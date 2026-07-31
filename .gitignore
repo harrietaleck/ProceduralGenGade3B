@@ -1,0 +1,28 @@
+# Unreal Engine .gitignore
+
+# Build/generated folders (do NOT track)
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# Keep tracked: Content/, Config/, Source/, .uproject
+
+# Visual Studio / Rider / IDE files
+.vs/
+.vsconfig
+.idea/
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+
+# Compiled files
+*.opendb
+
+# OS files
+.DS_Store
+Thumbs.db
