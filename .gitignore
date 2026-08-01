@@ -26,3 +26,6 @@ Saved/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local editor tooling config (not part of the project)
+.mcp.json
