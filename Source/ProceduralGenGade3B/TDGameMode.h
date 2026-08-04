@@ -14,6 +14,7 @@ class ATower;
 class AEnemySpawner;
 class AEnemy;
 class AWaveManager;
+class ABuildPadMarker;
 
 // Broadcast whenever the player's resource count changes (UI binds to this).
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnResourcesChanged, int32, NewAmount);
@@ -44,6 +45,10 @@ public:
 	/** Which wave manager class to use (defaults to the C++ AWaveManager; can be a Blueprint child). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<AWaveManager> WaveManagerClass;
+
+	/** Visual marker spawned on every generated build pad (defaults to ABuildPadMarker). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
+	TSubclassOf<ABuildPadMarker> BuildPadMarkerClass;
 
 	/** Fired when resources change. */
 	UPROPERTY(BlueprintAssignable, Category = "Rules")

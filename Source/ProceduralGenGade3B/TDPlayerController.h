@@ -34,6 +34,7 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
+	virtual void Tick(float DeltaSeconds) override;
 
 	/** Left-click handler: attempt to place a defender under the cursor. */
 	void OnPlaceDefenderClicked();
@@ -44,4 +45,12 @@ protected:
 private:
 	/** True if a living defender already occupies the given world slot. */
 	bool IsSlotOccupied(const FVector& SlotLocation) const;
+
+	/** Finds the terrain's build slot nearest the cursor, within SlotClickTolerance. Shared
+	 *  by the click handler and the every-frame hover highlight so they never disagree. */
+	bool FindNearestSlotUnderCursor(FVector& OutSlotLocation) const;
+
+	/** Draws a translucent green (valid) or red (occupied / unaffordable) patch over the
+	 *  build pad nearest the cursor, each frame, so placement validity is always clear. */
+	void UpdateBuildPadHighlight() const;
 };

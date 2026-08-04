@@ -5,11 +5,15 @@
 #include "ProceduralTerrain.h"
 #include "TDGameMode.h"
 #include "EngineUtils.h"
+#include "DrawDebugHelpers.h"
 
 ATDPlayerController::ATDPlayerController()
 {
 	// Default to the plain C++ defender unless overridden.
 	DefenderClass = ADefender::StaticClass();
+
+	// Ticks every frame to draw the build-pad hover highlight.
+	PrimaryActorTick.bCanEverTick = true;
 }
 
 void ATDPlayerController::BeginPlay()
@@ -54,41 +58,11 @@ void ATDPlayerController::OnPlaceDefenderClicked()
 		return;
 	}
 
-	AProceduralTerrain* Terrain = GameMode->GetTerrain();
-	if (!Terrain)
+	FVector SlotLocation;
+	if (!FindNearestSlotUnderCursor(SlotLocation))
 	{
-		return;
+		return; // Clicked away from any slot.
 	}
-
-	// Trace under the cursor to find where on the world the player clicked.
-	FHitResult Hit;
-	if (!GetHitResultUnderCursor(ECC_Visibility, /*bTraceComplex=*/false, Hit))
-	{
-		return;
-	}
-	const FVector ClickLocation = Hit.Location;
-
-	// Snap the click to the nearest buildable slot (compared on the ground plane, ignoring Z).
-	const TArray<FVector>& Slots = Terrain->GetDefenderSlots();
-	int32 BestIndex = INDEX_NONE;
-	float BestDistSq = SlotClickTolerance * SlotClickTolerance;
-	for (int32 i = 0; i < Slots.Num(); ++i)
-	{
-		const FVector Delta(ClickLocation.X - Slots[i].X, ClickLocation.Y - Slots[i].Y, 0.0f);
-		const float DistSq = Delta.SizeSquared();
-		if (DistSq <= BestDistSq)
-		{
-			BestDistSq = DistSq;
-			BestIndex = i;
-		}
-	}
-
-	// Clicked away from any slot.
-	if (BestIndex == INDEX_NONE)
-	{
-		return;
-	}
-	const FVector SlotLocation = Slots[BestIndex];
 
 	// Can't stack two defenders on one slot.
 	if (IsSlotOccupied(SlotLocation))
@@ -124,4 +98,79 @@ bool ATDPlayerController::IsSlotOccupied(const FVector& SlotLocation) const
 		}
 	}
 	return false;
+}
+
+bool ATDPlayerController::FindNearestSlotUnderCursor(FVector& OutSlotLocation) const
+{
+	ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>();
+	AProceduralTerrain* Terrain = GameMode ? GameMode->GetTerrain() : nullptr;
+	if (!Terrain)
+	{
+		return false;
+	}
+
+	// Trace under the cursor to find where on the world the player is pointing.
+	FHitResult Hit;
+	if (!GetHitResultUnderCursor(ECC_Visibility, /*bTraceComplex=*/false, Hit))
+	{
+		return false;
+	}
+	const FVector CursorLocation = Hit.Location;
+
+	// Snap to the nearest buildable slot (compared on the ground plane, ignoring Z).
+	const TArray<FVector>& Slots = Terrain->GetDefenderSlots();
+	int32 BestIndex = INDEX_NONE;
+	float BestDistSq = SlotClickTolerance * SlotClickTolerance;
+	for (int32 i = 0; i < Slots.Num(); ++i)
+	{
+		const FVector Delta(CursorLocation.X - Slots[i].X, CursorLocation.Y - Slots[i].Y, 0.0f);
+		const float DistSq = Delta.SizeSquared();
+		if (DistSq <= BestDistSq)
+		{
+			BestDistSq = DistSq;
+			BestIndex = i;
+		}
+	}
+
+	if (BestIndex == INDEX_NONE)
+	{
+		return false;
+	}
+	OutSlotLocation = Slots[BestIndex];
+	return true;
+}
+
+void ATDPlayerController::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	UpdateBuildPadHighlight();
+}
+
+void ATDPlayerController::UpdateBuildPadHighlight() const
+{
+	ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>();
+	if (!GameMode || GameMode->IsGameOver() || !DefenderClass)
+	{
+		return;
+	}
+
+	FVector SlotLocation;
+	if (!FindNearestSlotUnderCursor(SlotLocation))
+	{
+		return; // Cursor isn't near any build pad right now -> no highlight to draw.
+	}
+
+	// Valid = free slot AND the player can currently afford this defender.
+	const bool bOccupied = IsSlotOccupied(SlotLocation);
+	const int32 Cost = DefenderClass.GetDefaultObject()->Cost;
+	const bool bAffordable = GameMode->GetResources() >= Cost;
+	const bool bValid = !bOccupied && bAffordable;
+
+	const FColor HighlightColor = bValid ? FColor(60, 220, 90, 140) : FColor(220, 60, 60, 140);
+
+	// A flat, short-lived translucent patch over the pad. Redrawn every tick so it tracks the
+	// cursor smoothly (same technique as the muzzle tracers in Tower/Defender) without ever
+	// leaving stale debug geometry behind if the cursor moves off the pad.
+	DrawDebugSolidPlane(GetWorld(), FPlane(FVector::UpVector, SlotLocation.Z + 6.0f),
+		SlotLocation, 85.0f, HighlightColor, false, 0.05f);
 }

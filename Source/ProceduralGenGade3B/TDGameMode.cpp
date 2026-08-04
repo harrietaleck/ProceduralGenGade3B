@@ -6,6 +6,7 @@
 #include "Enemy.h"
 #include "EnemySpawner.h"
 #include "WaveManager.h"
+#include "BuildPadMarker.h"
 #include "TDPlayerController.h"
 #include "TDHUD.h"
 #include "TDCameraPawn.h"
@@ -25,6 +26,7 @@ ATDGameMode::ATDGameMode()
 	TowerClass = ATower::StaticClass();
 	SpawnerClass = AEnemySpawner::StaticClass();
 	WaveManagerClass = AWaveManager::StaticClass();
+	BuildPadMarkerClass = ABuildPadMarker::StaticClass();
 }
 
 void ATDGameMode::BeginPlay()
@@ -48,6 +50,16 @@ void ATDGameMode::BeginPlay()
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	Tower = GetWorld()->SpawnActor<ATower>(TowerClass, TowerLocation, FRotator::ZeroRotator, SpawnParams);
+
+	// Mark every generated build pad with a visual platform, so valid placement locations
+	// are always obvious (brief: "is it clear to the player how/where they can build?").
+	if (BuildPadMarkerClass)
+	{
+		for (const FVector& Slot : Terrain->GetDefenderSlots())
+		{
+			GetWorld()->SpawnActor<ABuildPadMarker>(BuildPadMarkerClass, Slot + FVector(0.0f, 0.0f, 4.0f), FRotator::ZeroRotator, SpawnParams);
+		}
+	}
 
 	// Spawn the enemy spawner and hand it the terrain (for spawn points/paths) and the tower (target).
 	// We disable its self-driven timer: the WaveManager decides when each enemy spawns.
