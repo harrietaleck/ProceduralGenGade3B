@@ -71,6 +71,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	bool IsGameOver() const { return bGameOver; }
 
+	/** Reload the current level for a fresh game (regenerates terrain, resets economy). */
+	UFUNCTION(BlueprintCallable, Category = "Rules")
+	void RestartGame();
+
 	/** The procedural terrain located at startup (source of paths / slots / tower location). */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	AProceduralTerrain* GetTerrain() const { return Terrain; }

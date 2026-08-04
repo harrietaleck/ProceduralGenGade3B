@@ -7,7 +7,9 @@
 #include "EnemySpawner.h"
 #include "WaveManager.h"
 #include "TDPlayerController.h"
+#include "TDHUD.h"
 #include "GameFramework/DefaultPawn.h"
+#include "Kismet/GameplayStatics.h"
 #include "EngineUtils.h"
 
 ATDGameMode::ATDGameMode()
@@ -16,6 +18,7 @@ ATDGameMode::ATDGameMode()
 	// default pawn so the player can look around the battlefield.
 	PlayerControllerClass = ATDPlayerController::StaticClass();
 	DefaultPawnClass = ADefaultPawn::StaticClass();
+	HUDClass = ATDHUD::StaticClass();
 
 	// Default to the plain C++ classes; a designer can override these with Blueprint children.
 	TowerClass = ATower::StaticClass();
@@ -65,6 +68,14 @@ void ATDGameMode::BeginPlay()
 int32 ATDGameMode::GetCurrentWave() const
 {
 	return WaveManager ? WaveManager->GetCurrentWave() : 0;
+}
+
+void ATDGameMode::RestartGame()
+{
+	// Reopen the current level. Because the terrain randomises its seed on BeginPlay, this
+	// produces a fresh map, fresh economy and fresh waves — a brand-new game.
+	const FName CurrentLevel(*UGameplayStatics::GetCurrentLevelName(this, /*bRemovePrefixString=*/true));
+	UGameplayStatics::OpenLevel(this, CurrentLevel);
 }
 
 AProceduralTerrain* ATDGameMode::FindTerrain() const

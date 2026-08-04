@@ -28,6 +28,21 @@ void ATDPlayerController::SetupInputComponent()
 
 	// Bind left mouse button directly (simple and sufficient for Part 1 placement).
 	InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &ATDPlayerController::OnPlaceDefenderClicked);
+
+	// Bind R to restart (only acts once the game is over — see OnRestartPressed).
+	InputComponent->BindKey(EKeys::R, IE_Pressed, this, &ATDPlayerController::OnRestartPressed);
+}
+
+void ATDPlayerController::OnRestartPressed()
+{
+	// Only allow a restart after the game has ended, so R can't be spammed mid-match.
+	if (ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>())
+	{
+		if (GameMode->IsGameOver())
+		{
+			GameMode->RestartGame();
+		}
+	}
 }
 
 void ATDPlayerController::OnPlaceDefenderClicked()
