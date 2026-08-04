@@ -83,6 +83,11 @@ int32 ATDGameMode::GetCurrentWave() const
 	return WaveManager ? WaveManager->GetCurrentWave() : 0;
 }
 
+bool ATDGameMode::IsVictory() const
+{
+	return WaveManager && WaveManager->IsVictory();
+}
+
 void ATDGameMode::RestartGame()
 {
 	// Reopen the current level. Because the terrain randomises its seed on BeginPlay, this

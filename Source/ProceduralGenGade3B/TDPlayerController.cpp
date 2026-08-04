@@ -40,10 +40,10 @@ void ATDPlayerController::SetupInputComponent()
 
 void ATDPlayerController::OnRestartPressed()
 {
-	// Only allow a restart after the game has ended, so R can't be spammed mid-match.
+	// Only allow a restart once the match has ended (loss or win), so R can't be spammed mid-match.
 	if (ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>())
 	{
-		if (GameMode->IsGameOver())
+		if (GameMode->IsGameOver() || GameMode->IsVictory())
 		{
 			GameMode->RestartGame();
 		}

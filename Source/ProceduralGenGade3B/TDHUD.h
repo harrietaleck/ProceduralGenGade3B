@@ -57,4 +57,7 @@ private:
 
 	/** Draw the centred "GAME OVER — press R to restart" banner. */
 	void DrawGameOver();
+
+	/** Draw the centred "VICTORY — press R to restart" banner. */
+	void DrawVictory();
 };

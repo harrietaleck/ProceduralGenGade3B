@@ -76,6 +76,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	bool IsGameOver() const { return bGameOver; }
 
+	/** True once the final configured wave has been cleared. WaveManager is the sole
+	 *  authority for this — GameMode only forwards the query, it never tracks its own copy. */
+	UFUNCTION(BlueprintPure, Category = "Rules")
+	bool IsVictory() const;
+
 	/** Reload the current level for a fresh game (regenerates terrain, resets economy). */
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void RestartGame();

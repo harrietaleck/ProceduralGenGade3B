@@ -2,11 +2,71 @@
 
 #include "WaveManager.h"
 #include "EnemySpawner.h"
+#include "Enemy.h"
+#include "HealthComponent.h"
 
 AWaveManager::AWaveManager()
 {
 	// All pacing is timer-driven, so no per-frame tick is needed.
 	PrimaryActorTick.bCanEverTick = false;
+
+	EnsureDefaultWaveTable();
+}
+
+void AWaveManager::EnsureDefaultWaveTable()
+{
+	// Only fill in the default Part 1 progression if nothing was configured — an instance
+	// (or a Blueprint child) that already set up its own Waves array is left untouched.
+	if (Waves.Num() > 0)
+	{
+		return;
+	}
+
+	// Multipliers here are derived directly from the Basic Enemy's own base stats (100 HP,
+	// 10 damage, 25 Loot) against the assignment's exact per-wave target numbers, e.g. Wave 2's
+	// 120 HP / 100 base HP = 1.2x. Storing multipliers rather than absolute numbers means the
+	// wave table automatically stays correct if the Basic Enemy's base stats are ever retuned.
+	FWaveData Wave1;
+	Wave1.EnemyCount = 5;
+	Wave1.SpawnDelay = 2.0f;
+	Wave1.HealthMultiplier = 1.0f;
+	Wave1.DamageMultiplier = 1.0f;
+	Wave1.SpeedMultiplier = 1.0f;
+	Wave1.RewardMultiplier = 1.0f;
+
+	FWaveData Wave2;
+	Wave2.EnemyCount = 8;
+	Wave2.SpawnDelay = 1.8f;
+	Wave2.HealthMultiplier = 1.2f;
+	Wave2.DamageMultiplier = 1.2f;
+	Wave2.SpeedMultiplier = 1.0f;
+	Wave2.RewardMultiplier = 1.2f;
+
+	FWaveData Wave3;
+	Wave3.EnemyCount = 12;
+	Wave3.SpawnDelay = 1.5f;
+	Wave3.HealthMultiplier = 1.4f;
+	Wave3.DamageMultiplier = 1.4f;
+	Wave3.SpeedMultiplier = 1.0f;
+	Wave3.RewardMultiplier = 1.4f;
+
+	FWaveData Wave4;
+	Wave4.EnemyCount = 16;
+	Wave4.SpawnDelay = 1.3f;
+	Wave4.HealthMultiplier = 1.7f;
+	Wave4.DamageMultiplier = 1.6f;
+	Wave4.SpeedMultiplier = 1.0f;
+	Wave4.RewardMultiplier = 1.6f;
+
+	FWaveData Wave5;
+	Wave5.EnemyCount = 20;
+	Wave5.SpawnDelay = 1.0f;
+	Wave5.HealthMultiplier = 2.0f;
+	Wave5.DamageMultiplier = 2.0f;
+	Wave5.SpeedMultiplier = 1.0f;
+	Wave5.RewardMultiplier = 2.0f;
+
+	Waves = { Wave1, Wave2, Wave3, Wave4, Wave5 };
 }
 
 void AWaveManager::Initialize(AEnemySpawner* InSpawner, bool bStartImmediately)
@@ -21,14 +81,14 @@ void AWaveManager::Initialize(AEnemySpawner* InSpawner, bool bStartImmediately)
 
 void AWaveManager::StartWaves()
 {
-	// Guard: nothing to drive without a spawner.
-	if (!Spawner)
+	if (!Spawner || bStopped)
 	{
 		return;
 	}
 
-	// If we haven't started yet, kick off wave 1; otherwise this acts as a resume.
-	if (CurrentWave == 0)
+	// Only (re)start from scratch if nothing has begun yet — matches the old contract where
+	// calling this again acts as a no-op resume rather than restarting wave 1.
+	if (CurrentWaveIndex < 0)
 	{
 		BeginNextWave();
 	}
@@ -36,52 +96,161 @@ void AWaveManager::StartWaves()
 
 void AWaveManager::StopWaves()
 {
+	bStopped = true;
+	GetWorldTimerManager().ClearTimer(CountdownTimerHandle);
 	GetWorldTimerManager().ClearTimer(SpawnTimerHandle);
-	GetWorldTimerManager().ClearTimer(WaveGapTimerHandle);
-}
-
-int32 AWaveManager::EnemiesForWave(int32 WaveNumber) const
-{
-	// Wave 1 = EnemiesInFirstWave; each later wave adds EnemiesPerWaveIncrement.
-	const int32 Count = EnemiesInFirstWave + (WaveNumber - 1) * EnemiesPerWaveIncrement;
-	return FMath::Max(1, Count);
+	GetWorldTimerManager().ClearTimer(BreakTimerHandle);
 }
 
 void AWaveManager::BeginNextWave()
 {
-	++CurrentWave;
-	EnemiesLeftThisWave = EnemiesForWave(CurrentWave);
+	if (bStopped)
+	{
+		return;
+	}
 
-	// Let the UI (and anything else) know a new wave has begun.
-	OnWaveChanged.Broadcast(CurrentWave);
+	++CurrentWaveIndex;
 
-	// Spawn one enemy immediately, then the rest on the spawn timer.
+	// No more configured waves -> the player has cleared everything. Win condition.
+	if (CurrentWaveIndex >= Waves.Num())
+	{
+		TriggerVictory();
+		return;
+	}
+
+	EnemiesSpawnedThisWave = 0;
+	ActiveEnemyCount = 0;
+	State = EWaveState::CountingDown;
+	CountdownSecondsRemaining = CountdownSeconds;
+
+	OnWaveCountdownTick.Broadcast(CountdownSecondsRemaining);
+
+	if (CountdownSecondsRemaining <= 0)
+	{
+		// A zero-length countdown is valid configuration -> skip straight to spawning.
+		CountdownTick();
+		return;
+	}
+
+	GetWorldTimerManager().SetTimer(CountdownTimerHandle, this, &AWaveManager::CountdownTick, 1.0f, /*bLoop=*/true);
+}
+
+void AWaveManager::CountdownTick()
+{
+	if (bStopped)
+	{
+		return;
+	}
+
+	--CountdownSecondsRemaining;
+
+	if (CountdownSecondsRemaining > 0)
+	{
+		OnWaveCountdownTick.Broadcast(CountdownSecondsRemaining);
+		return;
+	}
+
+	// Countdown finished -> the wave is now live.
+	GetWorldTimerManager().ClearTimer(CountdownTimerHandle);
+	State = EWaveState::Active;
+	OnWaveStarted.Broadcast(GetCurrentWave());
+	OnEnemiesRemainingChanged.Broadcast(ActiveEnemyCount);
+
+	// Spawn the first enemy immediately, then continue on this wave's own spawn delay.
 	SpawnTick();
 }
 
 void AWaveManager::SpawnTick()
 {
-	if (!Spawner)
+	if (bStopped || !Spawner || !Waves.IsValidIndex(CurrentWaveIndex))
 	{
 		return;
 	}
 
-	// Spawn one enemy for this wave.
-	if (EnemiesLeftThisWave > 0)
+	const FWaveData& WaveData = Waves[CurrentWaveIndex];
+
+	// Let this wave's data pick the enemy class (Part 1: always the Basic Enemy). The spawner
+	// itself is untouched — we simply set which class it should hand out next.
+	if (WaveData.EnemyType)
 	{
-		Spawner->SpawnSingleEnemy();
-		--EnemiesLeftThisWave;
+		Spawner->EnemyClass = WaveData.EnemyType;
 	}
 
-	if (EnemiesLeftThisWave > 0)
+	if (AEnemy* NewEnemy = Spawner->SpawnSingleEnemy())
 	{
-		// More to come in this wave: schedule the next spawn.
-		GetWorldTimerManager().SetTimer(SpawnTimerHandle, this, &AWaveManager::SpawnTick, TimeBetweenSpawns, /*bLoop=*/false);
+		// Scale this enemy's stats from its own class defaults using the wave's multipliers,
+		// rather than hardcoding base numbers here — the Basic Enemy stays the single source
+		// of truth for what "100% difficulty" means.
+		if (UHealthComponent* Health = NewEnemy->HealthComponent)
+		{
+			Health->MaxHealth *= WaveData.HealthMultiplier;
+			Health->Heal(Health->MaxHealth); // Top current health up to the new (scaled) max.
+		}
+		NewEnemy->AttackDamage *= WaveData.DamageMultiplier;
+		NewEnemy->MoveSpeed *= WaveData.SpeedMultiplier;
+		NewEnemy->ResourceReward = FMath::RoundToInt(NewEnemy->ResourceReward * WaveData.RewardMultiplier);
+
+		// Track this specific enemy so we know the instant it dies (event-driven — no per-
+		// frame polling or GetAllActorsOfClass scans needed to know when the wave is clear).
+		if (NewEnemy->HealthComponent)
+		{
+			NewEnemy->HealthComponent->OnDeath.AddDynamic(this, &AWaveManager::HandleTrackedEnemyDeath);
+		}
+
+		++ActiveEnemyCount;
+		OnEnemiesRemainingChanged.Broadcast(ActiveEnemyCount);
+	}
+
+	++EnemiesSpawnedThisWave;
+
+	if (EnemiesSpawnedThisWave < WaveData.EnemyCount)
+	{
+		GetWorldTimerManager().SetTimer(SpawnTimerHandle, this, &AWaveManager::SpawnTick, WaveData.SpawnDelay, /*bLoop=*/false);
 	}
 	else
 	{
-		// Wave exhausted: pause, then roll into the next (harder) wave.
+		// All of this wave's enemies have been scheduled; now we just wait for them to die.
 		GetWorldTimerManager().ClearTimer(SpawnTimerHandle);
-		GetWorldTimerManager().SetTimer(WaveGapTimerHandle, this, &AWaveManager::BeginNextWave, TimeBetweenWaves, /*bLoop=*/false);
+		CheckWaveCompletion();
 	}
+}
+
+void AWaveManager::HandleTrackedEnemyDeath(AActor* Killer)
+{
+	if (bStopped)
+	{
+		return;
+	}
+
+	ActiveEnemyCount = FMath::Max(0, ActiveEnemyCount - 1);
+	OnEnemiesRemainingChanged.Broadcast(ActiveEnemyCount);
+
+	CheckWaveCompletion();
+}
+
+void AWaveManager::CheckWaveCompletion()
+{
+	if (bStopped || State != EWaveState::Active || !Waves.IsValidIndex(CurrentWaveIndex))
+	{
+		return;
+	}
+
+	const bool bAllSpawned = EnemiesSpawnedThisWave >= Waves[CurrentWaveIndex].EnemyCount;
+	if (!bAllSpawned || ActiveEnemyCount > 0)
+	{
+		return; // Still enemies left to spawn or still enemies alive -> not complete yet.
+	}
+
+	State = EWaveState::Complete;
+	OnWaveComplete.Broadcast(GetCurrentWave());
+
+	// Give the player a breather, then automatically roll into the next wave's countdown.
+	GetWorldTimerManager().SetTimer(BreakTimerHandle, this, &AWaveManager::BeginNextWave, BreakDuration, /*bLoop=*/false);
+}
+
+void AWaveManager::TriggerVictory()
+{
+	State = EWaveState::Victory;
+	StopWaves(); // No further countdowns/spawns/breaks once every wave is cleared.
+	OnVictory.Broadcast();
 }

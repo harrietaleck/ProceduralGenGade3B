@@ -4,6 +4,7 @@
 #include "TDGameMode.h"
 #include "Tower.h"
 #include "Defender.h"
+#include "WaveManager.h"
 #include "HealthComponent.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
@@ -29,6 +30,10 @@ void ATDHUD::DrawHUD()
 	{
 		DrawGameOver();
 	}
+	else if (GameMode->IsVictory())
+	{
+		DrawVictory();
+	}
 }
 
 void ATDHUD::DrawStatus(ATDGameMode* GameMode)
@@ -43,9 +48,31 @@ void ATDHUD::DrawStatus(ATDGameMode* GameMode)
 	const FLinearColor LootColor = IsShowingInsufficientFundsMessage() ? FLinearColor::Red : FLinearColor(0.4f, 0.9f, 1.0f);
 	DrawText(LootText, LootColor, 40.0f, 40.0f, Font, 1.4f);
 
-	// --- Current wave ---
-	const FString WaveText = FString::Printf(TEXT("Wave: %d"), GameMode->GetCurrentWave());
-	DrawText(WaveText, FLinearColor::White, 40.0f, 80.0f, Font, 1.4f);
+	// --- Wave status: text and colour both depend on where the wave sequence currently is,
+	// so the player always knows what's happening without needing to guess. ---
+	FString WaveText = FString::Printf(TEXT("Wave: %d"), GameMode->GetCurrentWave());
+	FLinearColor WaveColor = FLinearColor::White;
+	if (AWaveManager* WaveMgr = GameMode->GetWaveManager())
+	{
+		switch (WaveMgr->GetWaveState())
+		{
+		case EWaveState::CountingDown:
+			WaveText = FString::Printf(TEXT("Wave %d starting in %d..."), WaveMgr->GetCurrentWave(), WaveMgr->GetCountdownSecondsRemaining());
+			WaveColor = FLinearColor::Yellow;
+			break;
+		case EWaveState::Active:
+			WaveText = FString::Printf(TEXT("Wave %d — Enemies Remaining: %d"), WaveMgr->GetCurrentWave(), WaveMgr->GetEnemiesRemaining());
+			WaveColor = FLinearColor::White;
+			break;
+		case EWaveState::Complete:
+			WaveText = FString::Printf(TEXT("WAVE %d COMPLETE"), WaveMgr->GetCurrentWave());
+			WaveColor = FLinearColor::Green;
+			break;
+		default:
+			break;
+		}
+	}
+	DrawText(WaveText, WaveColor, 40.0f, 80.0f, Font, 1.4f);
 
 	// --- Citadel health ---
 	if (ATower* Citadel = GameMode->GetTower())
@@ -179,5 +206,19 @@ void ATDHUD::DrawGameOver()
 
 	// DrawText positions from the top-left of the string, so nudge left to look centred.
 	DrawText(OverText, FLinearColor::Red, CenterX - 120.0f, CenterY - 40.0f, Font, 2.5f);
+	DrawText(HintText, FLinearColor::White, CenterX - 110.0f, CenterY + 20.0f, Font, 1.4f);
+}
+
+void ATDHUD::DrawVictory()
+{
+	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetLargeFont() : nullptr);
+
+	const float CenterX = Canvas ? Canvas->SizeX * 0.5f : 400.0f;
+	const float CenterY = Canvas ? Canvas->SizeY * 0.5f : 300.0f;
+
+	const FString VictoryText = TEXT("VICTORY");
+	const FString HintText = TEXT("Press R to restart");
+
+	DrawText(VictoryText, FLinearColor::Green, CenterX - 100.0f, CenterY - 40.0f, Font, 2.5f);
 	DrawText(HintText, FLinearColor::White, CenterX - 110.0f, CenterY + 20.0f, Font, 1.4f);
 }
