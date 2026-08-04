@@ -59,6 +59,35 @@ void ATDHUD::DrawStatus(ATDGameMode* GameMode)
 			DrawText(HealthText, HealthColor, 40.0f, 120.0f, Font, 1.4f);
 		}
 	}
+
+	// --- Defender summary: how many are alive and their combined health, at a glance ---
+	{
+		int32 AliveCount = 0;
+		float TotalCurrent = 0.0f;
+		float TotalMax = 0.0f;
+		for (TActorIterator<ADefender> It(GetWorld()); It; ++It)
+		{
+			ADefender* Defender = *It;
+			UHealthComponent* Health = Defender ? Defender->HealthComponent : nullptr;
+			if (!Health || Health->IsDead())
+			{
+				continue;
+			}
+			++AliveCount;
+			TotalCurrent += Health->GetCurrentHealth();
+			TotalMax += Health->MaxHealth;
+		}
+
+		const FString DefenderText = AliveCount > 0
+			? FString::Printf(TEXT("Defenders: %d (%d / %d HP)"), AliveCount, FMath::RoundToInt(TotalCurrent), FMath::RoundToInt(TotalMax))
+			: TEXT("Defenders: 0");
+
+		// Same green-to-red health language as the Citadel line above; plain white when none placed yet.
+		const FLinearColor DefenderColor = AliveCount > 0
+			? FMath::Lerp(FLinearColor::Red, FLinearColor::Green, TotalMax > 0.0f ? TotalCurrent / TotalMax : 1.0f)
+			: FLinearColor::White;
+		DrawText(DefenderText, DefenderColor, 40.0f, 160.0f, Font, 1.4f);
+	}
 }
 
 void ATDHUD::DrawDefenderHealthBars()
