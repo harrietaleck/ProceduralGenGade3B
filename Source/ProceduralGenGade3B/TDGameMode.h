@@ -13,6 +13,7 @@ class AProceduralTerrain;
 class ATower;
 class AEnemySpawner;
 class AEnemy;
+class AWaveManager;
 
 // Broadcast whenever the player's resource count changes (UI binds to this).
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnResourcesChanged, int32, NewAmount);
@@ -39,6 +40,10 @@ public:
 	/** Which spawner class to use (defaults to the C++ AEnemySpawner; can be a Blueprint child). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<AEnemySpawner> SpawnerClass;
+
+	/** Which wave manager class to use (defaults to the C++ AWaveManager; can be a Blueprint child). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
+	TSubclassOf<AWaveManager> WaveManagerClass;
 
 	/** Fired when resources change. */
 	UPROPERTY(BlueprintAssignable, Category = "Rules")
@@ -74,6 +79,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	ATower* GetTower() const { return Tower; }
 
+	/** The wave manager driving enemy waves (may be null before BeginPlay finishes). */
+	UFUNCTION(BlueprintPure, Category = "Rules")
+	AWaveManager* GetWaveManager() const { return WaveManager; }
+
+	/** Convenience for the HUD: the current wave number (0 if waves haven't started). */
+	UFUNCTION(BlueprintPure, Category = "Rules")
+	int32 GetCurrentWave() const;
+
 	// ---- Notifications called by other actors ----
 
 	/** Called by an enemy when it dies: award its bounty. */
@@ -102,6 +115,9 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<AEnemySpawner> Spawner;
+
+	UPROPERTY()
+	TObjectPtr<AWaveManager> WaveManager;
 
 	/** Find the terrain actor already placed in the level. */
 	AProceduralTerrain* FindTerrain() const;

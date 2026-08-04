@@ -5,6 +5,7 @@
 #include "Tower.h"
 #include "Enemy.h"
 #include "EnemySpawner.h"
+#include "WaveManager.h"
 #include "TDPlayerController.h"
 #include "GameFramework/DefaultPawn.h"
 #include "EngineUtils.h"
@@ -19,6 +20,7 @@ ATDGameMode::ATDGameMode()
 	// Default to the plain C++ classes; a designer can override these with Blueprint children.
 	TowerClass = ATower::StaticClass();
 	SpawnerClass = AEnemySpawner::StaticClass();
+	WaveManagerClass = AWaveManager::StaticClass();
 }
 
 void ATDGameMode::BeginPlay()
@@ -44,11 +46,25 @@ void ATDGameMode::BeginPlay()
 	Tower = GetWorld()->SpawnActor<ATower>(TowerClass, TowerLocation, FRotator::ZeroRotator, SpawnParams);
 
 	// Spawn the enemy spawner and hand it the terrain (for spawn points/paths) and the tower (target).
+	// We disable its self-driven timer: the WaveManager decides when each enemy spawns.
 	Spawner = GetWorld()->SpawnActor<AEnemySpawner>(SpawnerClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
 	if (Spawner)
 	{
+		Spawner->bAutoStart = false;
 		Spawner->Initialize(Terrain, Tower);
 	}
+
+	// Spawn the wave manager and let it drive the spawner in escalating waves.
+	WaveManager = GetWorld()->SpawnActor<AWaveManager>(WaveManagerClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
+	if (WaveManager && Spawner)
+	{
+		WaveManager->Initialize(Spawner, /*bStartImmediately=*/true);
+	}
+}
+
+int32 ATDGameMode::GetCurrentWave() const
+{
+	return WaveManager ? WaveManager->GetCurrentWave() : 0;
 }
 
 AProceduralTerrain* ATDGameMode::FindTerrain() const
@@ -97,7 +113,11 @@ void ATDGameMode::NotifyTowerDestroyed()
 	}
 	bGameOver = true;
 
-	// Stop spawning more enemies.
+	// Stop spawning more enemies (halt both the wave pacing and any spawner timer).
+	if (WaveManager)
+	{
+		WaveManager->StopWaves();
+	}
 	if (Spawner)
 	{
 		Spawner->StopSpawning();

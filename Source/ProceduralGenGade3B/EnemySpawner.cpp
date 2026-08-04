@@ -38,21 +38,27 @@ void AEnemySpawner::StopSpawning()
 
 void AEnemySpawner::SpawnEnemy()
 {
+	// The timer path simply requests one enemy per tick.
+	SpawnSingleEnemy();
+}
+
+AEnemy* AEnemySpawner::SpawnSingleEnemy()
+{
 	// Need a terrain with at least one path to spawn anything.
 	if (!Terrain)
 	{
-		return;
+		return nullptr;
 	}
 	const TArray<FEnemyPath>& Paths = Terrain->GetEnemyPaths();
 	if (Paths.Num() == 0 || !EnemyClass)
 	{
-		return;
+		return nullptr;
 	}
 
 	// Respect the optional live-enemy cap.
 	if (MaxEnemiesAlive > 0 && CountAliveEnemies() >= MaxEnemiesAlive)
 	{
-		return;
+		return nullptr;
 	}
 
 	// Choose the next path in rotation so all routes stay active.
@@ -71,6 +77,7 @@ void AEnemySpawner::SpawnEnemy()
 		Enemy->SetPath(Path.Waypoints);
 		Enemy->SetTargetTower(Tower);
 	}
+	return Enemy;
 }
 
 int32 AEnemySpawner::CountAliveEnemies() const

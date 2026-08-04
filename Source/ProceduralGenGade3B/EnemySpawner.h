@@ -48,8 +48,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Spawner")
 	void StopSpawning();
 
+	/**
+	 * Spawn exactly one enemy on the next path in rotation and return it (may be null if it
+	 * couldn't spawn, e.g. no terrain or the live cap is reached). This is the single unit of
+	 * spawning; both the built-in timer and the WaveManager go through it.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Spawner")
+	AEnemy* SpawnSingleEnemy();
+
 protected:
-	/** Timer callback: spawn a single enemy on the next path in rotation. */
+	/** Timer callback used by StartSpawning(): just spawns one enemy per tick. */
 	void SpawnEnemy();
 
 private:
