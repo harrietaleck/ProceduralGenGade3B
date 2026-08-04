@@ -8,16 +8,16 @@
 #include "WaveManager.h"
 #include "TDPlayerController.h"
 #include "TDHUD.h"
-#include "GameFramework/DefaultPawn.h"
+#include "TDCameraPawn.h"
 #include "Kismet/GameplayStatics.h"
 #include "EngineUtils.h"
 
 ATDGameMode::ATDGameMode()
 {
-	// Use our own player controller (mouse-driven defender placement) and a free-flying
-	// default pawn so the player can look around the battlefield.
+	// Use our own player controller (mouse-driven defender placement) and an RTS-style
+	// camera pawn so the player can pan, rotate and zoom over the battlefield.
 	PlayerControllerClass = ATDPlayerController::StaticClass();
-	DefaultPawnClass = ADefaultPawn::StaticClass();
+	DefaultPawnClass = ATDCameraPawn::StaticClass();
 	HUDClass = ATDHUD::StaticClass();
 
 	// Default to the plain C++ classes; a designer can override these with Blueprint children.
