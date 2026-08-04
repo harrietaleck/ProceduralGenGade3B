@@ -27,7 +27,7 @@ public:
 
 	/** Damage dealt to an enemy per shot. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower", meta = (ClampMin = "0.0"))
-	float AttackDamage = 5.0f;
+	float AttackDamage = 10.0f;
 
 	/** Seconds between shots (0.5 = two shots per second). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower", meta = (ClampMin = "0.05"))
