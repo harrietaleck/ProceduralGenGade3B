@@ -23,6 +23,7 @@ void ATDHUD::DrawHUD()
 
 	DrawStatus(GameMode);
 	DrawDefenderHealthBars();
+	DrawInsufficientFundsMessage();
 
 	if (GameMode->IsGameOver())
 	{
@@ -36,9 +37,11 @@ void ATDHUD::DrawStatus(ATDGameMode* GameMode)
 	// DrawText only reads the font, so a const_cast here is safe.
 	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetLargeFont() : nullptr);
 
-	// --- Loot (the single shared currency, earned by defeating enemies) ---
+	// --- Loot (the single shared currency, earned by defeating enemies). Flashes red while
+	// a placement was just rejected for insufficient funds. ---
 	const FString LootText = FString::Printf(TEXT("Loot: %d"), GameMode->GetResources());
-	DrawText(LootText, FLinearColor(0.4f, 0.9f, 1.0f), 40.0f, 40.0f, Font, 1.4f);
+	const FLinearColor LootColor = IsShowingInsufficientFundsMessage() ? FLinearColor::Red : FLinearColor(0.4f, 0.9f, 1.0f);
+	DrawText(LootText, LootColor, 40.0f, 40.0f, Font, 1.4f);
 
 	// --- Current wave ---
 	const FString WaveText = FString::Printf(TEXT("Wave: %d"), GameMode->GetCurrentWave());
@@ -88,6 +91,32 @@ void ATDHUD::DrawStatus(ATDGameMode* GameMode)
 		const FLinearColor DefenderColor(0.35f, 0.0f, 0.55f);
 		DrawText(DefenderText, DefenderColor, 40.0f, 160.0f, Font, 1.4f);
 	}
+}
+
+void ATDHUD::ShowInsufficientFundsMessage()
+{
+	if (UWorld* World = GetWorld())
+	{
+		InsufficientFundsMessageExpireTime = World->GetTimeSeconds() + InsufficientFundsMessageDuration;
+	}
+}
+
+bool ATDHUD::IsShowingInsufficientFundsMessage() const
+{
+	const UWorld* World = GetWorld();
+	return World && World->GetTimeSeconds() < InsufficientFundsMessageExpireTime;
+}
+
+void ATDHUD::DrawInsufficientFundsMessage()
+{
+	if (!IsShowingInsufficientFundsMessage())
+	{
+		return; // Never triggered, or it already expired -> nothing to draw, no timer to clean up.
+	}
+
+	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetLargeFont() : nullptr);
+	const float CenterX = Canvas ? Canvas->SizeX * 0.5f : 400.0f;
+	DrawText(TEXT("Not Enough Loot"), FLinearColor::Red, CenterX - 150.0f, 40.0f, Font, 1.6f);
 }
 
 void ATDHUD::DrawDefenderHealthBars()

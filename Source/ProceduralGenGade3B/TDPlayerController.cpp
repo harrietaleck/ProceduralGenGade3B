@@ -4,6 +4,7 @@
 #include "Defender.h"
 #include "ProceduralTerrain.h"
 #include "TDGameMode.h"
+#include "TDHUD.h"
 #include "EngineUtils.h"
 #include "DrawDebugHelpers.h"
 
@@ -70,11 +71,17 @@ void ATDPlayerController::OnPlaceDefenderClicked()
 		return;
 	}
 
-	// Check affordability using the defender's own Cost, then spend.
+	// Check affordability using the defender's own Cost, but don't spend yet — Loot is only
+	// ever deducted for a placement that actually happens (see below).
 	const int32 Cost = DefenderClass.GetDefaultObject()->Cost;
-	if (!GameMode->TrySpendResources(Cost))
+	if (GameMode->GetResources() < Cost)
 	{
-		return; // Not enough resources.
+		// Reject the placement and tell the player why, without touching their Loot.
+		if (ATDHUD* HUD = Cast<ATDHUD>(GetHUD()))
+		{
+			HUD->ShowInsufficientFundsMessage();
+		}
+		return;
 	}
 
 	// Spawn the defender on the slot, raised so its base rests on the ground.
@@ -82,7 +89,13 @@ void ATDPlayerController::OnPlaceDefenderClicked()
 	const FVector DefenderSpawnLocation = SlotLocation + FVector(0.0f, 0.0f, 60.0f);
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	GetWorld()->SpawnActor<ADefender>(DefenderClass, DefenderSpawnLocation, FRotator::ZeroRotator, SpawnParams);
+	ADefender* NewDefender = GetWorld()->SpawnActor<ADefender>(DefenderClass, DefenderSpawnLocation, FRotator::ZeroRotator, SpawnParams);
+
+	// Only pay for a placement that actually succeeded.
+	if (NewDefender)
+	{
+		GameMode->TrySpendResources(Cost);
+	}
 }
 
 bool ATDPlayerController::IsSlotOccupied(const FVector& SlotLocation) const

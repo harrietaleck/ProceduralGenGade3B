@@ -25,7 +25,25 @@ public:
 	/** Called every frame by the engine to paint the HUD. */
 	virtual void DrawHUD() override;
 
+	/** Shown by the player controller when a placement is rejected for insufficient Loot.
+	 *  Displays "Not Enough Loot" (and flashes the Loot counter red) for a few seconds, then
+	 *  disappears on its own — no explicit hide call needed. */
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void ShowInsufficientFundsMessage();
+
 private:
+	/** How long the "Not Enough Loot" message stays on screen, in seconds. */
+	UPROPERTY(EditAnywhere, Category = "HUD")
+	float InsufficientFundsMessageDuration = 2.0f;
+
+	/** World time (seconds) after which the message stops drawing. 0 = not currently showing. */
+	float InsufficientFundsMessageExpireTime = 0.0f;
+
+	/** True while the "Not Enough Loot" message is active — also flashes the Loot counter red. */
+	bool IsShowingInsufficientFundsMessage() const;
+
+	/** Draws the centred "Not Enough Loot" warning while active. */
+	void DrawInsufficientFundsMessage();
 	/** Draw the top-left status readout (Loot, Citadel health, wave). */
 	void DrawStatus(ATDGameMode* GameMode);
 

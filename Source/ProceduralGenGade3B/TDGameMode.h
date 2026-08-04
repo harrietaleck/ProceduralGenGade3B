@@ -30,9 +30,9 @@ class PROCEDURALGENGADE3B_API ATDGameMode : public AGameModeBase
 public:
 	ATDGameMode();
 
-	/** Resources the player starts with. */
+	/** Loot the player starts with (Economy spec: 200). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules", meta = (ClampMin = "0"))
-	int32 StartingResources = 100;
+	int32 StartingResources = 200;
 
 	/** Which tower class to spawn (defaults to the C++ ATower; can be a Blueprint child). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
