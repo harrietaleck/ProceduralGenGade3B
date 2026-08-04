@@ -34,7 +34,7 @@ ATDGameMode::ATDGameMode()
 	// Default to the UMG match HUD asset if one exists at this path (created via the UMG
 	// editor tools as a child of UTDHUDWidget). Missing gracefully means no HUD is shown
 	// rather than a hard error — matches how meshes are defaulted elsewhere in this project.
-	static ConstructorHelpers::FClassFinder<UTDHUDWidget> HUDWidgetFinder(TEXT("/Game/UI/WBP_TDHUD"));
+	static ConstructorHelpers::FClassFinder<UTDHUDWidget> HUDWidgetFinder(TEXT("/Game/UI/WBP_MatchHUD"));
 	if (HUDWidgetFinder.Succeeded())
 	{
 		HUDWidgetClass = HUDWidgetFinder.Class;
