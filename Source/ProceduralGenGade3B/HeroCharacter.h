@@ -109,6 +109,9 @@ private:
 	/** While Right Mouse is held, turn mouse motion into camera yaw + clamped pitch. */
 	void UpdateLook();
 
-	/** Drop the hero onto the procedurally-generated ground at start. */
+	/** Drop the hero onto an open spot on the procedurally-generated ground at start. */
 	void SnapToGround();
+
+	/** Force this hero's camera to be the player's view (beats any auto-activating level camera). */
+	void ForceViewToSelf();
 };

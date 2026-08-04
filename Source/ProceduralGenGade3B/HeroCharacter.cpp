@@ -11,6 +11,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
+#include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 
 AHeroCharacter::AHeroCharacter()
@@ -102,20 +103,47 @@ void AHeroCharacter::BeginPlay()
 
 	// The map is generated at runtime, so find the ground and drop onto it.
 	SnapToGround();
+
+	// A leftover level camera may auto-activate and steal the view; after everything's had
+	// its BeginPlay, force our own camera to be the player's view (with a short blend).
+	FTimerHandle ViewTimer;
+	GetWorldTimerManager().SetTimer(ViewTimer, this, &AHeroCharacter::ForceViewToSelf, 0.3f, false);
+}
+
+void AHeroCharacter::ForceViewToSelf()
+{
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		PC->SetViewTargetWithBlend(this, 0.4f);
+	}
 }
 
 void AHeroCharacter::SnapToGround()
 {
-	// Prefer the terrain's central tower point as a safe, central spawn spot.
+	// Choose an open spawn spot on a flattened path corridor (partway toward the tower),
+	// so the hero starts in the open with room behind for the camera — not jammed against
+	// the tower or a hillside. Fall back to the tower point if there are no paths.
 	FVector Target = GetActorLocation();
+	float FaceYaw = 0.0f;
 	for (TActorIterator<AProceduralTerrain> It(GetWorld()); It; ++It)
 	{
-		Target = It->GetTowerLocation();
+		const FVector TowerLoc = It->GetTowerLocation();
+		Target = TowerLoc;
+
+		const TArray<FEnemyPath>& Paths = It->GetEnemyPaths();
+		if (Paths.Num() > 0 && Paths[0].Waypoints.Num() > 1)
+		{
+			// A waypoint about a third of the way in from the spawn end of path 0.
+			const TArray<FVector>& WP = Paths[0].Waypoints;
+			Target = WP[FMath::Clamp(WP.Num() / 3, 0, WP.Num() - 1)];
+			// Face along the path toward the tower.
+			FaceYaw = (TowerLoc - Target).Rotation().Yaw;
+		}
 		break;
 	}
 
-	// Trace straight down from high above to find the terrain surface.
-	const FVector Start = FVector(Target.X + 400.0f, Target.Y + 400.0f, Target.Z + 5000.0f);
+	// Trace straight down from high above to find the terrain surface at that spot.
+	const FVector Start = FVector(Target.X, Target.Y, Target.Z + 5000.0f);
 	const FVector End = Start - FVector(0.0f, 0.0f, 12000.0f);
 	FHitResult Hit;
 	FCollisionQueryParams Params;
@@ -125,6 +153,16 @@ void AHeroCharacter::SnapToGround()
 		const float HalfHeight = GetCapsuleComponent() ? GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 90.0f;
 		SetActorLocation(Hit.ImpactPoint + FVector(0.0f, 0.0f, HalfHeight + 10.0f));
 	}
+
+	// Face toward the tower, and align the camera behind that facing.
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		FRotator Look = PC->GetControlRotation();
+		Look.Yaw = FaceYaw;
+		Look.Pitch = DefaultPitch;
+		PC->SetControlRotation(Look);
+	}
+	SetActorRotation(FRotator(0.0f, FaceYaw, 0.0f));
 }
 
 void AHeroCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
