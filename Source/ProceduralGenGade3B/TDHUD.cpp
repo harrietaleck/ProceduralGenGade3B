@@ -3,9 +3,12 @@
 #include "TDHUD.h"
 #include "TDGameMode.h"
 #include "Tower.h"
+#include "Defender.h"
 #include "HealthComponent.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
+#include "EngineUtils.h"
+#include "GameFramework/PlayerController.h"
 
 void ATDHUD::DrawHUD()
 {
@@ -19,6 +22,7 @@ void ATDHUD::DrawHUD()
 	}
 
 	DrawStatus(GameMode);
+	DrawDefenderHealthBars();
 
 	if (GameMode->IsGameOver())
 	{
@@ -55,6 +59,51 @@ void ATDHUD::DrawStatus(ATDGameMode* GameMode)
 			DrawText(HealthText, HealthColor, 40.0f, 120.0f, Font, 1.4f);
 		}
 	}
+}
+
+void ATDHUD::DrawDefenderHealthBars()
+{
+	for (TActorIterator<ADefender> It(GetWorld()); It; ++It)
+	{
+		ADefender* Defender = *It;
+		UHealthComponent* Health = Defender ? Defender->HealthComponent : nullptr;
+		if (!Health || Health->IsDead())
+		{
+			continue; // Destroyed/dying defenders don't need a bar drawn over them.
+		}
+
+		// Float the bar a little above the defender's mesh so it doesn't overlap the model.
+		const FVector BarLocation = Defender->GetActorLocation() + FVector(0.0f, 0.0f, 140.0f);
+		DrawWorldHealthBar(BarLocation, Health->GetHealthPercent(), 70.0f, 8.0f);
+	}
+}
+
+void ATDHUD::DrawWorldHealthBar(const FVector& WorldLocation, float HealthPercent, float BarWidth, float BarHeight)
+{
+	if (!PlayerOwner)
+	{
+		return;
+	}
+
+	// Project the 3D world position to a 2D screen position. Returns false if the point is
+	// behind the camera, in which case there's nothing sensible to draw.
+	FVector2D ScreenPos;
+	if (!PlayerOwner->ProjectWorldLocationToScreen(WorldLocation, ScreenPos))
+	{
+		return;
+	}
+
+	const float Left = ScreenPos.X - BarWidth * 0.5f;
+	const float Top = ScreenPos.Y - BarHeight * 0.5f;
+
+	// Dark background so the bar reads clearly against any part of the battlefield...
+	DrawRect(FLinearColor(0.05f, 0.05f, 0.05f, 0.75f), Left, Top, BarWidth, BarHeight);
+
+	// ...then a green-to-red fill scaled by remaining health, same colour language as the
+	// Citadel readout so health always means the same thing everywhere on screen.
+	const float Pct = FMath::Clamp(HealthPercent, 0.0f, 1.0f);
+	const FLinearColor FillColor = FMath::Lerp(FLinearColor::Red, FLinearColor::Green, Pct);
+	DrawRect(FillColor, Left, Top, BarWidth * Pct, BarHeight);
 }
 
 void ATDHUD::DrawGameOver()

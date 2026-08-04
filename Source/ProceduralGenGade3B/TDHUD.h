@@ -26,8 +26,16 @@ public:
 	virtual void DrawHUD() override;
 
 private:
-	/** Draw the top-left status readout (Essence, Citadel health, wave). */
+	/** Draw the top-left status readout (Loot, Citadel health, wave). */
 	void DrawStatus(ATDGameMode* GameMode);
+
+	/** Draw a small floating health bar over every living defender, so it's always clear
+	 *  how much health each one has left. */
+	void DrawDefenderHealthBars();
+
+	/** Projects a world location to screen space and draws a background + health-coloured
+	 *  fill bar there. Shared by defender (and future enemy/tower) health bars. */
+	void DrawWorldHealthBar(const FVector& WorldLocation, float HealthPercent, float BarWidth, float BarHeight);
 
 	/** Draw the centred "GAME OVER — press R to restart" banner. */
 	void DrawGameOver();
