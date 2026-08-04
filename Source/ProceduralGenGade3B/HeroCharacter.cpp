@@ -101,13 +101,15 @@ void AHeroCharacter::BeginPlay()
 		}
 	}
 
-	// The map is generated at runtime, so find the ground and drop onto it.
-	SnapToGround();
+	// The terrain generates in its OWN BeginPlay, which may run after ours — so defer
+	// placement a moment to guarantee the paths and ground mesh exist before we trace.
+	FTimerHandle PlaceTimer;
+	GetWorldTimerManager().SetTimer(PlaceTimer, this, &AHeroCharacter::SnapToGround, 0.2f, false);
 
 	// A leftover level camera may auto-activate and steal the view; after everything's had
 	// its BeginPlay, force our own camera to be the player's view (with a short blend).
 	FTimerHandle ViewTimer;
-	GetWorldTimerManager().SetTimer(ViewTimer, this, &AHeroCharacter::ForceViewToSelf, 0.3f, false);
+	GetWorldTimerManager().SetTimer(ViewTimer, this, &AHeroCharacter::ForceViewToSelf, 0.4f, false);
 }
 
 void AHeroCharacter::ForceViewToSelf()
@@ -133,11 +135,12 @@ void AHeroCharacter::SnapToGround()
 		const TArray<FEnemyPath>& Paths = It->GetEnemyPaths();
 		if (Paths.Num() > 0 && Paths[0].Waypoints.Num() > 1)
 		{
-			// A waypoint about a third of the way in from the spawn end of path 0.
+			// Stand partway along path 0, out in the open corridor (not on the tower).
 			const TArray<FVector>& WP = Paths[0].Waypoints;
-			Target = WP[FMath::Clamp(WP.Num() / 3, 0, WP.Num() - 1)];
-			// Face along the path toward the tower.
-			FaceYaw = (TowerLoc - Target).Rotation().Yaw;
+			Target = WP[FMath::Clamp(WP.Num() / 2, 0, WP.Num() - 1)];
+			// Face OUTWARD down the path toward where enemies spawn, so the battlefield and
+			// incoming enemies are ahead and the tower is behind the camera.
+			FaceYaw = (Paths[0].SpawnPoint - TowerLoc).Rotation().Yaw;
 		}
 		break;
 	}
