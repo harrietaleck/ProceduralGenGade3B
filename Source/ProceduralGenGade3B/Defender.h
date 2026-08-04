@@ -28,11 +28,11 @@ public:
 
 	/** How far the defender can hit enemies (uu). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender", meta = (ClampMin = "0.0"))
-	float AttackRange = 900.0f;
+	float AttackRange = 600.0f;
 
 	/** Damage dealt to an enemy per shot. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender", meta = (ClampMin = "0.0"))
-	float AttackDamage = 15.0f;
+	float AttackDamage = 5.0f;
 
 	/** Seconds between shots. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender", meta = (ClampMin = "0.05"))

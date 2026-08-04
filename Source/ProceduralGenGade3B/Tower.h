@@ -23,11 +23,11 @@ public:
 
 	/** How far the tower can hit enemies (uu). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower", meta = (ClampMin = "0.0"))
-	float AttackRange = 1500.0f;
+	float AttackRange = 1000.0f;
 
 	/** Damage dealt to an enemy per shot. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower", meta = (ClampMin = "0.0"))
-	float AttackDamage = 25.0f;
+	float AttackDamage = 5.0f;
 
 	/** Seconds between shots (0.5 = two shots per second). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower", meta = (ClampMin = "0.05"))

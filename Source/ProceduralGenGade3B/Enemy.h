@@ -47,9 +47,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0.1"))
 	float AttackInterval = 1.0f;
 
-	/** Strict range that actually gates stopping + dealing damage (Basic Enemy spec: 150). */
+	/** Strict range that actually gates stopping + dealing damage (Basic Enemy spec: 200). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0.0"))
-	float AttackRange = 150.0f;
+	float AttackRange = 200.0f;
 
 	/** How far the enemy "notices" a defender worth considering as a target (Basic Enemy
 	 *  spec: 250). Wider than AttackRange on purpose: a defender must be detected here
