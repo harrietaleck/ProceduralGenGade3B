@@ -82,10 +82,9 @@ void ATDHUD::DrawStatus(ATDGameMode* GameMode)
 			? FString::Printf(TEXT("Defenders: %d (%d / %d HP)"), AliveCount, FMath::RoundToInt(TotalCurrent), FMath::RoundToInt(TotalMax))
 			: TEXT("Defenders: 0");
 
-		// Same green-to-red health language as the Citadel line above; plain white when none placed yet.
-		const FLinearColor DefenderColor = AliveCount > 0
-			? FMath::Lerp(FLinearColor::Red, FLinearColor::Green, TotalMax > 0.0f ? TotalCurrent / TotalMax : 1.0f)
-			: FLinearColor::White;
+		// Purple identifies this as the "defenders" line at a glance, distinct from the
+		// Citadel's red/green health colouring above it.
+		const FLinearColor DefenderColor(0.65f, 0.35f, 0.95f);
 		DrawText(DefenderText, DefenderColor, 40.0f, 160.0f, Font, 1.4f);
 	}
 }
