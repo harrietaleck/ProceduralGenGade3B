@@ -1,7 +1,9 @@
 // Enemy.h
-// An enemy that walks the terrain's path waypoints toward the tower. Along the way it
-// stops to attack any defender within range; on reaching the tower it attacks the tower.
-// Movement is simple waypoint-following (no navmesh) which is robust on our runtime mesh.
+// The Basic Enemy: walks the terrain's path waypoints toward the tower. Along the way it
+// stops to attack any defender that blocks it; once the defender falls it resumes the path.
+// On reaching the tower it attacks the tower until either dies. It NEVER targets the player
+// character — only the tower and defenders are valid targets. Movement is simple waypoint-
+// following (no navmesh), which is robust on our runtime-generated mesh.
 
 #pragma once
 
@@ -33,25 +35,32 @@ class PROCEDURALGENGADE3B_API AEnemy : public AActor
 public:
 	AEnemy();
 
-	/** Movement speed along the path, in Unreal units per second. */
+	/** Movement speed along the path, in Unreal units per second (Basic Enemy spec: 350). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0.0"))
-	float MoveSpeed = 250.0f;
+	float MoveSpeed = 350.0f;
 
-	/** Damage dealt per attack to the tower or a defender. */
+	/** Damage dealt per attack to the tower or a defender (Basic Enemy spec: 10). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0.0"))
 	float AttackDamage = 10.0f;
 
-	/** Seconds between attacks. */
+	/** Seconds between attacks — the attack cooldown (Basic Enemy spec: 1.0). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0.1"))
 	float AttackInterval = 1.0f;
 
-	/** Range within which the enemy can hit the tower or a defender. */
+	/** Strict range that actually gates stopping + dealing damage (Basic Enemy spec: 150). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0.0"))
-	float AttackRange = 250.0f;
+	float AttackRange = 150.0f;
 
-	/** Essence granted to the player when this enemy is killed (the brief: enemies drop 2). */
+	/** How far the enemy "notices" a defender worth considering as a target (Basic Enemy
+	 *  spec: 250). Wider than AttackRange on purpose: a defender must be detected here
+	 *  first, but the enemy only actually stops and attacks once inside AttackRange. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0.0"))
+	float DetectionRadius = 250.0f;
+
+	/** Gold granted to the player when this enemy is killed (Basic Enemy spec: 25). Flows
+	 *  into the game's shared Loot pool via TDGameMode::AddResources. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0"))
-	int32 ResourceReward = 2;
+	int32 ResourceReward = 25;
 
 	/** Which flavour of drop this enemy leaves (cosmetic/future-facing; still becomes Essence). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
@@ -106,4 +115,7 @@ private:
 	void TryAttack(AActor* Target, float DeltaSeconds);
 	/** Return the nearest damageable target (defender or tower) inside AttackRange, or null. */
 	AActor* FindTargetInRange() const;
+	/** True if nothing (terrain, other geometry) blocks a straight line to Target — enforces
+	 *  "never attack through walls." */
+	bool HasLineOfSightTo(const AActor* Target) const;
 };
