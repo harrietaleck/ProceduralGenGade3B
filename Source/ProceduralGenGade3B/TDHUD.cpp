@@ -42,53 +42,9 @@ void ATDHUD::DrawStatus(ATDGameMode* GameMode)
 	// DrawText only reads the font, so a const_cast here is safe.
 	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetLargeFont() : nullptr);
 
-	// --- Loot (the single shared currency, earned by defeating enemies). Flashes red while
-	// a placement was just rejected for insufficient funds. ---
-	const FString LootText = FString::Printf(TEXT("Loot: %d"), GameMode->GetResources());
-	const FLinearColor LootColor = IsShowingInsufficientFundsMessage() ? FLinearColor::Red : FLinearColor(0.4f, 0.9f, 1.0f);
-	DrawText(LootText, LootColor, 40.0f, 40.0f, Font, 1.4f);
-
-	// --- Wave status: text and colour both depend on where the wave sequence currently is,
-	// so the player always knows what's happening without needing to guess. ---
-	FString WaveText = FString::Printf(TEXT("Wave: %d"), GameMode->GetCurrentWave());
-	FLinearColor WaveColor = FLinearColor::White;
-	if (AWaveManager* WaveMgr = GameMode->GetWaveManager())
-	{
-		switch (WaveMgr->GetWaveState())
-		{
-		case EWaveState::CountingDown:
-			WaveText = FString::Printf(TEXT("Wave %d starting in %d..."), WaveMgr->GetCurrentWave(), WaveMgr->GetCountdownSecondsRemaining());
-			WaveColor = FLinearColor::Yellow;
-			break;
-		case EWaveState::Active:
-			WaveText = FString::Printf(TEXT("Wave %d — Enemies Remaining: %d"), WaveMgr->GetCurrentWave(), WaveMgr->GetEnemiesRemaining());
-			WaveColor = FLinearColor::White;
-			break;
-		case EWaveState::Complete:
-			WaveText = FString::Printf(TEXT("WAVE %d COMPLETE"), WaveMgr->GetCurrentWave());
-			WaveColor = FLinearColor::Green;
-			break;
-		default:
-			break;
-		}
-	}
-	DrawText(WaveText, WaveColor, 40.0f, 80.0f, Font, 1.4f);
-
-	// --- Citadel health ---
-	if (ATower* Citadel = GameMode->GetTower())
-	{
-		if (UHealthComponent* Health = Citadel->HealthComponent)
-		{
-			const FString HealthText = FString::Printf(TEXT("Citadel: %d / %d"),
-				FMath::RoundToInt(Health->GetCurrentHealth()),
-				FMath::RoundToInt(Health->MaxHealth));
-
-			// Green when healthy, red when nearly destroyed.
-			const float Pct = Health->GetHealthPercent();
-			const FLinearColor HealthColor = FMath::Lerp(FLinearColor::Red, FLinearColor::Green, Pct);
-			DrawText(HealthText, HealthColor, 40.0f, 120.0f, Font, 1.4f);
-		}
-	}
+	// Loot, Wave status, and Citadel health now live in the real UMG HUD (UTDHUDWidget /
+	// WBP_TDHUD) — see TDHUDWidget.cpp. Kept here in Canvas: the defender summary below (no
+	// UMG equivalent yet), the insufficient-funds banner, and the Game Over / Victory screens.
 
 	// --- Defender summary: how many are alive and their combined health, at a glance ---
 	{
@@ -115,8 +71,9 @@ void ATDHUD::DrawStatus(ATDGameMode* GameMode)
 		// Deep purple identifies this as the "defenders" line at a glance, distinct from the
 		// Citadel's red/green health colouring above it. Kept dark/saturated (rather than a
 		// pale lavender) so it stays readable against light terrain in the background.
+		// Positioned well below the UMG HUD's top-left "Wave X / Y" text so the two never overlap.
 		const FLinearColor DefenderColor(0.35f, 0.0f, 0.55f);
-		DrawText(DefenderText, DefenderColor, 40.0f, 160.0f, Font, 1.4f);
+		DrawText(DefenderText, DefenderColor, 40.0f, 220.0f, Font, 1.4f);
 	}
 }
 

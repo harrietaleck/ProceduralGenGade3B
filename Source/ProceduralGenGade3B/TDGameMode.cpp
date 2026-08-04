@@ -9,10 +9,13 @@
 #include "BuildPadMarker.h"
 #include "TDPlayerController.h"
 #include "TDHUD.h"
+#include "TDHUDWidget.h"
 #include "TDCameraPawn.h"
 #include "HeroCharacter.h"
 #include "Kismet/GameplayStatics.h"
+#include "Blueprint/UserWidget.h"
 #include "EngineUtils.h"
+#include "UObject/ConstructorHelpers.h"
 
 ATDGameMode::ATDGameMode()
 {
@@ -27,6 +30,15 @@ ATDGameMode::ATDGameMode()
 	SpawnerClass = AEnemySpawner::StaticClass();
 	WaveManagerClass = AWaveManager::StaticClass();
 	BuildPadMarkerClass = ABuildPadMarker::StaticClass();
+
+	// Default to the UMG match HUD asset if one exists at this path (created via the UMG
+	// editor tools as a child of UTDHUDWidget). Missing gracefully means no HUD is shown
+	// rather than a hard error — matches how meshes are defaulted elsewhere in this project.
+	static ConstructorHelpers::FClassFinder<UTDHUDWidget> HUDWidgetFinder(TEXT("/Game/UI/WBP_TDHUD"));
+	if (HUDWidgetFinder.Succeeded())
+	{
+		HUDWidgetClass = HUDWidgetFinder.Class;
+	}
 }
 
 void ATDGameMode::BeginPlay()
@@ -75,6 +87,20 @@ void ATDGameMode::BeginPlay()
 	if (WaveManager && Spawner)
 	{
 		WaveManager->Initialize(Spawner, /*bStartImmediately=*/true);
+	}
+
+	// Create the UMG match HUD last, now that Tower and WaveManager both exist for it to
+	// bind to. A missing HUDWidgetClass (no WBP_TDHUD asset yet) is a silent no-op.
+	if (HUDWidgetClass)
+	{
+		if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+		{
+			if (UTDHUDWidget* Widget = CreateWidget<UTDHUDWidget>(PC, HUDWidgetClass))
+			{
+				Widget->AddToViewport();
+				Widget->InitializeHUD(this);
+			}
+		}
 	}
 }
 

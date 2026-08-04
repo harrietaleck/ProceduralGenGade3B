@@ -15,6 +15,7 @@ class AEnemySpawner;
 class AEnemy;
 class AWaveManager;
 class ABuildPadMarker;
+class UTDHUDWidget;
 
 // Broadcast whenever the player's resource count changes (UI binds to this).
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnResourcesChanged, int32, NewAmount);
@@ -49,6 +50,11 @@ public:
 	/** Visual marker spawned on every generated build pad (defaults to ABuildPadMarker). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<ABuildPadMarker> BuildPadMarkerClass;
+
+	/** The always-visible UMG match HUD (Widget Blueprint child of UTDHUDWidget). Created and
+	 *  wired up once Tower/WaveManager exist, at the end of BeginPlay. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
+	TSubclassOf<UTDHUDWidget> HUDWidgetClass;
 
 	/** Fired when resources change. */
 	UPROPERTY(BlueprintAssignable, Category = "Rules")
