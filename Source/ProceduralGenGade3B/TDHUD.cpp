@@ -32,9 +32,9 @@ void ATDHUD::DrawStatus(ATDGameMode* GameMode)
 	// DrawText only reads the font, so a const_cast here is safe.
 	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetLargeFont() : nullptr);
 
-	// --- Essence (the single shared currency) ---
-	const FString EssenceText = FString::Printf(TEXT("Essence: %d"), GameMode->GetResources());
-	DrawText(EssenceText, FLinearColor(0.4f, 0.9f, 1.0f), 40.0f, 40.0f, Font, 1.4f);
+	// --- Loot (the single shared currency, earned by defeating enemies) ---
+	const FString LootText = FString::Printf(TEXT("Loot: %d"), GameMode->GetResources());
+	DrawText(LootText, FLinearColor(0.4f, 0.9f, 1.0f), 40.0f, 40.0f, Font, 1.4f);
 
 	// --- Current wave ---
 	const FString WaveText = FString::Printf(TEXT("Wave: %d"), GameMode->GetCurrentWave());
