@@ -40,15 +40,18 @@ AHeroCharacter::AHeroCharacter()
 	CameraBoom->CameraLagSpeed = 10.0f;
 	CameraBoom->bEnableCameraRotationLag = true;          // Smooth orbiting.
 	CameraBoom->CameraRotationLagSpeed = 10.0f;
-	// Raise + shoulder-offset the pivot so the hero sits low-centre and slightly left,
-	// leaving the path ahead clearly visible.
-	CameraBoom->SocketOffset = FVector(0.0f, 45.0f, 130.0f);
+	// Raise the PIVOT to roughly head height (rotates with the boom, so the arm swings from
+	// a natural "eye line" rather than the character's feet).
+	CameraBoom->TargetOffset = FVector(0.0f, 0.0f, 80.0f);
+	// Then a small screen-space shoulder nudge (applied AFTER rotation) so the hero sits
+	// slightly off-centre rather than dead-centre, without stacking excess height like before.
+	CameraBoom->SocketOffset = FVector(0.0f, 40.0f, 20.0f);
 
 	// --- Follow camera on the end of the boom ---
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;        // Boom already handles rotation.
-	FollowCamera->FieldOfView = 80.0f;                    // Wide tactical view.
+	FollowCamera->FieldOfView = 70.0f;                    // Tactical but not fish-eyed wide.
 
 	// --- Visible placeholder body (capsule collision stays the real collider) ---
 	BodyMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BodyMesh"));
