@@ -3,6 +3,7 @@
 #include "Defender.h"
 #include "HealthComponent.h"
 #include "Enemy.h"
+#include "Projectile.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
@@ -55,12 +56,25 @@ void ADefender::FireAtNearestEnemy()
 		return;
 	}
 
+	const FVector MuzzleLocation = GetActorLocation() + MuzzleOffset;
+
+	// Preferred path: launch a projectile that flies to the enemy and applies damage on impact.
+	if (ProjectileClass)
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		SpawnParams.Owner = this;
+		if (AProjectile* Shot = GetWorld()->SpawnActor<AProjectile>(ProjectileClass, MuzzleLocation, GetActorRotation(), SpawnParams))
+		{
+			Shot->InitProjectile(Target, AttackDamage, this);
+		}
+		return;
+	}
+
+	// Fallback (no projectile class set): instant hitscan damage + a debug tracer.
 	if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
 	{
 		TargetHealth->ApplyDamage(AttackDamage, this);
-
-		// Tracer from the top of the defender to the enemy for visual feedback.
-		const FVector MuzzleLocation = GetActorLocation() + FVector(0.0f, 0.0f, 80.0f);
 		DrawDebugLine(GetWorld(), MuzzleLocation, Target->GetActorLocation(), FColor::Yellow, false, 0.1f, 0, 3.0f);
 	}
 }

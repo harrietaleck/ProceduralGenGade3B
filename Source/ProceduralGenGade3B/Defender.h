@@ -12,6 +12,7 @@
 class UHealthComponent;
 class UStaticMeshComponent;
 class AEnemy;
+class AProjectile;
 
 UCLASS()
 class PROCEDURALGENGADE3B_API ADefender : public AActor
@@ -36,6 +37,14 @@ public:
 	/** Seconds between shots. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender", meta = (ClampMin = "0.05"))
 	float FireInterval = 0.7f;
+
+	/** Projectile fired at enemies. If left empty, the defender falls back to instant (hitscan) damage. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender")
+	TSubclassOf<AProjectile> ProjectileClass;
+
+	/** Local-space offset from the defender origin where shots originate (the muzzle). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender")
+	FVector MuzzleOffset = FVector(0.0f, 0.0f, 80.0f);
 
 	/** Shared health/damage/death component. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Defender")

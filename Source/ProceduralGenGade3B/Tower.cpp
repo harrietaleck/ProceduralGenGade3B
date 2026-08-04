@@ -3,6 +3,7 @@
 #include "Tower.h"
 #include "HealthComponent.h"
 #include "Enemy.h"
+#include "Projectile.h"
 #include "TDGameMode.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -57,13 +58,25 @@ void ATower::FireAtNearestEnemy()
 		return;
 	}
 
-	// Apply damage through the enemy's health component.
+	const FVector MuzzleLocation = GetActorLocation() + MuzzleOffset;
+
+	// Preferred path: launch a projectile that flies to the enemy and applies damage on impact.
+	if (ProjectileClass)
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		SpawnParams.Owner = this;
+		if (AProjectile* Shot = GetWorld()->SpawnActor<AProjectile>(ProjectileClass, MuzzleLocation, GetActorRotation(), SpawnParams))
+		{
+			Shot->InitProjectile(Target, AttackDamage, this);
+		}
+		return;
+	}
+
+	// Fallback (no projectile class set): instant hitscan damage + a debug tracer.
 	if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
 	{
 		TargetHealth->ApplyDamage(AttackDamage, this);
-
-		// Draw a short-lived tracer from the top of the tower to the enemy for visual feedback.
-		const FVector MuzzleLocation = GetActorLocation() + FVector(0.0f, 0.0f, 300.0f);
 		DrawDebugLine(GetWorld(), MuzzleLocation, Target->GetActorLocation(), FColor::Cyan, false, 0.1f, 0, 4.0f);
 	}
 }

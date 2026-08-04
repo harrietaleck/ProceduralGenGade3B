@@ -11,6 +11,7 @@
 class UHealthComponent;
 class UStaticMeshComponent;
 class AEnemy;
+class AProjectile;
 
 UCLASS()
 class PROCEDURALGENGADE3B_API ATower : public AActor
@@ -31,6 +32,14 @@ public:
 	/** Seconds between shots (0.5 = two shots per second). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower", meta = (ClampMin = "0.05"))
 	float FireInterval = 0.5f;
+
+	/** Projectile fired at enemies. If left empty, the tower falls back to instant (hitscan) damage. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower")
+	TSubclassOf<AProjectile> ProjectileClass;
+
+	/** Local-space offset from the tower origin where shots originate (the muzzle). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower")
+	FVector MuzzleOffset = FVector(0.0f, 0.0f, 300.0f);
 
 	/** Shared health/damage/death component. Game over fires when this dies. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower")
