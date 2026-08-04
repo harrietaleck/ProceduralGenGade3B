@@ -28,8 +28,10 @@ ADefender::ADefender()
 	MeshComponent->SetCollisionResponseToAllChannels(ECR_Overlap);
 
 	// Shared health component.
+	// NOTE: temporarily lowered from 120 to 3 for easy manual testing (defenders die in one
+	// enemy hit) — restore to a real balance value once testing is done.
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
-	HealthComponent->MaxHealth = 120.0f;
+	HealthComponent->MaxHealth = 3.0f;
 }
 
 void ADefender::BeginPlay()
