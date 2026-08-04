@@ -32,9 +32,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0"))
 	float PanSpeed = 2500.0f;
 
-	/** Rotation speed in degrees per second (Q/E). */
+	/** Rotation speed in degrees per second (Q/E keys). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0"))
 	float RotateSpeed = 90.0f;
+
+	/** Degrees of rotation per pixel of mouse movement while middle-mouse dragging. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0"))
+	float MouseRotateSpeed = 0.35f;
 
 	/** How far one mouse-wheel notch changes the zoom (spring-arm length), in uu. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "1.0"))
@@ -52,9 +56,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.1"))
 	float ZoomInterpSpeed = 10.0f;
 
-	/** Downward tilt of the camera, in degrees (e.g. -55 looks down at the battlefield). */
+	/** Starting downward tilt of the camera, in degrees. -40 gives an angled 3/4 strategic
+	 *  view (more of the battlefield's "side" is visible) rather than a steep top-down look. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "-89.0", ClampMax = "0.0"))
-	float CameraPitch = -55.0f;
+	float CameraPitch = -40.0f;
+
+	/** Shallowest tilt allowed while drag-tilting (closest to level). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "-89.0", ClampMax = "0.0"))
+	float MinPitch = -25.0f;
+
+	/** Steepest tilt allowed while drag-tilting (closest to straight down). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "-89.0", ClampMax = "0.0"))
+	float MaxPitch = -70.0f;
 
 protected:
 	virtual void BeginPlay() override;
@@ -64,6 +77,10 @@ protected:
 	/** Mouse-wheel handlers: nudge the target zoom in or out (clamped). */
 	void ZoomIn();
 	void ZoomOut();
+
+	/** Middle-mouse press/release: begin/end free drag-rotation of the view. */
+	void BeginDragRotate();
+	void EndDragRotate();
 
 private:
 	/** Boom that holds the camera up and back from the pivot; also drives zoom via its length. */
@@ -77,6 +94,15 @@ private:
 	/** The zoom distance we're easing toward (spring-arm target length). */
 	float TargetArmLength = 3000.0f;
 
+	/** True while the middle mouse button is held (free-rotate mode). */
+	bool bIsDragging = false;
+
+	/** Live tilt, adjusted by vertical drag and kept within [MaxPitch, MinPitch]. */
+	float CurrentPitch = -40.0f;
+
 	/** Reads WASD/arrows/Q/E from the controller and applies pan + rotation this frame. */
 	void UpdateMovement(float DeltaSeconds);
+
+	/** While dragging, turn mouse motion into yaw (horizontal) and pitch (vertical) changes. */
+	void UpdateDragRotation();
 };

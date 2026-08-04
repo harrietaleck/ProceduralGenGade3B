@@ -9,15 +9,16 @@
 #include "TDPlayerController.h"
 #include "TDHUD.h"
 #include "TDCameraPawn.h"
+#include "HeroCharacter.h"
 #include "Kismet/GameplayStatics.h"
 #include "EngineUtils.h"
 
 ATDGameMode::ATDGameMode()
 {
-	// Use our own player controller (mouse-driven defender placement) and an RTS-style
-	// camera pawn so the player can pan, rotate and zoom over the battlefield.
+	// Use our own player controller (mouse-driven defender placement) and a third-person
+	// hero the player walks around the battlefield (Dungeon Defenders / Orcs Must Die style).
 	PlayerControllerClass = ATDPlayerController::StaticClass();
-	DefaultPawnClass = ATDCameraPawn::StaticClass();
+	DefaultPawnClass = AHeroCharacter::StaticClass();
 	HUDClass = ATDHUD::StaticClass();
 
 	// Default to the plain C++ classes; a designer can override these with Blueprint children.

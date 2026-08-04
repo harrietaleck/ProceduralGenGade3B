@@ -21,9 +21,12 @@ ATDCameraPawn::ATDCameraPawn()
 	SpringArm->SetupAttachment(Root);
 	SpringArm->TargetArmLength = TargetArmLength;
 	SpringArm->SetRelativeRotation(FRotator(CameraPitch, 0.0f, 0.0f));
-	SpringArm->bDoCollisionTest = false;   // Don't let terrain push the camera in.
+	SpringArm->bDoCollisionTest = true;    // Shorten the boom so the lens never clips terrain.
+	SpringArm->ProbeSize = 12.0f;          // Collision probe radius for that test.
 	SpringArm->bEnableCameraLag = true;    // Smooth, weighty movement.
 	SpringArm->CameraLagSpeed = 10.0f;
+	SpringArm->bEnableCameraRotationLag = true; // Ease rotation too, so turns glide.
+	SpringArm->CameraRotationLagSpeed = 10.0f;
 
 	// The view camera on the end of the boom.
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
@@ -35,7 +38,8 @@ void ATDCameraPawn::BeginPlay()
 	Super::BeginPlay();
 
 	// Apply the (possibly designer-tuned) pitch and starting zoom.
-	SpringArm->SetRelativeRotation(FRotator(CameraPitch, 0.0f, 0.0f));
+	CurrentPitch = CameraPitch;
+	SpringArm->SetRelativeRotation(FRotator(CurrentPitch, 0.0f, 0.0f));
 	TargetArmLength = FMath::Clamp(TargetArmLength, MinZoom, MaxZoom);
 	SpringArm->TargetArmLength = TargetArmLength;
 
@@ -55,6 +59,49 @@ void ATDCameraPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 	// Zoom is event-driven (the wheel fires discrete notches); pan/rotate are polled in Tick.
 	PlayerInputComponent->BindKey(EKeys::MouseScrollUp, IE_Pressed, this, &ATDCameraPawn::ZoomIn);
 	PlayerInputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &ATDCameraPawn::ZoomOut);
+
+	// Hold the middle mouse button to freely rotate the view around the battlefield.
+	PlayerInputComponent->BindKey(EKeys::MiddleMouseButton, IE_Pressed, this, &ATDCameraPawn::BeginDragRotate);
+	PlayerInputComponent->BindKey(EKeys::MiddleMouseButton, IE_Released, this, &ATDCameraPawn::EndDragRotate);
+}
+
+void ATDCameraPawn::BeginDragRotate()
+{
+	bIsDragging = true;
+}
+
+void ATDCameraPawn::EndDragRotate()
+{
+	bIsDragging = false;
+}
+
+void ATDCameraPawn::UpdateDragRotation()
+{
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC)
+	{
+		return;
+	}
+
+	// Raw mouse delta since last frame.
+	float MouseX = 0.0f;
+	float MouseY = 0.0f;
+	PC->GetInputMouseDelta(MouseX, MouseY);
+
+	// Horizontal drag -> yaw the whole rig around the battlefield.
+	if (MouseX != 0.0f)
+	{
+		FRotator NewRot = GetActorRotation();
+		NewRot.Yaw += MouseX * MouseRotateSpeed;
+		SetActorRotation(NewRot);
+	}
+
+	// Vertical drag -> tilt the boom, clamped between MaxPitch (steep) and MinPitch (shallow).
+	if (MouseY != 0.0f)
+	{
+		CurrentPitch = FMath::Clamp(CurrentPitch + MouseY * MouseRotateSpeed, MaxPitch, MinPitch);
+		SpringArm->SetRelativeRotation(FRotator(CurrentPitch, 0.0f, 0.0f));
+	}
 }
 
 void ATDCameraPawn::Tick(float DeltaSeconds)
@@ -62,6 +109,12 @@ void ATDCameraPawn::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 
 	UpdateMovement(DeltaSeconds);
+
+	// Free-rotate the view while the middle mouse button is held.
+	if (bIsDragging)
+	{
+		UpdateDragRotation();
+	}
 
 	// Ease the spring-arm length toward the desired zoom for a smooth feel.
 	SpringArm->TargetArmLength = FMath::FInterpTo(SpringArm->TargetArmLength, TargetArmLength, DeltaSeconds, ZoomInterpSpeed);
