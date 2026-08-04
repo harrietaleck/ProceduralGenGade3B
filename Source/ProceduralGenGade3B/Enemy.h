@@ -12,6 +12,19 @@
 class UHealthComponent;
 class UStaticMeshComponent;
 
+/**
+ * The flavour of loot an enemy drops. Every type still converts into the single shared
+ * Essence currency — the enum only records *what* it looked like, which lets the UI/VFX
+ * differ per enemy and lets future systems (e.g. crafting) treat drops distinctly without
+ * changing the economy. New enemies just pick a different value.
+ */
+UENUM(BlueprintType)
+enum class EResourceType : uint8
+{
+	ArcaneOrb   UMETA(DisplayName = "Arcane Orb"),
+	ToxicMucus  UMETA(DisplayName = "Toxic Mucus")
+};
+
 UCLASS()
 class PROCEDURALGENGADE3B_API AEnemy : public AActor
 {
@@ -36,9 +49,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0.0"))
 	float AttackRange = 250.0f;
 
-	/** Resources granted to the player when this enemy is killed. */
+	/** Essence granted to the player when this enemy is killed (the brief: enemies drop 2). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0"))
-	int32 ResourceReward = 10;
+	int32 ResourceReward = 2;
+
+	/** Which flavour of drop this enemy leaves (cosmetic/future-facing; still becomes Essence). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
+	EResourceType ResourceType = EResourceType::ArcaneOrb;
 
 	/** Height the enemy floats above the (flat) path plane so it doesn't sink into the mesh. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0.0"))
