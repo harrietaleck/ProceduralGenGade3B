@@ -28,7 +28,9 @@ void ATDHUD::DrawHUD()
 
 void ATDHUD::DrawStatus(ATDGameMode* GameMode)
 {
-	const UFont* Font = GEngine ? GEngine->GetLargeFont() : nullptr;
+	// GetLargeFont() returns a const UFont*, but AHUD::DrawText wants a non-const UFont*.
+	// DrawText only reads the font, so a const_cast here is safe.
+	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetLargeFont() : nullptr);
 
 	// --- Essence (the single shared currency) ---
 	const FString EssenceText = FString::Printf(TEXT("Essence: %d"), GameMode->GetResources());
@@ -57,7 +59,9 @@ void ATDHUD::DrawStatus(ATDGameMode* GameMode)
 
 void ATDHUD::DrawGameOver()
 {
-	const UFont* Font = GEngine ? GEngine->GetLargeFont() : nullptr;
+	// GetLargeFont() returns a const UFont*, but AHUD::DrawText wants a non-const UFont*.
+	// DrawText only reads the font, so a const_cast here is safe.
+	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetLargeFont() : nullptr);
 
 	// Centre the banner roughly on screen (Canvas gives us the viewport size).
 	const float CenterX = Canvas ? Canvas->SizeX * 0.5f : 400.0f;
