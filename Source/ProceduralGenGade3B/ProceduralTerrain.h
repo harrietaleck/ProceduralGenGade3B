@@ -209,6 +209,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Terrain")
 	bool ValidatePathfinding() const;
 
+	/** Forces a full, synchronous NavMesh rebuild and waits for every pending tile task to
+	 *  finish. Public so callers who place additional nav-relevant obstacles after generation
+	 *  (e.g. TDGameMode spawning the Tower actor) can flush the resulting dynamic NavMesh update
+	 *  before querying pathfinding — RuntimeGeneration=Dynamic reactively schedules an update
+	 *  when such an obstacle appears, but does not block until it completes on its own. */
+	UFUNCTION(BlueprintCallable, Category = "Terrain")
+	void RebuildNavigation();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void OnConstruction(const FTransform& Transform) override;
@@ -247,10 +255,6 @@ private:
 	 *  three paths, every path's last waypoint actually reaches the tower, and at least one
 	 *  build slot exists. GenerateTerrain() regenerates automatically if this ever fails. */
 	bool ValidateGeneratedWorld() const;
-
-	/** Grows/repositions the level's NavMesh bounds volume to cover the freshly generated
-	 *  terrain and forces a synchronous NavMesh rebuild, so navigation is always current. */
-	void RebuildNavigation();
 
 	/** Draws the terrain bounds, every path, the tower, every build slot, every spawn point,
 	 *  and logs the seed — only when bDebugMode is enabled. */
