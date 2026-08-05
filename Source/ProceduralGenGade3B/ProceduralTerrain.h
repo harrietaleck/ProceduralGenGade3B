@@ -99,6 +99,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Defenders", meta = (ClampMin = "1"))
 	int32 MaxDefenderSlots = 24;
 
+	/** Chaikin corner-cutting passes applied to each path's waypoints after the raw random walk
+	 *  is carved. 0 = the raw, blocky cell-by-cell line; higher values round it into a smoother
+	 *  curve. The spawn point and tower point are always kept exact regardless of this value. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Paths", meta = (ClampMin = "0", ClampMax = "5"))
+	int32 PathSmoothingIterations = 2;
+
 	/** Material applied to the terrain mesh. Defaults to a vertex-colour material so the
 	 *  path/buildable/tower cell colours are visible. Assignable to a custom material later. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Visual")
@@ -204,6 +210,11 @@ private:
 	 *  three paths, every path's last waypoint actually reaches the tower, and at least one
 	 *  build slot exists. GenerateTerrain() regenerates automatically if this ever fails. */
 	bool ValidateGeneratedWorld() const;
+
+	/** Runs a synchronous NavMesh pathfinding query from every path's spawn point to the tower,
+	 *  failing if any query is unreachable or only partially successful. Requires the NavMesh to
+	 *  already be rebuilt (RebuildNavigation) against the current geometry before being called. */
+	bool ValidatePathfinding() const;
 
 	/** Grows/repositions the level's NavMesh bounds volume to cover the freshly generated
 	 *  terrain and forces a synchronous NavMesh rebuild, so navigation is always current. */

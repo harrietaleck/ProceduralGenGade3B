@@ -9,11 +9,34 @@
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
 #include "NavigationSystem.h"
+#include "NavigationPath.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
 
 // Everything flat (paths, tower pad, buildable pads) sits on this Z plane in local space.
 static constexpr float PathPlaneHeight = 0.0f;
+
+// Chaikin corner-cutting: replaces each segment with two points 1/4 and 3/4 along it, which
+// rounds a blocky polyline into a smooth curve over successive iterations. The first and last
+// points are re-anchored exactly after each pass so the spawn and tower ends never drift.
+static TArray<FVector> ChaikinSmooth(const TArray<FVector>& Points, int32 Iterations)
+{
+	TArray<FVector> Current = Points;
+	for (int32 It = 0; It < Iterations && Current.Num() >= 3; ++It)
+	{
+		TArray<FVector> Next;
+		Next.Reserve(Current.Num() * 2);
+		for (int32 I = 0; I + 1 < Current.Num(); ++I)
+		{
+			Next.Add(FMath::Lerp(Current[I], Current[I + 1], 0.25f));
+			Next.Add(FMath::Lerp(Current[I], Current[I + 1], 0.75f));
+		}
+		Next[0] = Current[0];
+		Next.Last() = Current.Last();
+		Current = MoveTemp(Next);
+	}
+	return Current;
+}
 
 AProceduralTerrain::AProceduralTerrain()
 {
@@ -149,20 +172,35 @@ void AProceduralTerrain::GenerateTerrain()
 		bValid = ValidateGeneratedWorld();
 		if (bValid)
 		{
+			// Only rebuild the (expensive) NavMesh once the geometry itself is valid, then
+			// confirm AI can actually walk every path before accepting this attempt.
+			RebuildNavigation();
+			bValid = ValidatePathfinding();
+			if (!bValid)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("ProceduralTerrain: generated world passed geometry validation but failed AI pathfinding on attempt %d/%d (seed %d) — regenerating with a new seed."),
+					Attempt, MaxAttempts, Seed);
+			}
+		}
+
+		if (bValid)
+		{
 			break;
 		}
 
-		UE_LOG(LogTemp, Warning, TEXT("ProceduralTerrain: generated world failed validation on attempt %d/%d (seed %d) — regenerating with a new seed."),
-			Attempt, MaxAttempts, Seed);
+		if (Attempt < MaxAttempts)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("ProceduralTerrain: generated world failed validation on attempt %d/%d (seed %d) — regenerating with a new seed."),
+				Attempt, MaxAttempts, Seed);
+		}
 		Seed = FMath::RandRange(1, MAX_int32 - 1);
 	}
 
 	if (!bValid)
 	{
 		UE_LOG(LogTemp, Error, TEXT("ProceduralTerrain: failed to generate a valid world after %d attempts — using the last attempt anyway."), MaxAttempts);
+		RebuildNavigation(); // Make sure nav still matches whatever geometry we ended up keeping.
 	}
-
-	RebuildNavigation();
 
 	if (bDebugMode)
 	{
@@ -199,6 +237,17 @@ bool AProceduralTerrain::ValidateGeneratedWorld() const
 		{
 			return false;
 		}
+
+		// No broken/disconnected paths: consecutive waypoints must never be further apart than
+		// a couple of cells. Smoothing only ever subdivides segments (shrinks the gap), so this
+		// bound catches a genuinely broken chain without being tripped by smoothing itself.
+		for (int32 I = 0; I + 1 < Path.Waypoints.Num(); ++I)
+		{
+			if (FVector::DistSquared2D(Path.Waypoints[I], Path.Waypoints[I + 1]) > FMath::Square(CellSize * 2.0f))
+			{
+				return false;
+			}
+		}
 	}
 
 	// At least one buildable location must exist, or the game is unplayable.
@@ -207,6 +256,33 @@ bool AProceduralTerrain::ValidateGeneratedWorld() const
 		return false;
 	}
 
+	return true;
+}
+
+bool AProceduralTerrain::ValidatePathfinding() const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+
+	// AI must actually be able to walk every path, not just have geometrically valid waypoints —
+	// query the just-rebuilt NavMesh from each spawn point to the tower and require a complete
+	// (non-partial) route.
+	for (const FEnemyPath& Path : EnemyPaths)
+	{
+		if (Path.Waypoints.Num() == 0)
+		{
+			return false;
+		}
+
+		UNavigationPath* NavPath = UNavigationSystemV1::FindPathToLocationSynchronously(World, Path.SpawnPoint, TowerLocation);
+		if (!NavPath || !NavPath->IsValid() || NavPath->IsPartial())
+		{
+			return false;
+		}
+	}
 	return true;
 }
 
@@ -341,6 +417,10 @@ void AProceduralTerrain::CarvePaths()
 		}
 		if (Path.Waypoints.Num() > 0)
 		{
+			if (PathSmoothingIterations > 0)
+			{
+				Path.Waypoints = ChaikinSmooth(Path.Waypoints, PathSmoothingIterations);
+			}
 			Path.SpawnPoint = Path.Waypoints[0];
 			EnemyPaths.Add(MoveTemp(Path));
 		}
