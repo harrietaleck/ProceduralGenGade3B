@@ -25,8 +25,11 @@ ATower::ATower()
 		MeshComponent->SetStaticMesh(CylinderMesh.Object);
 	}
 	MeshComponent->SetRelativeScale3D(FVector(1.5f, 1.5f, 3.0f)); // Wide and tall.
+	// A solid structure: blocks the player and traces (so the hero can't walk through it and
+	// the camera can't clip into it), while staying QueryOnly since it never needs physics
+	// simulation — it's a static, immovable actor.
+	MeshComponent->SetCollisionProfileName(TEXT("BlockAll"));
 	MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-	MeshComponent->SetCollisionResponseToAllChannels(ECR_Overlap);
 
 	// Shared health component.
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));

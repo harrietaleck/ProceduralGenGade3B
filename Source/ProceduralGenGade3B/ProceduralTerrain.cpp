@@ -53,8 +53,23 @@ void AProceduralTerrain::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// The brief requires the terrain to differ every new game: pick a fresh random
-	// seed at play time (unless the designer pinned a fixed seed for testing).
+	// Deliberately does NOT generate here. Unreal does not guarantee this actor's BeginPlay
+	// runs before the GameMode's — relying on that would be a latent ordering bug, since the
+	// GameMode spawns the Tower and build-pad markers from this terrain's data. Generation is
+	// instead triggered explicitly and synchronously by the GameMode via PrepareForNewGame(),
+	// so there is never any ambiguity about whether fresh data is ready before it's read.
+}
+
+void AProceduralTerrain::RandomizeAndRegenerate()
+{
+	Seed = FMath::RandRange(1, MAX_int32 - 1);
+	GenerateTerrain();
+}
+
+void AProceduralTerrain::PrepareForNewGame()
+{
+	// The brief requires the terrain to differ every new game: pick a fresh random seed
+	// (unless the designer pinned a fixed seed for testing) and generate synchronously.
 	if (bRandomizeSeedOnBeginPlay)
 	{
 		Seed = FMath::RandRange(1, MAX_int32 - 1);
@@ -62,9 +77,38 @@ void AProceduralTerrain::BeginPlay()
 	GenerateTerrain();
 }
 
-void AProceduralTerrain::RandomizeAndRegenerate()
+void AProceduralTerrain::RunStressTest(int32 NumIterations)
 {
-	Seed = FMath::RandRange(1, MAX_int32 - 1);
+	NumIterations = FMath::Max(1, NumIterations);
+
+	const int32 OriginalSeed = Seed;
+	int32 PassCount = 0;
+	double TotalSeconds = 0.0;
+
+	UE_LOG(LogTemp, Display, TEXT("ProceduralTerrain [STRESS TEST]: starting %d generations..."), NumIterations);
+
+	for (int32 I = 1; I <= NumIterations; ++I)
+	{
+		Seed = FMath::RandRange(1, MAX_int32 - 1);
+
+		const double StartTime = FPlatformTime::Seconds();
+		GenerateTerrain(); // Includes its own validate-and-regenerate-on-failure loop.
+		const double ElapsedSeconds = FPlatformTime::Seconds() - StartTime;
+		TotalSeconds += ElapsedSeconds;
+
+		const bool bPass = ValidateGeneratedWorld();
+		PassCount += bPass ? 1 : 0;
+
+		UE_LOG(LogTemp, Display, TEXT("ProceduralTerrain [STRESS TEST] run %d/%d: seed=%d, paths=%d, buildSlots=%d, time=%.2fms -> %s"),
+			I, NumIterations, Seed, EnemyPaths.Num(), DefenderSlots.Num(), ElapsedSeconds * 1000.0, bPass ? TEXT("PASS") : TEXT("FAIL"));
+	}
+
+	UE_LOG(LogTemp, Display, TEXT("ProceduralTerrain [STRESS TEST] complete: %d/%d passed (%.1f%%), average time %.2fms."),
+		PassCount, NumIterations, 100.0 * PassCount / NumIterations, 1000.0 * TotalSeconds / NumIterations);
+
+	// Leave the terrain on a fresh, valid generation rather than the caller's original seed,
+	// so the level is left in a normal playable state after the test runs.
+	Seed = OriginalSeed;
 	GenerateTerrain();
 }
 

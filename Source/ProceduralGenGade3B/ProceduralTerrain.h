@@ -132,6 +132,26 @@ public:
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Terrain")
 	void RandomizeAndRegenerate();
 
+	/**
+	 * The single, explicit entry point a match's GameMode must call — once, before reading
+	 * any terrain data — to guarantee this actor's world is freshly generated and current.
+	 * Deliberately NOT done automatically in BeginPlay(): Unreal does not guarantee this
+	 * actor's BeginPlay runs before GameMode's, so leaving generation implicit there was a
+	 * latent ordering bug (GameMode could have read stale, pre-randomisation data). Making
+	 * the trigger explicit removes that ambiguity entirely.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Terrain")
+	void PrepareForNewGame();
+
+	/**
+	 * Runs the full generate-and-validate pipeline NumIterations times in a row (a fresh
+	 * random seed each time), logging a pass/fail line per run and an aggregate summary at
+	 * the end. Lets the generation pipeline be stress-tested many times over in seconds,
+	 * without needing a separate PIE session per run. Callable from the editor Details panel.
+	 */
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Terrain|Debug")
+	void RunStressTest(int32 NumIterations = 20);
+
 	// ---- Data queries used by the rest of the game (Blueprint-friendly) ----
 
 	/** World-space location of the tower cell (top surface, centre). */

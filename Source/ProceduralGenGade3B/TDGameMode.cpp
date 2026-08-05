@@ -57,11 +57,49 @@ void ATDGameMode::BeginPlay()
 		return;
 	}
 
+	// Explicitly trigger generation before reading any terrain data. AProceduralTerrain's own
+	// BeginPlay deliberately does nothing, since actor BeginPlay order between this GameMode and
+	// the terrain actor is not guaranteed by Unreal — calling this here removes that ambiguity.
+	Terrain->PrepareForNewGame();
+
 	// Spawn the tower on the terrain's central tower cell, raised so its base sits on the ground.
-	const FVector TowerLocation = Terrain->GetTowerLocation() + FVector(0.0f, 0.0f, 150.0f);
+	// Bounded retry: if a spawn is ever rejected (nullptr) or lands away from the terrain's
+	// published tower location (e.g. blocked by another actor at that transform), regenerate the
+	// world and try again rather than starting a match with a missing/misplaced tower.
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	Tower = GetWorld()->SpawnActor<ATower>(TowerClass, TowerLocation, FRotator::ZeroRotator, SpawnParams);
+
+	const int32 MaxTowerSpawnAttempts = 5;
+	const float TowerPlacementToleranceSq = FMath::Square(50.0f);
+	bool bTowerPlaced = false;
+	for (int32 Attempt = 1; Attempt <= MaxTowerSpawnAttempts && !bTowerPlaced; ++Attempt)
+	{
+		if (Tower)
+		{
+			Tower->Destroy();
+			Tower = nullptr;
+		}
+
+		const FVector TowerLocation = Terrain->GetTowerLocation() + FVector(0.0f, 0.0f, 150.0f);
+		Tower = GetWorld()->SpawnActor<ATower>(TowerClass, TowerLocation, FRotator::ZeroRotator, SpawnParams);
+
+		const bool bLocationMatches = Tower && FVector::DistSquared(Tower->GetActorLocation(), TowerLocation) <= TowerPlacementToleranceSq;
+		if (Tower && bLocationMatches)
+		{
+			bTowerPlaced = true;
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("TDGameMode: tower spawn attempt %d/%d failed validation, regenerating world."), Attempt, MaxTowerSpawnAttempts);
+			Terrain->RandomizeAndRegenerate();
+		}
+	}
+
+	if (!bTowerPlaced)
+	{
+		UE_LOG(LogTemp, Error, TEXT("TDGameMode: failed to place a valid tower after %d attempts. Aborting match start."), MaxTowerSpawnAttempts);
+		return;
+	}
 
 	// Mark every generated build pad with a visual platform, so valid placement locations
 	// are always obvious (brief: "is it clear to the player how/where they can build?").
