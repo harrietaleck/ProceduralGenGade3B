@@ -356,41 +356,33 @@ void AProceduralTerrain::RebuildNavigation()
 		return;
 	}
 
-	// Grow/reposition every NavMeshBoundsVolume in the level to fully cover whatever extent was
-	// just generated. GridSize/CellSize/HeightScale are all designer-tunable, so a fixed,
-	// hand-placed volume could silently stop covering the play area (missing NavMesh tiles at
-	// the edges) the moment those values change. Resizing by scale factor — recomputed fresh
-	// from the volume's current (already-scaled) bounds each call — works regardless of the
-	// volume's originally-authored size and never compounds drift across repeated calls.
+	// Warn loudly (once per generation) if no placed NavMeshBoundsVolume actually covers the
+	// terrain's current footprint, rather than silently producing an unwalkable map. Runtime
+	// resizing of a placed volume's brush geometry proved unreliable (its cached bounds didn't
+	// consistently follow actor-transform changes at PIE runtime), so instead of fighting that,
+	// this requires the level to already contain a volume generously sized for the configured
+	// GridSize/CellSize/HeightScale — exactly how the volume was set up in the level (see
+	// TowerDefense.umap's NavMeshBoundsVolume_0). ValidatePathfinding() below is the real,
+	// authoritative check that navigation is actually usable.
 	const float Half = GridSize * CellSize * 0.5f;
-	const FVector RequiredExtent(Half + CellSize * 2.0f, Half + CellSize * 2.0f, HeightScale * 0.5f + 300.0f);
-	const FVector RequiredCenter = GetActorLocation() + FVector(0.0f, 0.0f, HeightScale * 0.5f);
-
+	const FBox RequiredBounds(GetActorLocation() + FVector(-Half, -Half, -50.0f), GetActorLocation() + FVector(Half, Half, HeightScale + 50.0f));
+	bool bAnyVolumeCoversTerrain = false;
 	for (TActorIterator<ANavMeshBoundsVolume> It(World); It; ++It)
 	{
-		ANavMeshBoundsVolume* BoundsVolume = *It;
-
-		// A hand-placed volume defaults to Static mobility, which silently rejects the
-		// transform changes below (logs a warning, does nothing) — force it Movable so the
-		// resize below actually takes effect.
-		if (USceneComponent* Root = BoundsVolume->GetRootComponent())
+		if (It->GetComponentsBoundingBox(/*bNonColliding=*/true).IsInside(RequiredBounds))
 		{
-			Root->SetMobility(EComponentMobility::Movable);
+			bAnyVolumeCoversTerrain = true;
+			break;
 		}
-
-		const FVector CurrentScale = BoundsVolume->GetActorScale3D();
-		const FVector SafeCurrentScale(FMath::Max(FMath::Abs(CurrentScale.X), KINDA_SMALL_NUMBER),
-			FMath::Max(FMath::Abs(CurrentScale.Y), KINDA_SMALL_NUMBER), FMath::Max(FMath::Abs(CurrentScale.Z), KINDA_SMALL_NUMBER));
-		const FVector CurrentExtent = BoundsVolume->GetComponentsBoundingBox(/*bNonColliding=*/true).GetExtent();
-		const FVector UnscaledExtent(FMath::Max(CurrentExtent.X / SafeCurrentScale.X, 1.0f),
-			FMath::Max(CurrentExtent.Y / SafeCurrentScale.Y, 1.0f), FMath::Max(CurrentExtent.Z / SafeCurrentScale.Z, 1.0f));
-
-		BoundsVolume->SetActorScale3D(RequiredExtent / UnscaledExtent);
-		BoundsVolume->SetActorLocation(RequiredCenter);
+	}
+	if (!bAnyVolumeCoversTerrain)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ProceduralTerrain: no NavMeshBoundsVolume in the level fully covers the current terrain footprint — enlarge NavMeshBoundsVolume_0 in the level to cover at least +/-%.0f uu horizontally and %.0f uu vertically."),
+			Half, HeightScale);
 	}
 
 	// Forces a full, synchronous NavMesh rebuild so navigation data is always current with
-	// whatever terrain (and NavMeshBoundsVolume extent) was just generated.
+	// whatever terrain was just generated.
 	FNavigationSystem::Build(*World);
 }
 
