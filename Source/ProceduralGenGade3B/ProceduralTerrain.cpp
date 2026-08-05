@@ -11,6 +11,7 @@
 #include "NavigationSystem.h"
 #include "NavigationPath.h"
 #include "NavMesh/NavMeshBoundsVolume.h"
+#include "NavMesh/RecastNavMesh.h"
 #include "EngineUtils.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
@@ -381,9 +382,19 @@ void AProceduralTerrain::RebuildNavigation()
 			Half, HeightScale);
 	}
 
-	// Forces a full, synchronous NavMesh rebuild so navigation data is always current with
-	// whatever terrain was just generated.
+	// FNavigationSystem::Build() only *schedules* tile generation under RuntimeGeneration=Dynamic
+	// (the mode required for any runtime/PIE rebuild to do anything at all — see above) — it does
+	// not block until tiles finish. Without waiting here, ValidatePathfinding() immediately after
+	// would query a still-empty or partially-built NavMesh. EnsureBuildCompletion() forces every
+	// pending tile task to finish synchronously before this function returns.
 	FNavigationSystem::Build(*World);
+	for (TActorIterator<ARecastNavMesh> NavIt(World); NavIt; ++NavIt)
+	{
+		if (ARecastNavMesh* RecastNavMesh = *NavIt)
+		{
+			RecastNavMesh->EnsureBuildCompletion();
+		}
+	}
 }
 
 // --------------------------------------------------------------------------------------
