@@ -201,6 +201,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Terrain")
 	bool IsSlotOccupied(const FVector& Location) const;
 
+	/** Runs synchronous NavMesh pathfinding queries from every path's spawn point to the tower,
+	 *  and from the tower to every build slot, failing if any query is unreachable or only
+	 *  partially successful. Requires the NavMesh to already be rebuilt (RebuildNavigation)
+	 *  against the current geometry before being called. Public so callers outside this class
+	 *  (e.g. TDGameMode's final world-validation gate) can re-verify navigation independently. */
+	UFUNCTION(BlueprintPure, Category = "Terrain")
+	bool ValidatePathfinding() const;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void OnConstruction(const FTransform& Transform) override;
@@ -239,12 +247,6 @@ private:
 	 *  three paths, every path's last waypoint actually reaches the tower, and at least one
 	 *  build slot exists. GenerateTerrain() regenerates automatically if this ever fails. */
 	bool ValidateGeneratedWorld() const;
-
-	/** Runs synchronous NavMesh pathfinding queries from every path's spawn point to the tower,
-	 *  and from the tower to every build slot, failing if any query is unreachable or only
-	 *  partially successful. Requires the NavMesh to already be rebuilt (RebuildNavigation)
-	 *  against the current geometry before being called. */
-	bool ValidatePathfinding() const;
 
 	/** Grows/repositions the level's NavMesh bounds volume to cover the freshly generated
 	 *  terrain and forces a synchronous NavMesh rebuild, so navigation is always current. */

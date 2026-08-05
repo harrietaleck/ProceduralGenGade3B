@@ -139,6 +139,28 @@ private:
 	UPROPERTY()
 	TObjectPtr<AWaveManager> WaveManager;
 
+	/** Visual platforms spawned on every generated build pad this attempt — tracked so a failed
+	 *  world-validation pass can tear them down before regenerating. */
+	UPROPERTY()
+	TArray<TObjectPtr<ABuildPadMarker>> BuildPadMarkers;
+
 	/** Find the terrain actor already placed in the level. */
 	AProceduralTerrain* FindTerrain() const;
+
+	/** Spawns the tower on the terrain's published tower location, retrying with a fresh terrain
+	 *  regeneration if the spawn is ever rejected or lands away from that location. Returns false
+	 *  if no valid placement was reached within the attempt budget. */
+	bool SpawnTowerWithRetry();
+
+	/** Spawns a visual platform on every one of the terrain's current build slots. */
+	void SpawnBuildPadMarkers();
+
+	/** Destroys the tower and every build-pad marker spawned so far, so a failed world-validation
+	 *  attempt can regenerate cleanly rather than leaving stale actors from the last attempt. */
+	void DestroySpawnedWorldActors();
+
+	/** Final gate before gameplay (enemy spawning, HUD) is allowed to start: re-checks the whole
+	 *  placed world — terrain, tower, build pads, navigation — as actually spawned, not just the
+	 *  terrain's own self-validation during generation. */
+	bool ValidateWorldBeforeGameplay() const;
 };

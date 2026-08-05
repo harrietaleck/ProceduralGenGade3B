@@ -57,59 +57,51 @@ void ATDGameMode::BeginPlay()
 		return;
 	}
 
-	// Explicitly trigger generation before reading any terrain data. AProceduralTerrain's own
-	// BeginPlay deliberately does nothing, since actor BeginPlay order between this GameMode and
-	// the terrain actor is not guaranteed by Unreal — calling this here removes that ambiguity.
-	Terrain->PrepareForNewGame();
-
-	// Spawn the tower on the terrain's central tower cell, raised so its base sits on the ground.
-	// Bounded retry: if a spawn is ever rejected (nullptr) or lands away from the terrain's
-	// published tower location (e.g. blocked by another actor at that transform), regenerate the
-	// world and try again rather than starting a match with a missing/misplaced tower.
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-	const int32 MaxTowerSpawnAttempts = 5;
-	const float TowerPlacementToleranceSq = FMath::Square(50.0f);
-	bool bTowerPlaced = false;
-	for (int32 Attempt = 1; Attempt <= MaxTowerSpawnAttempts && !bTowerPlaced; ++Attempt)
+	// Build the whole world (terrain, tower, build pads) and validate it as actually placed
+	// before allowing gameplay to begin. Any failure tears down this attempt's actors and
+	// regenerates the entire world from scratch — gameplay must never start on an invalid map.
+	const int32 MaxWorldAttempts = 5;
+	bool bWorldValid = false;
+	for (int32 WorldAttempt = 1; WorldAttempt <= MaxWorldAttempts; ++WorldAttempt)
 	{
-		if (Tower)
+		if (WorldAttempt > 1)
 		{
-			Tower->Destroy();
-			Tower = nullptr;
+			DestroySpawnedWorldActors();
 		}
 
-		const FVector TowerLocation = Terrain->GetTowerLocation() + FVector(0.0f, 0.0f, 150.0f);
-		Tower = GetWorld()->SpawnActor<ATower>(TowerClass, TowerLocation, FRotator::ZeroRotator, SpawnParams);
+		// Explicitly trigger generation before reading any terrain data. AProceduralTerrain's own
+		// BeginPlay deliberately does nothing, since actor BeginPlay order between this GameMode
+		// and the terrain actor is not guaranteed by Unreal — calling this here removes that
+		// ambiguity. A fresh seed each attempt (bRandomizeSeedOnBeginPlay permitting) so a failed
+		// attempt doesn't just regenerate the exact same invalid layout.
+		Terrain->PrepareForNewGame();
 
-		const bool bLocationMatches = Tower && FVector::DistSquared(Tower->GetActorLocation(), TowerLocation) <= TowerPlacementToleranceSq;
-		if (Tower && bLocationMatches)
+		if (!SpawnTowerWithRetry())
 		{
-			bTowerPlaced = true;
+			UE_LOG(LogTemp, Warning, TEXT("TDGameMode: world attempt %d/%d failed to place a tower — regenerating entire world."), WorldAttempt, MaxWorldAttempts);
+			continue;
 		}
-		else
+
+		SpawnBuildPadMarkers();
+
+		bWorldValid = ValidateWorldBeforeGameplay();
+		if (bWorldValid)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("TDGameMode: tower spawn attempt %d/%d failed validation, regenerating world."), Attempt, MaxTowerSpawnAttempts);
-			Terrain->RandomizeAndRegenerate();
+			break;
 		}
+
+		UE_LOG(LogTemp, Warning, TEXT("TDGameMode: world validation failed on attempt %d/%d — regenerating entire world."), WorldAttempt, MaxWorldAttempts);
 	}
 
-	if (!bTowerPlaced)
+	if (!bWorldValid)
 	{
-		UE_LOG(LogTemp, Error, TEXT("TDGameMode: failed to place a valid tower after %d attempts. Aborting match start."), MaxTowerSpawnAttempts);
+		UE_LOG(LogTemp, Error, TEXT("TDGameMode: failed to produce a valid world after %d attempts. Aborting match start — gameplay will not begin."), MaxWorldAttempts);
+		DestroySpawnedWorldActors();
 		return;
 	}
 
-	// Mark every generated build pad with a visual platform, so valid placement locations
-	// are always obvious (brief: "is it clear to the player how/where they can build?").
-	if (BuildPadMarkerClass)
-	{
-		for (const FDefenderSlot& Slot : Terrain->GetDefenderSlots())
-		{
-			GetWorld()->SpawnActor<ABuildPadMarker>(BuildPadMarkerClass, Slot.Location + FVector(0.0f, 0.0f, 4.0f), FRotator::ZeroRotator, SpawnParams);
-		}
-	}
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 	// Spawn the enemy spawner and hand it the terrain (for spawn points/paths) and the tower (target).
 	// We disable its self-driven timer: the WaveManager decides when each enemy spawns.
@@ -167,6 +159,131 @@ AProceduralTerrain* ATDGameMode::FindTerrain() const
 		return *It; // Use the first terrain found.
 	}
 	return nullptr;
+}
+
+bool ATDGameMode::SpawnTowerWithRetry()
+{
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	// Bounded retry: if a spawn is ever rejected (nullptr) or lands away from the terrain's
+	// published tower location (e.g. blocked by another actor at that transform), regenerate the
+	// terrain and try again rather than starting a match with a missing/misplaced tower.
+	const int32 MaxTowerSpawnAttempts = 5;
+	const float TowerPlacementToleranceSq = FMath::Square(50.0f);
+	for (int32 Attempt = 1; Attempt <= MaxTowerSpawnAttempts; ++Attempt)
+	{
+		if (Tower)
+		{
+			Tower->Destroy();
+			Tower = nullptr;
+		}
+
+		const FVector TowerSpawnLocation = Terrain->GetTowerLocation() + FVector(0.0f, 0.0f, 150.0f);
+		Tower = GetWorld()->SpawnActor<ATower>(TowerClass, TowerSpawnLocation, FRotator::ZeroRotator, SpawnParams);
+
+		const bool bLocationMatches = Tower && FVector::DistSquared(Tower->GetActorLocation(), TowerSpawnLocation) <= TowerPlacementToleranceSq;
+		if (Tower && bLocationMatches)
+		{
+			return true;
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("TDGameMode: tower spawn attempt %d/%d failed validation, regenerating terrain."), Attempt, MaxTowerSpawnAttempts);
+		Terrain->RandomizeAndRegenerate();
+	}
+
+	return false;
+}
+
+void ATDGameMode::SpawnBuildPadMarkers()
+{
+	if (!BuildPadMarkerClass)
+	{
+		return;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	// Mark every generated build pad with a visual platform, so valid placement locations
+	// are always obvious (brief: "is it clear to the player how/where they can build?").
+	for (const FDefenderSlot& Slot : Terrain->GetDefenderSlots())
+	{
+		if (ABuildPadMarker* Marker = GetWorld()->SpawnActor<ABuildPadMarker>(BuildPadMarkerClass, Slot.Location + FVector(0.0f, 0.0f, 4.0f), FRotator::ZeroRotator, SpawnParams))
+		{
+			BuildPadMarkers.Add(Marker);
+		}
+	}
+}
+
+void ATDGameMode::DestroySpawnedWorldActors()
+{
+	if (Tower)
+	{
+		Tower->Destroy();
+		Tower = nullptr;
+	}
+	for (ABuildPadMarker* Marker : BuildPadMarkers)
+	{
+		if (Marker)
+		{
+			Marker->Destroy();
+		}
+	}
+	BuildPadMarkers.Reset();
+}
+
+bool ATDGameMode::ValidateWorldBeforeGameplay() const
+{
+	// Terrain generated, with the minimum required systems.
+	if (!Terrain || Terrain->GetEnemyPaths().Num() < 3 || Terrain->GetDefenderSlots().Num() == 0)
+	{
+		return false;
+	}
+
+	// Tower generated, and not floating: its spawned Z must closely match the terrain's
+	// published tower ground height (SpawnTowerWithRetry already guarantees XY/overall placement
+	// matches, this re-confirms it as actually placed in the world, not just requested).
+	if (!Tower)
+	{
+		return false;
+	}
+	if (FMath::Abs(Tower->GetActorLocation().Z - (Terrain->GetTowerLocation().Z + 150.0f)) > 50.0f)
+	{
+		return false;
+	}
+
+	// Build slots valid: exactly one marker per published slot, none floating.
+	if (BuildPadMarkers.Num() != Terrain->GetDefenderSlots().Num())
+	{
+		return false;
+	}
+	for (const ABuildPadMarker* Marker : BuildPadMarkers)
+	{
+		if (!Marker)
+		{
+			return false;
+		}
+	}
+
+	// No overlapping actors: the tower's world bounds must not intersect any build-pad marker's.
+	const FBox TowerBounds = Tower->GetComponentsBoundingBox(/*bNonColliding=*/true);
+	for (const ABuildPadMarker* Marker : BuildPadMarkers)
+	{
+		if (TowerBounds.Intersect(Marker->GetComponentsBoundingBox(/*bNonColliding=*/true)))
+		{
+			return false;
+		}
+	}
+
+	// Navigation valid / no unreachable gameplay areas: every enemy path and every build slot
+	// must be reachable on the just-rebuilt NavMesh.
+	if (!Terrain->ValidatePathfinding())
+	{
+		return false;
+	}
+
+	return true;
 }
 
 void ATDGameMode::AddResources(int32 Amount)
