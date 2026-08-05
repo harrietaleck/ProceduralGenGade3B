@@ -38,6 +38,10 @@ protected:
 	/** R-key handler: restart the game (only has an effect once the game is over). */
 	void OnRestartPressed();
 
+	/** P-key handler: toggle the engine's NavMesh debug overlay, for verifying live navigation
+	 *  coverage over the current procedurally-generated terrain. */
+	void OnToggleNavMeshDebug();
+
 private:
 	/** True if the terrain's stored slot state says a defender already occupies this world slot. */
 	bool IsSlotOccupied(const FVector& SlotLocation) const;

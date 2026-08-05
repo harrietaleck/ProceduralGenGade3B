@@ -10,6 +10,8 @@
 #include "UObject/ConstructorHelpers.h"
 #include "NavigationSystem.h"
 #include "NavigationPath.h"
+#include "NavMesh/NavMeshBoundsVolume.h"
+#include "EngineUtils.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
 
@@ -119,7 +121,7 @@ void AProceduralTerrain::RunStressTest(int32 NumIterations)
 		const double ElapsedSeconds = FPlatformTime::Seconds() - StartTime;
 		TotalSeconds += ElapsedSeconds;
 
-		const bool bPass = ValidateGeneratedWorld();
+		const bool bPass = ValidateGeneratedWorld() && ValidatePathfinding();
 		PassCount += bPass ? 1 : 0;
 
 		UE_LOG(LogTemp, Display, TEXT("ProceduralTerrain [STRESS TEST] run %d/%d: seed=%d, paths=%d, buildSlots=%d, time=%.2fms -> %s"),
@@ -297,6 +299,17 @@ bool AProceduralTerrain::ValidatePathfinding() const
 			return false;
 		}
 	}
+
+	// Every build slot must also be reachable from the tower, not just the enemy paths.
+	for (const FDefenderSlot& Slot : DefenderSlots)
+	{
+		UNavigationPath* NavPath = UNavigationSystemV1::FindPathToLocationSynchronously(World, TowerLocation, Slot.Location);
+		if (!NavPath || !NavPath->IsValid() || NavPath->IsPartial())
+		{
+			return false;
+		}
+	}
+
 	return true;
 }
 
@@ -343,10 +356,33 @@ void AProceduralTerrain::RebuildNavigation()
 		return;
 	}
 
+	// Grow/reposition every NavMeshBoundsVolume in the level to fully cover whatever extent was
+	// just generated. GridSize/CellSize/HeightScale are all designer-tunable, so a fixed,
+	// hand-placed volume could silently stop covering the play area (missing NavMesh tiles at
+	// the edges) the moment those values change. Resizing by scale factor — recomputed fresh
+	// from the volume's current (already-scaled) bounds each call — works regardless of the
+	// volume's originally-authored size and never compounds drift across repeated calls.
+	const float Half = GridSize * CellSize * 0.5f;
+	const FVector RequiredExtent(Half + CellSize * 2.0f, Half + CellSize * 2.0f, HeightScale * 0.5f + 300.0f);
+	const FVector RequiredCenter = GetActorLocation() + FVector(0.0f, 0.0f, HeightScale * 0.5f);
+
+	for (TActorIterator<ANavMeshBoundsVolume> It(World); It; ++It)
+	{
+		ANavMeshBoundsVolume* BoundsVolume = *It;
+
+		const FVector CurrentScale = BoundsVolume->GetActorScale3D();
+		const FVector SafeCurrentScale(FMath::Max(FMath::Abs(CurrentScale.X), KINDA_SMALL_NUMBER),
+			FMath::Max(FMath::Abs(CurrentScale.Y), KINDA_SMALL_NUMBER), FMath::Max(FMath::Abs(CurrentScale.Z), KINDA_SMALL_NUMBER));
+		const FVector CurrentExtent = BoundsVolume->GetComponentsBoundingBox(/*bNonColliding=*/true).GetExtent();
+		const FVector UnscaledExtent(FMath::Max(CurrentExtent.X / SafeCurrentScale.X, 1.0f),
+			FMath::Max(CurrentExtent.Y / SafeCurrentScale.Y, 1.0f), FMath::Max(CurrentExtent.Z / SafeCurrentScale.Z, 1.0f));
+
+		BoundsVolume->SetActorScale3D(RequiredExtent / UnscaledExtent);
+		BoundsVolume->SetActorLocation(RequiredCenter);
+	}
+
 	// Forces a full, synchronous NavMesh rebuild so navigation data is always current with
-	// whatever terrain was just generated. Relies on a NavMeshBoundsVolume already covering
-	// the play area being present in the level (placed once, sized generously) — this call
-	// only triggers the rebuild, it doesn't need to know the terrain's exact extents itself.
+	// whatever terrain (and NavMeshBoundsVolume extent) was just generated.
 	FNavigationSystem::Build(*World);
 }
 

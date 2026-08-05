@@ -240,9 +240,10 @@ private:
 	 *  build slot exists. GenerateTerrain() regenerates automatically if this ever fails. */
 	bool ValidateGeneratedWorld() const;
 
-	/** Runs a synchronous NavMesh pathfinding query from every path's spawn point to the tower,
-	 *  failing if any query is unreachable or only partially successful. Requires the NavMesh to
-	 *  already be rebuilt (RebuildNavigation) against the current geometry before being called. */
+	/** Runs synchronous NavMesh pathfinding queries from every path's spawn point to the tower,
+	 *  and from the tower to every build slot, failing if any query is unreachable or only
+	 *  partially successful. Requires the NavMesh to already be rebuilt (RebuildNavigation)
+	 *  against the current geometry before being called. */
 	bool ValidatePathfinding() const;
 
 	/** Grows/repositions the level's NavMesh bounds volume to cover the freshly generated

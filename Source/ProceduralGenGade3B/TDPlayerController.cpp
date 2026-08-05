@@ -35,6 +35,16 @@ void ATDPlayerController::SetupInputComponent()
 
 	// Bind R to restart (only acts once the game is over — see OnRestartPressed).
 	InputComponent->BindKey(EKeys::R, IE_Pressed, this, &ATDPlayerController::OnRestartPressed);
+
+	// Bind P to toggle the NavMesh debug overlay.
+	InputComponent->BindKey(EKeys::P, IE_Pressed, this, &ATDPlayerController::OnToggleNavMeshDebug);
+}
+
+void ATDPlayerController::OnToggleNavMeshDebug()
+{
+	// "show Navigation" is the engine's own NavMesh debug-draw toggle — reuse it rather than
+	// reimplementing NavMesh visualisation.
+	ConsoleCommand(TEXT("show Navigation"));
 }
 
 void ATDPlayerController::OnRestartPressed()
