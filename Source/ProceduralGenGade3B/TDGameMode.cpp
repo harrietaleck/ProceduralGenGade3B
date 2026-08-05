@@ -105,9 +105,9 @@ void ATDGameMode::BeginPlay()
 	// are always obvious (brief: "is it clear to the player how/where they can build?").
 	if (BuildPadMarkerClass)
 	{
-		for (const FVector& Slot : Terrain->GetDefenderSlots())
+		for (const FDefenderSlot& Slot : Terrain->GetDefenderSlots())
 		{
-			GetWorld()->SpawnActor<ABuildPadMarker>(BuildPadMarkerClass, Slot + FVector(0.0f, 0.0f, 4.0f), FRotator::ZeroRotator, SpawnParams);
+			GetWorld()->SpawnActor<ABuildPadMarker>(BuildPadMarkerClass, Slot.Location + FVector(0.0f, 0.0f, 4.0f), FRotator::ZeroRotator, SpawnParams);
 		}
 	}
 

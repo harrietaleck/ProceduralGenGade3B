@@ -4,6 +4,8 @@
 #include "HealthComponent.h"
 #include "Enemy.h"
 #include "Projectile.h"
+#include "ProceduralTerrain.h"
+#include "TDGameMode.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
@@ -107,8 +109,26 @@ AEnemy* ADefender::FindNearestEnemyInRange() const
 
 void ADefender::HandleDeath(AActor* Killer)
 {
-	// Stop firing and remove the actor. Its build slot becomes free automatically because
-	// the player controller treats a slot as occupied only while a defender stands on it.
+	// Stop firing and remove the actor. Freeing its build slot happens in EndPlay, which fires
+	// for every destruction path (not just this one), so occupancy can never go stale.
 	GetWorldTimerManager().ClearTimer(FireTimerHandle);
 	Destroy();
+}
+
+void ADefender::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// Free the build slot this defender occupied, however it's being destroyed (death, level
+	// teardown, etc.), so the terrain's persisted occupancy state never goes stale.
+	if (bHasOccupiedSlot)
+	{
+		if (ATDGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ATDGameMode>() : nullptr)
+		{
+			if (AProceduralTerrain* Terrain = GameMode->GetTerrain())
+			{
+				Terrain->SetSlotOccupied(OccupiedSlotLocation, false);
+			}
+		}
+	}
+
+	Super::EndPlay(EndPlayReason);
 }

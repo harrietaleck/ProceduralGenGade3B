@@ -5,7 +5,6 @@
 #include "ProceduralTerrain.h"
 #include "TDGameMode.h"
 #include "TDHUD.h"
-#include "EngineUtils.h"
 #include "DrawDebugHelpers.h"
 
 ATDPlayerController::ATDPlayerController()
@@ -95,22 +94,19 @@ void ATDPlayerController::OnPlaceDefenderClicked()
 	if (NewDefender)
 	{
 		GameMode->TrySpendResources(Cost);
+		NewDefender->SetOccupiedSlot(SlotLocation);
+		if (AProceduralTerrain* Terrain = GameMode->GetTerrain())
+		{
+			Terrain->SetSlotOccupied(SlotLocation, true);
+		}
 	}
 }
 
 bool ATDPlayerController::IsSlotOccupied(const FVector& SlotLocation) const
 {
-	const float RadiusSq = SlotOccupiedRadius * SlotOccupiedRadius;
-	for (TActorIterator<ADefender> It(GetWorld()); It; ++It)
-	{
-		const FVector Delta(It->GetActorLocation().X - SlotLocation.X,
-		                    It->GetActorLocation().Y - SlotLocation.Y, 0.0f);
-		if (Delta.SizeSquared() <= RadiusSq)
-		{
-			return true;
-		}
-	}
-	return false;
+	ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>();
+	AProceduralTerrain* Terrain = GameMode ? GameMode->GetTerrain() : nullptr;
+	return Terrain && Terrain->IsSlotOccupied(SlotLocation);
 }
 
 bool ATDPlayerController::FindNearestSlotUnderCursor(FVector& OutSlotLocation) const
@@ -131,13 +127,12 @@ bool ATDPlayerController::FindNearestSlotUnderCursor(FVector& OutSlotLocation) c
 	const FVector CursorLocation = Hit.Location;
 
 	// Snap to the nearest buildable slot (compared on the ground plane, ignoring Z).
-	const TArray<FVector>& Slots = Terrain->GetDefenderSlots();
+	const TArray<FDefenderSlot>& Slots = Terrain->GetDefenderSlots();
 	int32 BestIndex = INDEX_NONE;
 	float BestDistSq = SlotClickTolerance * SlotClickTolerance;
 	for (int32 i = 0; i < Slots.Num(); ++i)
 	{
-		const FVector Delta(CursorLocation.X - Slots[i].X, CursorLocation.Y - Slots[i].Y, 0.0f);
-		const float DistSq = Delta.SizeSquared();
+		const float DistSq = FVector::DistSquared2D(CursorLocation, Slots[i].Location);
 		if (DistSq <= BestDistSq)
 		{
 			BestDistSq = DistSq;
@@ -149,7 +144,7 @@ bool ATDPlayerController::FindNearestSlotUnderCursor(FVector& OutSlotLocation) c
 	{
 		return false;
 	}
-	OutSlotLocation = Slots[BestIndex];
+	OutSlotLocation = Slots[BestIndex].Location;
 	return true;
 }
 

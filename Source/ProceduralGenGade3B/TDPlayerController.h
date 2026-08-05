@@ -27,10 +27,6 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "TowerDefense", meta = (ClampMin = "1.0"))
 	float SlotClickTolerance = 160.0f;
 
-	/** A slot counts as occupied if a defender stands within this radius of it. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "TowerDefense", meta = (ClampMin = "1.0"))
-	float SlotOccupiedRadius = 120.0f;
-
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
@@ -43,7 +39,7 @@ protected:
 	void OnRestartPressed();
 
 private:
-	/** True if a living defender already occupies the given world slot. */
+	/** True if the terrain's stored slot state says a defender already occupies this world slot. */
 	bool IsSlotOccupied(const FVector& SlotLocation) const;
 
 	/** Finds the terrain's build slot nearest the cursor, within SlotClickTolerance. Shared

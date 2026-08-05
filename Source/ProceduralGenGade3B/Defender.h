@@ -50,8 +50,14 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Defender")
 	TObjectPtr<UHealthComponent> HealthComponent;
 
+	/** Records which terrain build slot this defender was placed on, so it can be freed again
+	 *  when this defender is destroyed. Called once by the placement flow right after spawning. */
+	UFUNCTION(BlueprintCallable, Category = "Defender")
+	void SetOccupiedSlot(const FVector& SlotLocation) { OccupiedSlotLocation = SlotLocation; bHasOccupiedSlot = true; }
+
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	/** Timer callback: pick the nearest in-range enemy and shoot it. */
 	void FireAtNearestEnemy();
@@ -66,6 +72,12 @@ private:
 	TObjectPtr<UStaticMeshComponent> MeshComponent;
 
 	FTimerHandle FireTimerHandle;
+
+	/** The terrain build slot this defender occupies, set via SetOccupiedSlot at placement. */
+	FVector OccupiedSlotLocation = FVector::ZeroVector;
+
+	/** True once SetOccupiedSlot has been called, so EndPlay knows there's a slot to free. */
+	bool bHasOccupiedSlot = false;
 
 	/** Returns the closest living enemy within AttackRange, or null if none. */
 	AEnemy* FindNearestEnemyInRange() const;

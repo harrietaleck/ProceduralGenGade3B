@@ -50,6 +50,26 @@ struct FEnemyPath
 	TArray<FVector> Waypoints;
 };
 
+/**
+ * A single procedurally-placed defender build pad: its world location plus whether a defender
+ * currently stands on it. Occupancy is explicit, persisted state set by the placement flow
+ * (ATDPlayerController::SetSlotOccupied via the terrain) rather than re-derived every frame by
+ * scanning all placed defenders.
+ */
+USTRUCT(BlueprintType)
+struct FDefenderSlot
+{
+	GENERATED_BODY()
+
+	/** World-space location of the pad (ground level, cell centre). */
+	UPROPERTY(BlueprintReadOnly, Category = "Terrain")
+	FVector Location = FVector::ZeroVector;
+
+	/** True while a defender occupies this pad. */
+	UPROPERTY(BlueprintReadOnly, Category = "Terrain")
+	bool bOccupied = false;
+};
+
 UCLASS()
 class PROCEDURALGENGADE3B_API AProceduralTerrain : public AActor
 {
@@ -168,9 +188,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Terrain")
 	const TArray<FEnemyPath>& GetEnemyPaths() const { return EnemyPaths; }
 
-	/** World locations where the player may place defenders (flat pads beside paths, never on a path). */
+	/** All buildable pads (flat spots beside paths, never on a path) with their occupied state. */
 	UFUNCTION(BlueprintPure, Category = "Terrain")
-	const TArray<FVector>& GetDefenderSlots() const { return DefenderSlots; }
+	const TArray<FDefenderSlot>& GetDefenderSlots() const { return DefenderSlots; }
+
+	/** Marks the slot nearest to Location as occupied/free. Called by the placement flow when a
+	 *  defender is placed, and when one is removed/destroyed, so occupancy is always current. */
+	UFUNCTION(BlueprintCallable, Category = "Terrain")
+	void SetSlotOccupied(const FVector& Location, bool bOccupied);
+
+	/** Whether the slot nearest to Location is currently occupied. */
+	UFUNCTION(BlueprintPure, Category = "Terrain")
+	bool IsSlotOccupied(const FVector& Location) const;
 
 protected:
 	virtual void BeginPlay() override;
@@ -197,7 +226,7 @@ private:
 	UPROPERTY()
 	TArray<FEnemyPath> EnemyPaths;
 	UPROPERTY()
-	TArray<FVector> DefenderSlots;
+	TArray<FDefenderSlot> DefenderSlots;
 
 	// ---- Generation helper stages ----
 	void InitialiseGrid();

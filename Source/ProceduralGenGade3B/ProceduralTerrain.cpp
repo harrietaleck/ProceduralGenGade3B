@@ -256,6 +256,20 @@ bool AProceduralTerrain::ValidateGeneratedWorld() const
 		return false;
 	}
 
+	// No two build slots may overlap or sit closer than a single cell apart — each candidate
+	// comes from a distinct grid cell, but this catches any future regression explicitly rather
+	// than relying only on that construction guarantee.
+	for (int32 I = 0; I < DefenderSlots.Num(); ++I)
+	{
+		for (int32 J = I + 1; J < DefenderSlots.Num(); ++J)
+		{
+			if (FVector::DistSquared2D(DefenderSlots[I].Location, DefenderSlots[J].Location) < FMath::Square(CellSize * 0.99f))
+			{
+				return false;
+			}
+		}
+	}
+
 	return true;
 }
 
@@ -284,6 +298,41 @@ bool AProceduralTerrain::ValidatePathfinding() const
 		}
 	}
 	return true;
+}
+
+void AProceduralTerrain::SetSlotOccupied(const FVector& Location, bool bOccupied)
+{
+	int32 BestIndex = INDEX_NONE;
+	float BestDistSq = FMath::Square(CellSize * 0.5f);
+	for (int32 I = 0; I < DefenderSlots.Num(); ++I)
+	{
+		const float DistSq = FVector::DistSquared2D(DefenderSlots[I].Location, Location);
+		if (DistSq <= BestDistSq)
+		{
+			BestDistSq = DistSq;
+			BestIndex = I;
+		}
+	}
+	if (DefenderSlots.IsValidIndex(BestIndex))
+	{
+		DefenderSlots[BestIndex].bOccupied = bOccupied;
+	}
+}
+
+bool AProceduralTerrain::IsSlotOccupied(const FVector& Location) const
+{
+	int32 BestIndex = INDEX_NONE;
+	float BestDistSq = FMath::Square(CellSize * 0.5f);
+	for (int32 I = 0; I < DefenderSlots.Num(); ++I)
+	{
+		const float DistSq = FVector::DistSquared2D(DefenderSlots[I].Location, Location);
+		if (DistSq <= BestDistSq)
+		{
+			BestDistSq = DistSq;
+			BestIndex = I;
+		}
+	}
+	return DefenderSlots.IsValidIndex(BestIndex) && DefenderSlots[BestIndex].bOccupied;
 }
 
 void AProceduralTerrain::RebuildNavigation()
@@ -515,7 +564,10 @@ void AProceduralTerrain::MarkBuildableSlots()
 		VertexHeights[VertIndex(C.X,     C.Y + 1)] = PathPlaneHeight;
 		VertexHeights[VertIndex(C.X + 1, C.Y + 1)] = PathPlaneHeight;
 
-		DefenderSlots.Add(ActorToWorld().TransformPosition(CellCenterLocal(C.X, C.Y, PathPlaneHeight)));
+		FDefenderSlot Slot;
+		Slot.Location = ActorToWorld().TransformPosition(CellCenterLocal(C.X, C.Y, PathPlaneHeight));
+		Slot.bOccupied = false;
+		DefenderSlots.Add(Slot);
 	}
 }
 
@@ -718,9 +770,9 @@ void AProceduralTerrain::DrawDebugVisualization() const
 		}
 	}
 
-	// --- Every build slot: a small green point. ---
-	for (const FVector& Slot : DefenderSlots)
+	// --- Every build slot: green if free, red if occupied. ---
+	for (const FDefenderSlot& Slot : DefenderSlots)
 	{
-		DrawDebugPoint(World, Slot + FVector(0, 0, 30.0f), 12.0f, FColor::Green, false, DebugDrawDuration, 0);
+		DrawDebugPoint(World, Slot.Location + FVector(0, 0, 30.0f), 12.0f, Slot.bOccupied ? FColor::Red : FColor::Green, false, DebugDrawDuration, 0);
 	}
 }
