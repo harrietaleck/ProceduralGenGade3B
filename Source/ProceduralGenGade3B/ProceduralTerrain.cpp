@@ -8,6 +8,9 @@
 #include "ProceduralMeshComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
+#include "NavigationSystem.h"
+#include "DrawDebugHelpers.h"
+#include "Engine/World.h"
 
 // Everything flat (paths, tower pad, buildable pads) sits on this Z plane in local space.
 static constexpr float PathPlaneHeight = 0.0f;
@@ -71,24 +74,111 @@ void AProceduralTerrain::GenerateTerrain()
 	GridSize = FMath::Max(8, GridSize);
 	NumPaths = FMath::Max(3, NumPaths); // The brief mandates at least three paths.
 
-	// Seed the random stream so the entire map is reproducible from Seed alone.
-	Rng.Initialize(Seed);
+	// The generation pipeline is deterministic-by-construction and should always produce a
+	// valid world, but we verify it anyway and regenerate with a new seed on the rare chance
+	// something is wrong — gameplay must never begin on an unvalidated map. Bounded attempts
+	// so a genuine bug can't hang the game; if every attempt fails we log loudly and use the
+	// last (still fully-formed, just not ideal) result rather than leaving no terrain at all.
+	const int32 MaxAttempts = 5;
+	bool bValid = false;
+	for (int32 Attempt = 1; Attempt <= MaxAttempts; ++Attempt)
+	{
+		// Seed the random stream so the entire map is reproducible from Seed alone.
+		Rng.Initialize(Seed);
 
-	// Clear previously published data.
-	EnemyPaths.Reset();
-	DefenderSlots.Reset();
+		// Clear previously published data.
+		EnemyPaths.Reset();
+		DefenderSlots.Reset();
 
-	// Run the generation pipeline in order (each stage depends on the previous one).
-	InitialiseGrid();
-	CarvePaths();
-	BuildHeightmap();
-	MarkBuildableSlots();
-	BuildMesh();
+		// Run the generation pipeline in order (each stage depends on the previous one).
+		InitialiseGrid();
+		CarvePaths();
+		BuildHeightmap();
+		MarkBuildableSlots();
+		BuildMesh();
 
-	// ---- Publish the tower location (world space) at the centre cell ----
-	const int32 CX = GridSize / 2;
-	const int32 CY = GridSize / 2;
-	TowerLocation = ActorToWorld().TransformPosition(CellCenterLocal(CX, CY, PathPlaneHeight));
+		// ---- Publish the tower location (world space) at the centre cell ----
+		const int32 CX = GridSize / 2;
+		const int32 CY = GridSize / 2;
+		TowerLocation = ActorToWorld().TransformPosition(CellCenterLocal(CX, CY, PathPlaneHeight));
+
+		bValid = ValidateGeneratedWorld();
+		if (bValid)
+		{
+			break;
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("ProceduralTerrain: generated world failed validation on attempt %d/%d (seed %d) — regenerating with a new seed."),
+			Attempt, MaxAttempts, Seed);
+		Seed = FMath::RandRange(1, MAX_int32 - 1);
+	}
+
+	if (!bValid)
+	{
+		UE_LOG(LogTemp, Error, TEXT("ProceduralTerrain: failed to generate a valid world after %d attempts — using the last attempt anyway."), MaxAttempts);
+	}
+
+	RebuildNavigation();
+
+	if (bDebugMode)
+	{
+		DrawDebugVisualization();
+	}
+}
+
+bool AProceduralTerrain::ValidateGeneratedWorld() const
+{
+	// The grid/heightmap data must be fully and correctly sized — a corrupt or partial
+	// generation would index out of bounds later.
+	if (Cells.Num() != GridSize * GridSize || VertexHeights.Num() != (GridSize + 1) * (GridSize + 1))
+	{
+		return false;
+	}
+
+	// Mandatory: at least three enemy paths.
+	if (EnemyPaths.Num() < 3)
+	{
+		return false;
+	}
+
+	for (const FEnemyPath& Path : EnemyPaths)
+	{
+		// A path needs at least a spawn point and a destination to mean anything.
+		if (Path.Waypoints.Num() < 2)
+		{
+			return false;
+		}
+
+		// Every path must actually terminate at (or immediately next to) the tower — checked
+		// on the XY plane with a generous one-cell tolerance for floating point/edge cases.
+		if (FVector::DistSquared2D(Path.Waypoints.Last(), TowerLocation) > FMath::Square(CellSize * 1.5f))
+		{
+			return false;
+		}
+	}
+
+	// At least one buildable location must exist, or the game is unplayable.
+	if (DefenderSlots.Num() == 0)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+void AProceduralTerrain::RebuildNavigation()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// Forces a full, synchronous NavMesh rebuild so navigation data is always current with
+	// whatever terrain was just generated. Relies on a NavMeshBoundsVolume already covering
+	// the play area being present in the level (placed once, sized generously) — this call
+	// only triggers the rebuild, it doesn't need to know the terrain's exact extents itself.
+	FNavigationSystem::Build(*World);
 }
 
 // --------------------------------------------------------------------------------------
@@ -439,20 +529,74 @@ float AProceduralTerrain::ValueNoise(float X, float Y) const
 	return FMath::Lerp(NX0, NX1, SY);
 }
 
-// Fractal (fBm) noise: sum a few octaves of value noise at rising frequency / falling amplitude.
+// Fractal (fBm) noise: sum a configurable number of octaves of value noise at rising
+// frequency / falling amplitude. All three shape parameters (NoiseOctaves, NoiseBaseFrequency,
+// NoisePersistence) are designer-editable — nothing about the noise shape is hardcoded.
 float AProceduralTerrain::FractalNoise(float X, float Y) const
 {
 	float Total = 0.0f;
 	float Amplitude = 1.0f;
-	float Frequency = 1.0f / 8.0f; // Base feature size ~8 cells across.
+	float Frequency = NoiseBaseFrequency;
 	float MaxValue = 0.0f;
 
-	for (int32 Octave = 0; Octave < 4; ++Octave)
+	for (int32 Octave = 0; Octave < NoiseOctaves; ++Octave)
 	{
 		Total += ValueNoise(X * Frequency, Y * Frequency) * Amplitude;
 		MaxValue += Amplitude;
-		Amplitude *= 0.5f;
+		Amplitude *= NoisePersistence;
 		Frequency *= 2.0f;
 	}
 	return MaxValue > 0.0f ? Total / MaxValue : 0.0f; // Normalised back to [0,1].
+}
+
+// --------------------------------------------------------------------------------------
+// Debug visualisation. Entirely gated behind bDebugMode — leaving it off removes every
+// trace of this (no shapes drawn, no log spam), so it's safe to ship with and trivial to
+// strip out entirely later if desired.
+// --------------------------------------------------------------------------------------
+void AProceduralTerrain::DrawDebugVisualization() const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	UE_LOG(LogTemp, Display, TEXT("ProceduralTerrain [DEBUG]: seed=%d, GridSize=%d, CellSize=%.0f, paths=%d, buildSlots=%d"),
+		Seed, GridSize, CellSize, EnemyPaths.Num(), DefenderSlots.Num());
+
+	// --- Terrain bounds: a box covering the full generated footprint. ---
+	const float Half = GridSize * CellSize * 0.5f;
+	const FVector Center = GetActorLocation() + FVector(0.0f, 0.0f, HeightScale * 0.5f);
+	const FVector Extent(Half, Half, HeightScale * 0.5f + 50.0f);
+	DrawDebugBox(World, Center, Extent, FColor::White, false, DebugDrawDuration, 0, 6.0f);
+
+	// --- Tower position: a distinct magenta sphere at the centre. ---
+	DrawDebugSphere(World, TowerLocation + FVector(0, 0, 60.0f), 80.0f, 16, FColor::Magenta, false, DebugDrawDuration, 0, 6.0f);
+
+	// --- Every path: a coloured line strip through its waypoints, plus a marker at its spawn. ---
+	static const FColor PathColors[] = { FColor::Cyan, FColor::Orange, FColor::Yellow, FColor::Green, FColor::Red, FColor::Purple, FColor::Blue, FColor::Emerald };
+	for (int32 P = 0; P < EnemyPaths.Num(); ++P)
+	{
+		const FEnemyPath& Path = EnemyPaths[P];
+		const FColor Color = PathColors[P % UE_ARRAY_COUNT(PathColors)];
+
+		for (int32 I = 0; I + 1 < Path.Waypoints.Num(); ++I)
+		{
+			DrawDebugLine(World, Path.Waypoints[I] + FVector(0, 0, 20.0f), Path.Waypoints[I + 1] + FVector(0, 0, 20.0f),
+				Color, false, DebugDrawDuration, 0, 8.0f);
+		}
+
+		// Spawn point: a larger marker so it's easy to pick out from the path line itself.
+		if (Path.Waypoints.Num() > 0)
+		{
+			DrawDebugSphere(World, Path.SpawnPoint + FVector(0, 0, 60.0f), 50.0f, 12, Color, false, DebugDrawDuration, 0, 4.0f);
+		}
+	}
+
+	// --- Every build slot: a small green point. ---
+	for (const FVector& Slot : DefenderSlots)
+	{
+		DrawDebugPoint(World, Slot + FVector(0, 0, 30.0f), 12.0f, FColor::Green, false, DebugDrawDuration, 0);
+	}
 }

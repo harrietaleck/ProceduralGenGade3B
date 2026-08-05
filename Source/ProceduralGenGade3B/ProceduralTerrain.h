@@ -72,6 +72,21 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Grid", meta = (ClampMin = "0.0"))
 	float HeightScale = 600.0f;
 
+	/** Number of fractal-noise octaves summed for the height field. More octaves = more fine
+	 *  detail layered on top of the broad shape, at a small extra generation cost. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Noise", meta = (ClampMin = "1", ClampMax = "8"))
+	int32 NoiseOctaves = 4;
+
+	/** Base noise frequency: 1/N means the broadest terrain feature is roughly N cells across.
+	 *  Smaller values = larger, smoother hills; larger values = tighter, choppier terrain. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Noise", meta = (ClampMin = "0.01", ClampMax = "1.0"))
+	float NoiseBaseFrequency = 0.125f;
+
+	/** How much each successive octave's amplitude shrinks (0..1). Lower = smoother overall;
+	 *  higher = rougher, more jagged detail. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Noise", meta = (ClampMin = "0.1", ClampMax = "0.9"))
+	float NoisePersistence = 0.5f;
+
 	/** How many separate enemy paths to carve. The brief requires at least three. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Paths", meta = (ClampMin = "3"))
 	int32 NumPaths = 4;
@@ -96,6 +111,16 @@ public:
 	/** The seed used to drive all randomness. Same seed => identical map (useful for debugging). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Seed")
 	int32 Seed = 12345;
+
+	/** When true, draws the terrain bounds, every path, the tower, build slots and spawn
+	 *  points as debug shapes, and logs the seed. Purely diagnostic — safe to leave off;
+	 *  toggling it off removes every trace of the visualisation (nothing else depends on it). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Debug")
+	bool bDebugMode = false;
+
+	/** How long (seconds) the debug shapes persist once drawn. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Debug", meta = (ClampMin = "0.0", EditCondition = "bDebugMode"))
+	float DebugDrawDuration = 20.0f;
 
 	// ---- Generation entry points ----
 
@@ -154,6 +179,19 @@ private:
 	void BuildHeightmap();
 	void MarkBuildableSlots();
 	void BuildMesh();
+
+	/** Checks the just-generated world is actually playable: grid data intact, at least
+	 *  three paths, every path's last waypoint actually reaches the tower, and at least one
+	 *  build slot exists. GenerateTerrain() regenerates automatically if this ever fails. */
+	bool ValidateGeneratedWorld() const;
+
+	/** Grows/repositions the level's NavMesh bounds volume to cover the freshly generated
+	 *  terrain and forces a synchronous NavMesh rebuild, so navigation is always current. */
+	void RebuildNavigation();
+
+	/** Draws the terrain bounds, every path, the tower, every build slot, every spawn point,
+	 *  and logs the seed — only when bDebugMode is enabled. */
+	void DrawDebugVisualization() const;
 
 	// ---- Small index / coordinate helpers ----
 

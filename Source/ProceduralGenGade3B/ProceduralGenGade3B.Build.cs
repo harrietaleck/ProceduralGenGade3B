@@ -24,7 +24,8 @@ public class ProceduralGenGade3B : ModuleRules
 			"EnhancedInput",           // Modern input system for the player controller (defender placement).
 			"UMG",                     // Runtime UI (health bars, resources, game-over) driven from C++.
 			"Slate",
-			"SlateCore"
+			"SlateCore",
+			"NavigationSystem"         // Rebuilding the NavMesh after each procedural terrain generation.
 		});
 
 		// Modules used only by this module's private .cpp implementation files.
