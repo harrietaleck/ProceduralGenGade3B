@@ -35,13 +35,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "100.0"))
 	float MinZoom = 450.0f;
 
-	/** Furthest zoom (max boom length). */
+	/** Furthest zoom (max boom length). Raised well past the old 900 so the player can pull
+	 *  back for a wide tactical view of the whole battlefield when they want it. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "100.0"))
-	float MaxZoom = 900.0f;
+	float MaxZoom = 3000.0f;
 
-	/** How far one wheel notch changes zoom. */
+	/** How far one wheel notch changes zoom. Raised alongside MaxZoom so scrolling out to the
+	 *  new far limit takes a reasonable number of notches rather than dozens. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "1.0"))
-	float ZoomStep = 75.0f;
+	float ZoomStep = 150.0f;
 
 	/** How quickly zoom eases toward its target. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "0.1"))
