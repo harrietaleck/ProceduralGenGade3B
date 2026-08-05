@@ -26,10 +26,10 @@ ATower::ATower()
 	}
 	MeshComponent->SetRelativeScale3D(FVector(1.5f, 1.5f, 3.0f)); // Wide and tall.
 	// A solid structure: blocks the player and traces (so the hero can't walk through it and
-	// the camera can't clip into it), while staying QueryOnly since it never needs physics
-	// simulation — it's a static, immovable actor.
+	// the camera can't clip into it). Only SetCollisionProfileName is called — calling
+	// SetCollisionEnabled afterward would desync CollisionEnabled from the profile, leaving the
+	// component reporting profile "Custom" instead of a deterministic "BlockAll".
 	MeshComponent->SetCollisionProfileName(TEXT("BlockAll"));
-	MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 
 	// Shared health component.
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
