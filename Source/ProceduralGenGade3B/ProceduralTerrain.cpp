@@ -370,6 +370,14 @@ void AProceduralTerrain::RebuildNavigation()
 	{
 		ANavMeshBoundsVolume* BoundsVolume = *It;
 
+		// A hand-placed volume defaults to Static mobility, which silently rejects the
+		// transform changes below (logs a warning, does nothing) — force it Movable so the
+		// resize below actually takes effect.
+		if (USceneComponent* Root = BoundsVolume->GetRootComponent())
+		{
+			Root->SetMobility(EComponentMobility::Movable);
+		}
+
 		const FVector CurrentScale = BoundsVolume->GetActorScale3D();
 		const FVector SafeCurrentScale(FMath::Max(FMath::Abs(CurrentScale.X), KINDA_SMALL_NUMBER),
 			FMath::Max(FMath::Abs(CurrentScale.Y), KINDA_SMALL_NUMBER), FMath::Max(FMath::Abs(CurrentScale.Z), KINDA_SMALL_NUMBER));
