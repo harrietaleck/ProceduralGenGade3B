@@ -50,23 +50,8 @@ void AWaveManager::EnsureDefaultWaveTable()
 	Wave3.SpeedMultiplier = 1.0f;
 	Wave3.RewardMultiplier = 1.4f;
 
-	FWaveData Wave4;
-	Wave4.EnemyCount = 16;
-	Wave4.SpawnDelay = 1.3f;
-	Wave4.HealthMultiplier = 1.7f;
-	Wave4.DamageMultiplier = 1.6f;
-	Wave4.SpeedMultiplier = 1.0f;
-	Wave4.RewardMultiplier = 1.6f;
-
-	FWaveData Wave5;
-	Wave5.EnemyCount = 20;
-	Wave5.SpawnDelay = 1.0f;
-	Wave5.HealthMultiplier = 2.0f;
-	Wave5.DamageMultiplier = 2.0f;
-	Wave5.SpeedMultiplier = 1.0f;
-	Wave5.RewardMultiplier = 2.0f;
-
-	Waves = { Wave1, Wave2, Wave3, Wave4, Wave5 };
+	// Part 1 victory after wave 3 — keeps the demo shorter while still showing escalation.
+	Waves = { Wave1, Wave2, Wave3 };
 }
 
 void AWaveManager::Initialize(AEnemySpawner* InSpawner, bool bStartImmediately)

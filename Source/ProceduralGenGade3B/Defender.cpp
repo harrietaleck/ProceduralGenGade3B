@@ -10,7 +10,6 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
-#include "DrawDebugHelpers.h"
 #include "UObject/ConstructorHelpers.h"
 
 ADefender::ADefender()
@@ -35,6 +34,8 @@ ADefender::ADefender()
 	HealthComponent->MaxHealth = 120.0f;
 
 	CreateDefaultSubobject<UDamageFlashComponent>(TEXT("DamageFlash"));
+
+	ProjectileClass = AProjectile::StaticClass();
 }
 
 void ADefender::BeginPlay()
@@ -72,15 +73,15 @@ void ADefender::FireAtNearestEnemy()
 		if (AProjectile* Shot = GetWorld()->SpawnActor<AProjectile>(ProjectileClass, MuzzleLocation, GetActorRotation(), SpawnParams))
 		{
 			Shot->InitProjectile(Target, AttackDamage, this);
+			Shot->ConfigureVisuals(DefenderBallScale, DefenderBallColor);
 		}
 		return;
 	}
 
-	// Fallback (no projectile class set): instant hitscan damage + a debug tracer.
+	// Fallback (no projectile class set): instant hitscan damage.
 	if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
 	{
 		TargetHealth->ApplyDamage(AttackDamage, this);
-		DrawDebugLine(GetWorld(), MuzzleLocation, Target->GetActorLocation(), FColor::Yellow, false, 0.1f, 0, 3.0f);
 	}
 }
 

@@ -177,7 +177,7 @@ private:
 	FTimerHandle SpawnTimerHandle;
 	FTimerHandle BreakTimerHandle;
 
-	/** Populate Waves with the Part 1 progression (5 waves) if nothing was configured. */
+	/** Populate Waves with the Part 1 progression (3 waves) if nothing was configured. */
 	void EnsureDefaultWaveTable();
 
 	/** Advance to the next configured wave, or trigger Victory if none remain. */

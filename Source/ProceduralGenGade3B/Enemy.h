@@ -56,15 +56,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0.1"))
 	float AttackInterval = 1.0f;
 
-	/** Strict range that actually gates stopping + dealing damage (Basic Enemy spec: 200). */
+	/** Strict range that actually gates stopping + dealing damage. Slightly wider so enemies
+	 *  reliably stop beside build pads that sit one cell off the path. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0.0"))
-	float AttackRange = 200.0f;
+	float AttackRange = 280.0f;
 
-	/** How far the enemy "notices" a defender worth considering as a target (Basic Enemy
-	 *  spec: 250). Wider than AttackRange on purpose: a defender must be detected here
-	 *  first, but the enemy only actually stops and attacks once inside AttackRange. */
+	/** How far the enemy "notices" a defender worth considering as a target. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0.0"))
-	float DetectionRadius = 250.0f;
+	float DetectionRadius = 450.0f;
 
 	/** Gold granted to the player when this enemy is killed (Basic Enemy spec: 25). Flows
 	 *  into the game's shared Loot pool via TDGameMode::AddResources. */

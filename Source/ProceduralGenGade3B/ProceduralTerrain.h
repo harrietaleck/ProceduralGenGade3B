@@ -17,10 +17,12 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Math/RandomStream.h"
+#include "TerrainProp.h"
 #include "ProceduralTerrain.generated.h"
 
 class UProceduralMeshComponent;
 class UMaterialInterface;
+class UStaticMesh;
 
 /** What a single grid cell is used for. Drives colour, height flattening and buildability. */
 UENUM(BlueprintType)
@@ -172,6 +174,38 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Debug", meta = (ClampMin = "0.0", EditCondition = "bDebugMode"))
 	float DebugDrawDuration = 20.0f;
 
+	// ---- Procedural decoration (trees / rocks / buildings) ----
+
+	/** When false, terrain generation skips prop scattering entirely. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations")
+	bool bScatterDecorations = true;
+
+	/** Chance [0..1] per eligible terrain cell to spawn a tree. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float TreeDensity = 0.07f;
+
+	/** Chance [0..1] per eligible terrain cell to spawn a rock. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float RockDensity = 0.045f;
+
+	/** Chance [0..1] per eligible terrain cell to spawn a building (kept sparse). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float BuildingDensity = 0.018f;
+
+	/** Minimum grid-cell distance from paths, build pads, and the tower centre. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations", meta = (ClampMin = "0"))
+	int32 DecorationPathBufferCells = 2;
+
+	/** Optional custom meshes (leave empty to use engine placeholder shapes). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations|Meshes")
+	TArray<TObjectPtr<UStaticMesh>> TreeMeshes;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations|Meshes")
+	TArray<TObjectPtr<UStaticMesh>> RockMeshes;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations|Meshes")
+	TArray<TObjectPtr<UStaticMesh>> BuildingMeshes;
+
 	// ---- Generation entry points ----
 
 	/** Regenerates the whole terrain from the current parameters. Callable from the editor Details panel. */
@@ -283,6 +317,23 @@ private:
 
 	/** How many whole-grid growth steps have been applied this match. */
 	int32 GridExpansionCount = 0;
+
+	UPROPERTY()
+	TArray<TObjectPtr<ATerrainProp>> SpawnedDecorations;
+
+	TSet<int32> DecoratedCellKeys;
+
+	UStaticMesh* DefaultCylinderMesh = nullptr;
+	UStaticMesh* DefaultCubeMesh = nullptr;
+	UStaticMesh* DefaultSphereMesh = nullptr;
+
+	void ClearDecorations();
+	void ScatterDecorations();
+	bool IsCellEligibleForDecoration(int32 X, int32 Y) const;
+	float SampleCellSurfaceHeight(int32 X, int32 Y) const;
+	UStaticMesh* PickDecorationMesh(ETerrainDecorationKind Kind);
+	void SpawnDecorationAtCell(int32 X, int32 Y, ETerrainDecorationKind Kind);
+	void EnsureDefaultDecorationMeshes();
 
 	// ---- Generation helper stages ----
 	void InitialiseGrid();

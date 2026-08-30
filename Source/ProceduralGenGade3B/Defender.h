@@ -42,9 +42,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender", meta = (ClampMin = "0.05"))
 	float FireInterval = 0.7f;
 
-	/** Projectile fired at enemies. If left empty, the defender falls back to instant (hitscan) damage. */
+	/** Projectile fired at enemies. Defaults to orange ball shots in the constructor. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender")
 	TSubclassOf<AProjectile> ProjectileClass;
+
+	/** Scale and colour for defender shot balls. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender", meta = (ClampMin = "0.05"))
+	float DefenderBallScale = 0.35f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender")
+	FLinearColor DefenderBallColor = FLinearColor(1.0f, 0.55f, 0.1f);
 
 	/** Local-space offset from the defender origin where shots originate (the muzzle). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender")

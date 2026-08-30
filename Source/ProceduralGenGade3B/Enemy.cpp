@@ -4,6 +4,7 @@
 #include "HealthComponent.h"
 #include "DamageFlashComponent.h"
 #include "Defender.h"
+#include "ProceduralTerrain.h"
 #include "TDGameMode.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"         // Complete UStaticMesh type for the mesh finder.
@@ -163,6 +164,17 @@ void AEnemy::TryAttack(AActor* Target, float DeltaSeconds)
 	}
 	AttackTimer = AttackInterval;
 
+	// Face the target so combat reads clearly in the playtest.
+	if (Target)
+	{
+		FVector ToTarget = Target->GetActorLocation() - GetActorLocation();
+		ToTarget.Z = 0.0f;
+		if (!ToTarget.IsNearlyZero())
+		{
+			SetActorRotation(FRotator(0.0f, ToTarget.Rotation().Yaw, 0.0f));
+		}
+	}
+
 	// Damage the target through its health component (works for tower and defenders alike).
 	if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
 	{
@@ -234,8 +246,15 @@ bool AEnemy::HasLineOfSightTo(const AActor* Target) const
 	Params.AddIgnoredActor(this);
 	Params.AddIgnoredActor(Target);
 
+	// Build pads sit beside the path mesh. The procedural terrain would otherwise block every
+	// trace to a nearby defender even when the enemy is walking right past them.
+	for (TActorIterator<AProceduralTerrain> It(GetWorld()); It; ++It)
+	{
+		Params.AddIgnoredActor(*It);
+	}
+
 	const FVector Start = GetActorLocation() + FVector(0.0f, 0.0f, GroundClearance);
-	const FVector End = Target->GetActorLocation();
+	const FVector End = Target->GetActorLocation() + FVector(0.0f, 0.0f, GroundClearance);
 
 	// If the trace hits anything else first (terrain, another actor) something is blocking
 	// the shot -> no line of sight. "Never attack through walls."

@@ -6,6 +6,7 @@
 
 #include "ProceduralTerrain.h"
 #include "ProceduralMeshComponent.h"
+#include "TerrainProp.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
 #include "NavigationSystem.h"
@@ -194,6 +195,8 @@ void AProceduralTerrain::GenerateTerrain()
 		DefenderSlots.Reset();
 		PathCellLines.Reset();
 		GridExpansionCount = 0;
+		ClearDecorations();
+		DecoratedCellKeys.Reset();
 
 		// Run the generation pipeline in order (each stage depends on the previous one).
 		InitialiseGrid();
@@ -210,11 +213,9 @@ void AProceduralTerrain::GenerateTerrain()
 		bValid = ValidateGeneratedWorld();
 		if (bValid)
 		{
-			// Rebuild the NavMesh so it's current for the "Press P" debug overlay and the
-			// (non-blocking) coverage diagnostic in ValidatePathfinding() — actual movement
-			// doesn't depend on it, so it isn't part of the pass/fail decision here.
 			RebuildNavigation();
 			ValidatePathfinding();
+			ScatterDecorations();
 		}
 
 		if (bValid)
@@ -858,6 +859,9 @@ int32 AProceduralTerrain::ExpandWorldAfterWave()
 	}
 
 	RebuildTerrainVisuals();
+	ClearDecorations();
+	DecoratedCellKeys.Reset();
+	ScatterDecorations();
 
 	UE_LOG(LogTemp, Display, TEXT("ProceduralTerrain: post-wave expansion — grid=%d, lanes=%d, branches added=%d."),
 		GridSize, PathCellLines.Num(), BranchesAdded);
@@ -1229,6 +1233,242 @@ float AProceduralTerrain::FractalNoise(float X, float Y) const
 		Frequency *= 2.0f;
 	}
 	return MaxValue > 0.0f ? Total / MaxValue : 0.0f; // Normalised back to [0,1].
+}
+
+void AProceduralTerrain::EnsureDefaultDecorationMeshes()
+{
+	if (!DefaultCylinderMesh)
+	{
+		DefaultCylinderMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	}
+	if (!DefaultCubeMesh)
+	{
+		DefaultCubeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	}
+	if (!DefaultSphereMesh)
+	{
+		DefaultSphereMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	}
+}
+
+void AProceduralTerrain::ClearDecorations()
+{
+	for (ATerrainProp* Prop : SpawnedDecorations)
+	{
+		if (Prop)
+		{
+			Prop->Destroy();
+		}
+	}
+	SpawnedDecorations.Reset();
+}
+
+float AProceduralTerrain::SampleCellSurfaceHeight(int32 X, int32 Y) const
+{
+	if (!InBounds(X, Y) || VertexHeights.Num() == 0)
+	{
+		return PathPlaneHeight;
+	}
+
+	const float H00 = VertexHeights[VertIndex(X, Y)];
+	const float H10 = VertexHeights[VertIndex(X + 1, Y)];
+	const float H01 = VertexHeights[VertIndex(X, Y + 1)];
+	const float H11 = VertexHeights[VertIndex(X + 1, Y + 1)];
+	return (H00 + H10 + H01 + H11) * 0.25f;
+}
+
+bool AProceduralTerrain::IsCellEligibleForDecoration(int32 X, int32 Y) const
+{
+	if (!InBounds(X, Y))
+	{
+		return false;
+	}
+
+	if (Cells[CellIndex(X, Y)] != ECellType::Terrain)
+	{
+		return false;
+	}
+
+	const int32 Buffer = FMath::Max(0, DecorationPathBufferCells);
+	const int32 CX = GridSize / 2;
+	const int32 CY = GridSize / 2;
+
+	for (int32 DY = -Buffer; DY <= Buffer; ++DY)
+	{
+		for (int32 DX = -Buffer; DX <= Buffer; ++DX)
+		{
+			const int32 NX = X + DX;
+			const int32 NY = Y + DY;
+			if (!InBounds(NX, NY))
+			{
+				continue;
+			}
+
+			const ECellType Neighbour = Cells[CellIndex(NX, NY)];
+			if (Neighbour == ECellType::Path || Neighbour == ECellType::Buildable || Neighbour == ECellType::Tower)
+			{
+				return false;
+			}
+
+			if (FMath::Abs(NX - CX) <= Buffer && FMath::Abs(NY - CY) <= Buffer)
+			{
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+UStaticMesh* AProceduralTerrain::PickDecorationMesh(ETerrainDecorationKind Kind)
+{
+	const TArray<TObjectPtr<UStaticMesh>>* Pool = nullptr;
+	switch (Kind)
+	{
+	case ETerrainDecorationKind::Tree:     Pool = &TreeMeshes; break;
+	case ETerrainDecorationKind::Rock:     Pool = &RockMeshes; break;
+	case ETerrainDecorationKind::Building: Pool = &BuildingMeshes; break;
+	default: break;
+	}
+
+	if (Pool && Pool->Num() > 0)
+	{
+		const int32 Index = Rng.RandRange(0, Pool->Num() - 1);
+		if ((*Pool)[Index])
+		{
+			return (*Pool)[Index];
+		}
+	}
+
+	switch (Kind)
+	{
+	case ETerrainDecorationKind::Tree:     return DefaultCylinderMesh;
+	case ETerrainDecorationKind::Rock:     return DefaultSphereMesh;
+	case ETerrainDecorationKind::Building: return DefaultCubeMesh;
+	default: return DefaultCubeMesh;
+	}
+}
+
+void AProceduralTerrain::SpawnDecorationAtCell(int32 X, int32 Y, ETerrainDecorationKind Kind)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	EnsureDefaultDecorationMeshes();
+
+	const float SurfaceZ = SampleCellSurfaceHeight(X, Y);
+	const FVector LocalPos = CellCenterLocal(X, Y, SurfaceZ);
+	const FVector WorldPos = ActorToWorld().TransformPosition(LocalPos);
+	const float Yaw = Rng.FRandRange(0.0f, 360.0f);
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	SpawnParams.Owner = this;
+
+	ATerrainProp* Prop = World->SpawnActor<ATerrainProp>(ATerrainProp::StaticClass(), WorldPos, FRotator::ZeroRotator, SpawnParams);
+	if (!Prop)
+	{
+		return;
+	}
+
+	UStaticMesh* BaseMesh = PickDecorationMesh(Kind);
+	UStaticMesh* AccentMesh = nullptr;
+	FVector BaseScale = FVector::OneVector;
+	FVector AccentOffset = FVector::ZeroVector;
+	FVector AccentScale = FVector::OneVector;
+
+	switch (Kind)
+	{
+	case ETerrainDecorationKind::Tree:
+	{
+		const float TrunkHeight = Rng.FRandRange(2.8f, 4.2f);
+		const float TrunkRadius = Rng.FRandRange(0.35f, 0.55f);
+		BaseScale = FVector(TrunkRadius, TrunkRadius, TrunkHeight);
+		if (!TreeMeshes.Num())
+		{
+			BaseMesh = DefaultCylinderMesh;
+			AccentMesh = DefaultSphereMesh;
+			AccentOffset = FVector(0.0f, 0.0f, 50.0f * TrunkHeight);
+			AccentScale = FVector(Rng.FRandRange(1.8f, 2.6f));
+		}
+		break;
+	}
+	case ETerrainDecorationKind::Rock:
+	{
+		const float RockSize = Rng.FRandRange(0.9f, 1.8f);
+		BaseScale = FVector(RockSize, RockSize * Rng.FRandRange(0.8f, 1.2f), RockSize * Rng.FRandRange(0.6f, 1.0f));
+		break;
+	}
+	case ETerrainDecorationKind::Building:
+	{
+		const float Width = Rng.FRandRange(1.4f, 2.4f);
+		const float Depth = Rng.FRandRange(1.2f, 2.0f);
+		const float Height = Rng.FRandRange(1.8f, 3.2f);
+		BaseScale = FVector(Width, Depth, Height);
+		BaseMesh = PickDecorationMesh(Kind);
+		break;
+	}
+	default:
+		break;
+	}
+
+	Prop->ConfigureDecoration(Kind, BaseMesh, BaseScale, Yaw, AccentMesh, AccentOffset, AccentScale);
+	SpawnedDecorations.Add(Prop);
+	DecoratedCellKeys.Add(CellIndex(X, Y));
+}
+
+void AProceduralTerrain::ScatterDecorations()
+{
+	if (!bScatterDecorations || Cells.Num() == 0)
+	{
+		return;
+	}
+
+	EnsureDefaultDecorationMeshes();
+	const int32 CX = GridSize / 2;
+	const int32 CY = GridSize / 2;
+
+	for (int32 Y = 0; Y < GridSize; ++Y)
+	{
+		for (int32 X = 0; X < GridSize; ++X)
+		{
+			const int32 Key = CellIndex(X, Y);
+			if (DecoratedCellKeys.Contains(Key))
+			{
+				continue;
+			}
+
+			if (!IsCellEligibleForDecoration(X, Y))
+			{
+				continue;
+			}
+
+			const float Roll = Rng.FRand();
+			const int32 DistFromCentre = FMath::Max(FMath::Abs(X - CX), FMath::Abs(Y - CY));
+
+			if (DistFromCentre >= GridSize / 5 && Roll < BuildingDensity)
+			{
+				SpawnDecorationAtCell(X, Y, ETerrainDecorationKind::Building);
+				continue;
+			}
+
+			if (Roll < TreeDensity)
+			{
+				SpawnDecorationAtCell(X, Y, ETerrainDecorationKind::Tree);
+				continue;
+			}
+
+			if (Roll < TreeDensity + RockDensity)
+			{
+				SpawnDecorationAtCell(X, Y, ETerrainDecorationKind::Rock);
+			}
+		}
+	}
+
+	UE_LOG(LogTemp, Display, TEXT("ProceduralTerrain: scattered %d decorations (trees/rocks/buildings)."), SpawnedDecorations.Num());
 }
 
 // --------------------------------------------------------------------------------------
