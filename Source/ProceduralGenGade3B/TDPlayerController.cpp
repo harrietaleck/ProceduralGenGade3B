@@ -33,11 +33,14 @@ void ATDPlayerController::SetupInputComponent()
 	// Bind left mouse button directly (simple and sufficient for Part 1 placement).
 	InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &ATDPlayerController::OnPlaceDefenderClicked);
 
-	// Bind R to restart (only acts once the game is over — see OnRestartPressed).
+	// Bind R to restart at any time (brief: restart whenever the player wants).
 	InputComponent->BindKey(EKeys::R, IE_Pressed, this, &ATDPlayerController::OnRestartPressed);
 
-	// Bind P to toggle the NavMesh debug overlay.
-	InputComponent->BindKey(EKeys::P, IE_Pressed, this, &ATDPlayerController::OnToggleNavMeshDebug);
+	// Bind P to pause/unpause the match.
+	InputComponent->BindKey(EKeys::P, IE_Pressed, this, &ATDPlayerController::OnPausePressed);
+
+	// Bind N to toggle the NavMesh debug overlay.
+	InputComponent->BindKey(EKeys::N, IE_Pressed, this, &ATDPlayerController::OnToggleNavMeshDebug);
 }
 
 void ATDPlayerController::OnToggleNavMeshDebug()
@@ -47,23 +50,27 @@ void ATDPlayerController::OnToggleNavMeshDebug()
 	ConsoleCommand(TEXT("show Navigation"));
 }
 
-void ATDPlayerController::OnRestartPressed()
+void ATDPlayerController::OnPausePressed()
 {
-	// Only allow a restart once the match has ended (loss or win), so R can't be spammed mid-match.
 	if (ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>())
 	{
-		if (GameMode->IsGameOver() || GameMode->IsVictory())
-		{
-			GameMode->RestartGame();
-		}
+		GameMode->TogglePause();
+	}
+}
+
+void ATDPlayerController::OnRestartPressed()
+{
+	if (ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>())
+	{
+		GameMode->RestartGame();
 	}
 }
 
 void ATDPlayerController::OnPlaceDefenderClicked()
 {
-	// No placing once the game is over.
+	// No placing while paused or after the game ends.
 	ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>();
-	if (!GameMode || GameMode->IsGameOver() || !DefenderClass)
+	if (!GameMode || GameMode->IsGameOver() || GameMode->IsPaused() || !DefenderClass)
 	{
 		return;
 	}
@@ -167,7 +174,7 @@ void ATDPlayerController::Tick(float DeltaSeconds)
 void ATDPlayerController::UpdateBuildPadHighlight() const
 {
 	ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>();
-	if (!GameMode || GameMode->IsGameOver() || !DefenderClass)
+	if (!GameMode || GameMode->IsGameOver() || GameMode->IsPaused() || !DefenderClass)
 	{
 		return;
 	}

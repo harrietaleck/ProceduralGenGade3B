@@ -35,11 +35,13 @@ protected:
 	/** Left-click handler: attempt to place a defender under the cursor. */
 	void OnPlaceDefenderClicked();
 
-	/** R-key handler: restart the game (only has an effect once the game is over). */
+	/** R-key handler: restart the match (new procedural map). */
 	void OnRestartPressed();
 
-	/** P-key handler: toggle the engine's NavMesh debug overlay, for verifying live navigation
-	 *  coverage over the current procedurally-generated terrain. */
+	/** P-key handler: pause/unpause the match. */
+	void OnPausePressed();
+
+	/** N-key handler: toggle the engine's NavMesh debug overlay. */
 	void OnToggleNavMeshDebug();
 
 private:
