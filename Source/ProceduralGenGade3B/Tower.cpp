@@ -2,6 +2,7 @@
 
 #include "Tower.h"
 #include "HealthComponent.h"
+#include "DamageFlashComponent.h"
 #include "Enemy.h"
 #include "Projectile.h"
 #include "TDGameMode.h"
@@ -34,6 +35,8 @@ ATower::ATower()
 	// Shared health component.
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
 	HealthComponent->MaxHealth = 500.0f; // Towers are tougher than units by default.
+
+	CreateDefaultSubobject<UDamageFlashComponent>(TEXT("DamageFlash"));
 }
 
 void ATower::BeginPlay()

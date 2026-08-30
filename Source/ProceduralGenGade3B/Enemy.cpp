@@ -2,6 +2,7 @@
 
 #include "Enemy.h"
 #include "HealthComponent.h"
+#include "DamageFlashComponent.h"
 #include "Defender.h"
 #include "TDGameMode.h"
 #include "Components/StaticMeshComponent.h"
@@ -35,6 +36,8 @@ AEnemy::AEnemy()
 	// component's own default) so the Basic Enemy spec's "100 HP" is self-documenting.
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
 	HealthComponent->MaxHealth = 100.0f;
+
+	CreateDefaultSubobject<UDamageFlashComponent>(TEXT("DamageFlash"));
 }
 
 void AEnemy::BeginPlay()
