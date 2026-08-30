@@ -51,6 +51,12 @@ private:
 	 *  how much health each one has left. */
 	void DrawDefenderHealthBars();
 
+	/** Draw a small floating health bar over every living enemy. */
+	void DrawEnemyHealthBars();
+
+	/** Draw pause overlay and control hints (seed, defender cost, key bindings). */
+	void DrawPauseAndHints(ATDGameMode* GameMode);
+
 	/** Projects a world location to screen space and draws a background + health-coloured
 	 *  fill bar there. Shared by defender (and future enemy/tower) health bars. */
 	void DrawWorldHealthBar(const FVector& WorldLocation, float HealthPercent, float BarWidth, float BarHeight);

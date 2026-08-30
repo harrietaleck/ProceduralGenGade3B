@@ -4,8 +4,11 @@
 #include "TDGameMode.h"
 #include "Tower.h"
 #include "Defender.h"
+#include "Enemy.h"
 #include "WaveManager.h"
 #include "HealthComponent.h"
+#include "ProceduralTerrain.h"
+#include "TDPlayerController.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 #include "EngineUtils.h"
@@ -24,6 +27,8 @@ void ATDHUD::DrawHUD()
 
 	DrawStatus(GameMode);
 	DrawDefenderHealthBars();
+	DrawEnemyHealthBars();
+	DrawPauseAndHints(GameMode);
 	DrawInsufficientFundsMessage();
 
 	if (GameMode->IsGameOver())
@@ -101,6 +106,60 @@ void ATDHUD::DrawInsufficientFundsMessage()
 	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetLargeFont() : nullptr);
 	const float CenterX = Canvas ? Canvas->SizeX * 0.5f : 400.0f;
 	DrawText(TEXT("Not Enough Loot"), FLinearColor::Red, CenterX - 150.0f, 40.0f, Font, 1.6f);
+}
+
+void ATDHUD::DrawEnemyHealthBars()
+{
+	for (TActorIterator<AEnemy> It(GetWorld()); It; ++It)
+	{
+		AEnemy* Enemy = *It;
+		UHealthComponent* Health = Enemy ? Enemy->HealthComponent : nullptr;
+		if (!Health || Health->IsDead())
+		{
+			continue;
+		}
+
+		const FVector BarLocation = Enemy->GetActorLocation() + FVector(0.0f, 0.0f, 90.0f);
+		DrawWorldHealthBar(BarLocation, Health->GetHealthPercent(), 55.0f, 6.0f);
+	}
+}
+
+void ATDHUD::DrawPauseAndHints(ATDGameMode* GameMode)
+{
+	if (!GameMode)
+	{
+		return;
+	}
+
+	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetMediumFont() : nullptr);
+
+	int32 DefenderCost = 50;
+	if (ATDPlayerController* PC = Cast<ATDPlayerController>(GetOwningPlayerController()))
+	{
+		if (PC->DefenderClass)
+		{
+			DefenderCost = PC->DefenderClass.GetDefaultObject()->Cost;
+		}
+	}
+
+	const FString CostText = FString::Printf(TEXT("Defender Cost: %d"), DefenderCost);
+	DrawText(CostText, FLinearColor(0.85f, 0.85f, 0.85f), 40.0f, 250.0f, Font, 1.0f);
+
+	if (AProceduralTerrain* Terrain = GameMode->GetTerrain())
+	{
+		const FString SeedText = FString::Printf(TEXT("Map Seed: %d"), Terrain->Seed);
+		DrawText(SeedText, FLinearColor(0.6f, 0.6f, 0.6f), 40.0f, 275.0f, Font, 0.9f);
+	}
+
+	DrawText(TEXT("P: Pause | R: Restart | Click pad: Place defender"), FLinearColor(0.55f, 0.55f, 0.55f), 40.0f, 300.0f, Font, 0.85f);
+
+	if (GameMode->IsPaused())
+	{
+		const float CenterX = Canvas ? Canvas->SizeX * 0.5f : 400.0f;
+		const float CenterY = Canvas ? Canvas->SizeY * 0.5f : 300.0f;
+		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.45f), 0.f, 0.f, Canvas->SizeX, Canvas->SizeY);
+		DrawText(TEXT("PAUSED"), FLinearColor(1.f, 0.95f, 0.3f), CenterX - 70.0f, CenterY - 20.0f, Font, 2.2f);
+	}
 }
 
 void ATDHUD::DrawDefenderHealthBars()
