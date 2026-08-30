@@ -146,10 +146,24 @@ bool ATDGameMode::IsVictory() const
 
 void ATDGameMode::RestartGame()
 {
+	bPaused = false;
+	UGameplayStatics::SetGamePaused(this, false);
+
 	// Reopen the current level. Because the terrain randomises its seed on BeginPlay, this
 	// produces a fresh map, fresh economy and fresh waves — a brand-new game.
 	const FName CurrentLevel(*UGameplayStatics::GetCurrentLevelName(this, /*bRemovePrefixString=*/true));
 	UGameplayStatics::OpenLevel(this, CurrentLevel);
+}
+
+void ATDGameMode::TogglePause()
+{
+	if (bGameOver || IsVictory())
+	{
+		return;
+	}
+
+	bPaused = !bPaused;
+	UGameplayStatics::SetGamePaused(this, bPaused);
 }
 
 AProceduralTerrain* ATDGameMode::FindTerrain() const

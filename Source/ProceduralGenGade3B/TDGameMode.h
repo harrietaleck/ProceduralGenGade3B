@@ -91,6 +91,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void RestartGame();
 
+	/** Toggle match pause (freezes gameplay actors; UI remains visible). */
+	UFUNCTION(BlueprintCallable, Category = "Rules")
+	void TogglePause();
+
+	/** True while the match is paused. */
+	UFUNCTION(BlueprintPure, Category = "Rules")
+	bool IsPaused() const { return bPaused; }
+
 	/** The procedural terrain located at startup (source of paths / slots / tower location). */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	AProceduralTerrain* GetTerrain() const { return Terrain; }
@@ -125,6 +133,9 @@ private:
 
 	/** True after the tower is destroyed. */
 	bool bGameOver = false;
+
+	/** True while the player has paused the match. */
+	bool bPaused = false;
 
 	// Cached references to the key actors.
 	UPROPERTY()
