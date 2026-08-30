@@ -35,15 +35,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "100.0"))
 	float MinZoom = 450.0f;
 
-	/** Furthest zoom (max boom length). Raised well past the old 900 so the player can pull
-	 *  back for a wide tactical view of the whole battlefield when they want it. */
+	/** Furthest zoom (max boom length). Scaled up at runtime from map size so the full
+	 *  battlefield stays visible even after procedural expansion. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "100.0"))
-	float MaxZoom = 3000.0f;
+	float MaxZoom = 10000.0f;
 
-	/** How far one wheel notch changes zoom. Raised alongside MaxZoom so scrolling out to the
-	 *  new far limit takes a reasonable number of notches rather than dozens. */
+	/** Multiplier applied to the terrain's world width to compute the runtime max zoom. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "1.0"))
-	float ZoomStep = 150.0f;
+	float MapZoomOutMultiplier = 2.35f;
+
+	/** How far one wheel notch changes zoom. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "1.0"))
+	float ZoomStep = 300.0f;
 
 	/** How quickly zoom eases toward its target. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "0.1"))
@@ -53,9 +56,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "-89.0", ClampMax = "0.0"))
 	float DefaultPitch = -40.0f;
 
-	/** Steepest allowed tilt (closest to straight-down). */
+	/** Steepest allowed tilt (closest to straight-down). Wider range helps when zoomed out. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "-89.0", ClampMax = "0.0"))
-	float MinPitch = -60.0f;
+	float MinPitch = -75.0f;
 
 	/** Shallowest allowed tilt (closest to level). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "-89.0", ClampMax = "0.0"))
@@ -104,6 +107,12 @@ private:
 
 	/** Zoom distance we ease toward each frame. */
 	float TargetArm = 600.0f;
+
+	/** Designer-authored max zoom before terrain scaling is applied. */
+	float BaseMaxZoom = 10000.0f;
+
+	/** Recompute MaxZoom from the current procedural map size (grows after each wave). */
+	void RefreshZoomLimitsFromTerrain();
 
 	/** Poll WASD and move relative to the camera's yaw. */
 	void UpdateWalk();

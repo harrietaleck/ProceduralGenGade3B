@@ -5,19 +5,20 @@
 #include "DamageFlashComponent.h"
 #include "Enemy.h"
 #include "Projectile.h"
+#include "TowerDebrisPiece.h"
+#include "TowerDustMote.h"
 #include "TDGameMode.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
-#include "EngineUtils.h"           // TActorIterator, for scanning enemies.
-#include "DrawDebugHelpers.h"      // Visual tracer line for each shot.
+#include "EngineUtils.h"
+#include "Kismet/GameplayStatics.h"
+#include "Particles/ParticleSystem.h"
 #include "UObject/ConstructorHelpers.h"
 
 ATower::ATower()
 {
-	// Firing is driven by a timer, so no per-frame tick is required.
 	PrimaryActorTick.bCanEverTick = false;
 
-	// Visual body + root: a cylinder scaled to look like a squat tower.
 	MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("TowerMesh"));
 	SetRootComponent(MeshComponent);
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
@@ -25,34 +26,27 @@ ATower::ATower()
 	{
 		MeshComponent->SetStaticMesh(CylinderMesh.Object);
 	}
-	MeshComponent->SetRelativeScale3D(FVector(1.5f, 1.5f, 3.0f)); // Wide and tall.
-	// A solid structure: blocks the player and traces (so the hero can't walk through it and
-	// the camera can't clip into it). Only SetCollisionProfileName is called — calling
-	// SetCollisionEnabled afterward would desync CollisionEnabled from the profile, leaving the
-	// component reporting profile "Custom" instead of a deterministic "BlockAll".
+	MeshComponent->SetRelativeScale3D(FVector(1.5f, 1.5f, 3.0f));
 	MeshComponent->SetCollisionProfileName(TEXT("BlockAll"));
 
-	// Shared health component.
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
-	HealthComponent->MaxHealth = 500.0f; // Towers are tougher than units by default.
+	HealthComponent->MaxHealth = 500.0f;
 
 	CreateDefaultSubobject<UDamageFlashComponent>(TEXT("DamageFlash"));
+
+	ProjectileClass = AProjectile::StaticClass();
 }
 
 void ATower::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// End the game when the tower dies.
 	HealthComponent->OnDeath.AddDynamic(this, &ATower::HandleDeath);
-
-	// Start firing on a fixed interval.
 	GetWorldTimerManager().SetTimer(FireTimerHandle, this, &ATower::FireAtNearestEnemy, FireInterval, /*bLoop=*/true);
 }
 
 void ATower::FireAtNearestEnemy()
 {
-	// Dead towers don't shoot.
 	if (HealthComponent->IsDead())
 	{
 		return;
@@ -66,7 +60,6 @@ void ATower::FireAtNearestEnemy()
 
 	const FVector MuzzleLocation = GetActorLocation() + MuzzleOffset;
 
-	// Preferred path: launch a projectile that flies to the enemy and applies damage on impact.
 	if (ProjectileClass)
 	{
 		FActorSpawnParameters SpawnParams;
@@ -75,15 +68,14 @@ void ATower::FireAtNearestEnemy()
 		if (AProjectile* Shot = GetWorld()->SpawnActor<AProjectile>(ProjectileClass, MuzzleLocation, GetActorRotation(), SpawnParams))
 		{
 			Shot->InitProjectile(Target, AttackDamage, this);
+			Shot->ConfigureVisuals(TowerBallScale, TowerBallColor);
 		}
 		return;
 	}
 
-	// Fallback (no projectile class set): instant hitscan damage + a debug tracer.
 	if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
 	{
 		TargetHealth->ApplyDamage(AttackDamage, this);
-		DrawDebugLine(GetWorld(), MuzzleLocation, Target->GetActorLocation(), FColor::Cyan, false, 0.1f, 0, 4.0f);
 	}
 }
 
@@ -111,10 +103,96 @@ AEnemy* ATower::FindNearestEnemyInRange() const
 	return Best;
 }
 
+void ATower::PlayDestructionEffect()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	const FVector Origin = GetActorLocation();
+	const FVector Base = Origin + FVector(0.0f, 0.0f, 50.0f);
+
+	static UStaticMesh* CubeMesh = nullptr;
+	static UStaticMesh* SphereMesh = nullptr;
+	if (!CubeMesh || !SphereMesh)
+	{
+		CubeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+		SphereMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	for (int32 I = 0; I < DebrisPieceCount; ++I)
+	{
+		const float Angle = (2.0f * PI * I) / DebrisPieceCount + FMath::FRandRange(-0.2f, 0.2f);
+		const float Outward = FMath::FRandRange(120.0f, 420.0f);
+		const FVector Offset(
+			FMath::Cos(Angle) * FMath::FRandRange(40.0f, 160.0f),
+			FMath::Sin(Angle) * FMath::FRandRange(40.0f, 160.0f),
+			FMath::FRandRange(80.0f, 420.0f));
+
+		const FVector SpawnLocation = Base + Offset;
+		const FVector Impulse(
+			FMath::Cos(Angle) * Outward,
+			FMath::Sin(Angle) * Outward,
+			FMath::FRandRange(250.0f, 700.0f));
+
+		UStaticMesh* Mesh = (I % 3 == 0) ? SphereMesh : CubeMesh;
+		const FVector Scale(
+			FMath::FRandRange(0.18f, 0.45f),
+			FMath::FRandRange(0.18f, 0.45f),
+			FMath::FRandRange(0.18f, 0.55f));
+
+		if (ATowerDebrisPiece* Debris = World->SpawnActor<ATowerDebrisPiece>(ATowerDebrisPiece::StaticClass(), SpawnLocation, FRotator(FMath::FRandRange(0.0f, 360.0f), FMath::FRandRange(0.0f, 360.0f), FMath::FRandRange(0.0f, 360.0f)), SpawnParams))
+		{
+			Debris->InitDebris(Mesh, Scale, Impulse);
+		}
+	}
+
+	for (int32 I = 0; I < DustMoteCount; ++I)
+	{
+		const FVector DustOffset(
+			FMath::FRandRange(-220.0f, 220.0f),
+			FMath::FRandRange(-220.0f, 220.0f),
+			FMath::FRandRange(20.0f, 320.0f));
+
+		const FVector DustVelocity(
+			FMath::FRandRange(-180.0f, 180.0f),
+			FMath::FRandRange(-180.0f, 180.0f),
+			FMath::FRandRange(120.0f, 360.0f));
+
+		if (ATowerDustMote* Mote = World->SpawnActor<ATowerDustMote>(ATowerDustMote::StaticClass(), Base + DustOffset, FRotator::ZeroRotator, SpawnParams))
+		{
+			Mote->InitMote(DustVelocity, FMath::FRandRange(1.0f, 2.0f));
+		}
+	}
+
+	static UParticleSystem* DustBurst = nullptr;
+	if (!DustBurst)
+	{
+		DustBurst = LoadObject<UParticleSystem>(nullptr, TEXT("/Engine/EngineVFX/Blueprints/DefaultVFX/DefaultTexturedSmoke.DefaultTexturedSmoke"));
+	}
+	if (DustBurst)
+	{
+		UGameplayStatics::SpawnEmitterAtLocation(World, DustBurst, Base, FRotator::ZeroRotator, FVector(2.5f), /*bAutoDestroy=*/true, EPSCPoolMethod::None, /*bAutoActivateSystem=*/true);
+	}
+}
+
 void ATower::HandleDeath(AActor* Killer)
 {
-	// Stop firing and tell the game mode the game is over.
 	GetWorldTimerManager().ClearTimer(FireTimerHandle);
+
+	if (MeshComponent)
+	{
+		MeshComponent->SetVisibility(false);
+		MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+
+	PlayDestructionEffect();
+	SetLifeSpan(6.0f);
 
 	if (ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>())
 	{

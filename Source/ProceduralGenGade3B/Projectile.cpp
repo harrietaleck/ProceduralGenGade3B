@@ -4,6 +4,7 @@
 #include "HealthComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 
 AProjectile::AProjectile()
@@ -19,17 +20,35 @@ AProjectile::AProjectile()
 	{
 		MeshComponent->SetStaticMesh(SphereMesh.Object);
 	}
-	MeshComponent->SetRelativeScale3D(FVector(0.2f)); // ~10uu radius.
-	// No collision needed — we detect "impact" ourselves by distance to the target.
 	MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 void AProjectile::BeginPlay()
 {
 	Super::BeginPlay();
-
-	// Safety net: never let a projectile live forever if it somehow never reaches a target.
+	ApplyVisuals();
 	SetLifeSpan(MaxLifeSeconds);
+}
+
+void AProjectile::ConfigureVisuals(float InVisualScale, FLinearColor InColor)
+{
+	VisualScale = InVisualScale;
+	ProjectileColor = InColor;
+	ApplyVisuals();
+}
+
+void AProjectile::ApplyVisuals()
+{
+	MeshComponent->SetRelativeScale3D(FVector(VisualScale));
+
+	if (UMaterialInterface* BaseMat = MeshComponent->GetMaterial(0))
+	{
+		if (UMaterialInstanceDynamic* DynMat = UMaterialInstanceDynamic::Create(BaseMat, this))
+		{
+			DynMat->SetVectorParameterValue(TEXT("Color"), ProjectileColor);
+			MeshComponent->SetMaterial(0, DynMat);
+		}
+	}
 }
 
 void AProjectile::InitProjectile(AActor* InTarget, float InDamage, AActor* InInstigatorActor)

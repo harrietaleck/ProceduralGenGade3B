@@ -29,7 +29,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "HUD")
 	void InitializeHUD(ATDGameMode* InGameMode);
 
-protected:
+	/** Briefly flash the Loot counter red when placement is rejected. */
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void FlashLootInsufficient();
+
 	// --- Part A layout: five zones, one widget each, bound by exact name to the matching
 	// elements the Widget Blueprint's designer view must contain. ---
 
@@ -67,7 +70,10 @@ private:
 	UPROPERTY()
 	TObjectPtr<AWaveManager> WaveManagerRef;
 
-	// --- Delegate handlers: each updates only the one widget it owns. ---
+	FTimerHandle LootFlashTimerHandle;
+	FLinearColor DefaultLootColor = FLinearColor::White;
+
+	void HideLootFlash();
 
 	UFUNCTION()
 	void HandleResourcesChanged(int32 NewAmount);

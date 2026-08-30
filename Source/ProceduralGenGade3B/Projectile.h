@@ -35,12 +35,24 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile", meta = (ClampMin = "0.1"))
 	float MaxLifeSeconds = 5.0f;
 
+	/** Visual scale applied to the projectile mesh (balls read better slightly larger). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile", meta = (ClampMin = "0.05"))
+	float VisualScale = 0.28f;
+
+	/** Tint colour for the projectile ball. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile")
+	FLinearColor ProjectileColor = FLinearColor(1.0f, 0.82f, 0.2f);
+
 	/**
 	 * Arm the projectile: who to hit, how hard, and who fired it (for kill attribution).
 	 * Called by the shooter immediately after spawning.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Projectile")
 	void InitProjectile(AActor* InTarget, float InDamage, AActor* InInstigatorActor);
+
+	/** Optional per-shot visual override (tower balls can be larger/brighter than defenders). */
+	UFUNCTION(BlueprintCallable, Category = "Projectile")
+	void ConfigureVisuals(float InVisualScale, FLinearColor InColor);
 
 protected:
 	virtual void BeginPlay() override;
@@ -70,4 +82,6 @@ private:
 
 	/** Apply damage to the target (if still valid) and destroy the projectile. */
 	void HitTargetAndDie();
+
+	void ApplyVisuals();
 };

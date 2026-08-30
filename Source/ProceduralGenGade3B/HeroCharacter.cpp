@@ -34,7 +34,7 @@ AHeroCharacter::AHeroCharacter()
 	CameraBoom->SetupAttachment(RootComponent);           // Root is the capsule.
 	CameraBoom->TargetArmLength = TargetArmLength;         // ~600 uu distance.
 	CameraBoom->bUsePawnControlRotation = true;            // Boom follows the controller's look.
-	CameraBoom->bDoCollisionTest = true;                  // Pull in so it never clips walls/terrain.
+	CameraBoom->bDoCollisionTest = false;                 // Terrain hills were shortening the boom and blocking zoom-out.
 	CameraBoom->ProbeSize = 12.0f;
 	CameraBoom->bEnableCameraLag = true;                  // Smooth follow on movement.
 	CameraBoom->CameraLagSpeed = 10.0f;
@@ -51,7 +51,7 @@ AHeroCharacter::AHeroCharacter()
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;        // Boom already handles rotation.
-	FollowCamera->FieldOfView = 70.0f;                    // Tactical but not fish-eyed wide.
+	FollowCamera->FieldOfView = 80.0f;                    // Slightly wider for tactical map overview.
 
 	// --- Visible placeholder body (capsule collision stays the real collider) ---
 	BodyMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BodyMesh"));
@@ -80,6 +80,9 @@ AHeroCharacter::AHeroCharacter()
 void AHeroCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	BaseMaxZoom = MaxZoom;
+	RefreshZoomLimitsFromTerrain();
 
 	TargetArm = FMath::Clamp(TargetArmLength, MinZoom, MaxZoom);
 	CameraBoom->TargetArmLength = TargetArm;
@@ -273,10 +276,36 @@ void AHeroCharacter::EndLook()
 
 void AHeroCharacter::ZoomIn()
 {
+	RefreshZoomLimitsFromTerrain();
 	TargetArm = FMath::Clamp(TargetArm - ZoomStep, MinZoom, MaxZoom);
 }
 
 void AHeroCharacter::ZoomOut()
 {
+	RefreshZoomLimitsFromTerrain();
 	TargetArm = FMath::Clamp(TargetArm + ZoomStep, MinZoom, MaxZoom);
+}
+
+void AHeroCharacter::RefreshZoomLimitsFromTerrain()
+{
+	if (!GetWorld())
+	{
+		return;
+	}
+
+	for (TActorIterator<AProceduralTerrain> It(GetWorld()); It; ++It)
+	{
+		const AProceduralTerrain* Terrain = *It;
+		if (!Terrain)
+		{
+			continue;
+		}
+
+		const float MapWorldSize = Terrain->GridSize * Terrain->CellSize;
+		const float TerrainScaledMax = MapWorldSize * MapZoomOutMultiplier;
+		const float ExpansionCap = Terrain->MaxGridSize * Terrain->CellSize * MapZoomOutMultiplier;
+		MaxZoom = FMath::Max(BaseMaxZoom, TerrainScaledMax, ExpansionCap);
+		TargetArm = FMath::Clamp(TargetArm, MinZoom, MaxZoom);
+		return;
+	}
 }

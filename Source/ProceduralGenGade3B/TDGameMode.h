@@ -16,6 +16,8 @@ class AEnemy;
 class AWaveManager;
 class ABuildPadMarker;
 class UTDHUDWidget;
+class UTDEndScreenWidget;
+class UTDWarningBannerWidget;
 
 // Broadcast whenever the player's resource count changes (UI binds to this).
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnResourcesChanged, int32, NewAmount);
@@ -60,6 +62,18 @@ public:
 	 *  wired up once Tower/WaveManager exist, at the end of BeginPlay. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<UTDHUDWidget> HUDWidgetClass;
+
+	/** Full-screen game over / victory overlay (C++ widget by default). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
+	TSubclassOf<UTDEndScreenWidget> EndScreenWidgetClass;
+
+	/** Active match HUD widget instance (may be null if no WBP asset is configured). */
+	UFUNCTION(BlueprintPure, Category = "Rules")
+	UTDHUDWidget* GetMatchHUDWidget() const { return MatchHUDWidget; }
+
+	/** Bottom-centre warning when defender placement is rejected (e.g. not enough Loot). */
+	UFUNCTION(BlueprintCallable, Category = "Rules")
+	void ShowInsufficientFundsWarning();
 
 	/** Fired when resources change. */
 	UPROPERTY(BlueprintAssignable, Category = "Rules")
@@ -154,6 +168,15 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<AWaveManager> WaveManager;
+
+	UPROPERTY()
+	TObjectPtr<UTDHUDWidget> MatchHUDWidget;
+
+	UPROPERTY()
+	TObjectPtr<UTDEndScreenWidget> EndScreenWidget;
+
+	UPROPERTY()
+	TObjectPtr<UTDWarningBannerWidget> WarningBannerWidget;
 
 	/** Visual platforms spawned on every generated build pad this attempt — tracked so a failed
 	 *  world-validation pass can tear them down before regenerating. */

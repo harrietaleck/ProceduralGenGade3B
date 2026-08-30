@@ -4,7 +4,7 @@
 #include "Defender.h"
 #include "ProceduralTerrain.h"
 #include "TDGameMode.h"
-#include "TDHUD.h"
+#include "TDHUDWidget.h"
 #include "DrawDebugHelpers.h"
 
 ATDPlayerController::ATDPlayerController()
@@ -93,10 +93,7 @@ void ATDPlayerController::OnPlaceDefenderClicked()
 	if (GameMode->GetResources() < Cost)
 	{
 		// Reject the placement and tell the player why, without touching their Loot.
-		if (ATDHUD* HUD = Cast<ATDHUD>(GetHUD()))
-		{
-			HUD->ShowInsufficientFundsMessage();
-		}
+		GameMode->ShowInsufficientFundsWarning();
 		return;
 	}
 

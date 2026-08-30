@@ -33,9 +33,24 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower", meta = (ClampMin = "0.05"))
 	float FireInterval = 0.5f;
 
-	/** Projectile fired at enemies. If left empty, the tower falls back to instant (hitscan) damage. */
+	/** Projectile fired at enemies. Defaults to ball projectiles in the constructor. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower")
 	TSubclassOf<AProjectile> ProjectileClass;
+
+	/** Scale and colour for tower shot balls. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower", meta = (ClampMin = "0.05"))
+	float TowerBallScale = 0.42f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower")
+	FLinearColor TowerBallColor = FLinearColor(1.0f, 0.78f, 0.15f);
+
+	/** How many stone chunks spawn when the tower is destroyed. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower|Destruction", meta = (ClampMin = "1"))
+	int32 DebrisPieceCount = 18;
+
+	/** How many dust motes spawn in the collapse cloud. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower|Destruction", meta = (ClampMin = "0"))
+	int32 DustMoteCount = 28;
 
 	/** Local-space offset from the tower origin where shots originate (the muzzle). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower")
@@ -65,4 +80,7 @@ private:
 
 	/** Returns the closest living enemy within AttackRange, or null if none. */
 	AEnemy* FindNearestEnemyInRange() const;
+
+	/** Crumbling stones + dust when the tower falls. */
+	void PlayDestructionEffect();
 };

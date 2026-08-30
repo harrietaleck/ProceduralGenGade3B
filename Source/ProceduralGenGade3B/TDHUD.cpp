@@ -38,16 +38,6 @@ void ATDHUD::DrawHUD()
 	DrawInfoPanel(GameMode);
 	DrawDefenderHealthBars();
 	DrawEnemyHealthBars();
-	DrawInsufficientFundsMessage();
-
-	if (GameMode->IsGameOver())
-	{
-		DrawGameOver();
-	}
-	else if (GameMode->IsVictory())
-	{
-		DrawVictory();
-	}
 }
 
 void ATDHUD::DrawPanelText(const FString& Text, const FLinearColor& Color, float X, float Y, UFont* Font, float Scale)
@@ -169,32 +159,6 @@ void ATDHUD::DrawInfoPanel(ATDGameMode* GameMode)
 	}
 }
 
-void ATDHUD::ShowInsufficientFundsMessage()
-{
-	if (UWorld* World = GetWorld())
-	{
-		InsufficientFundsMessageExpireTime = World->GetTimeSeconds() + InsufficientFundsMessageDuration;
-	}
-}
-
-bool ATDHUD::IsShowingInsufficientFundsMessage() const
-{
-	const UWorld* World = GetWorld();
-	return World && World->GetTimeSeconds() < InsufficientFundsMessageExpireTime;
-}
-
-void ATDHUD::DrawInsufficientFundsMessage()
-{
-	if (!IsShowingInsufficientFundsMessage())
-	{
-		return; // Never triggered, or it already expired -> nothing to draw, no timer to clean up.
-	}
-
-	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetLargeFont() : nullptr);
-	const float CenterX = Canvas ? Canvas->SizeX * 0.5f : 400.0f;
-	DrawText(TEXT("Not Enough Loot"), FLinearColor::Red, CenterX - 150.0f, 40.0f, Font, 1.6f);
-}
-
 void ATDHUD::DrawEnemyHealthBars()
 {
 	for (TActorIterator<AEnemy> It(GetWorld()); It; ++It)
@@ -254,36 +218,4 @@ void ATDHUD::DrawWorldHealthBar(const FVector& WorldLocation, float HealthPercen
 	const float Pct = FMath::Clamp(HealthPercent, 0.0f, 1.0f);
 	const FLinearColor FillColor = FMath::Lerp(FLinearColor::Red, FLinearColor::Green, Pct);
 	DrawRect(FillColor, Left, Top, BarWidth * Pct, BarHeight);
-}
-
-void ATDHUD::DrawGameOver()
-{
-	// GetLargeFont() returns a const UFont*, but AHUD::DrawText wants a non-const UFont*.
-	// DrawText only reads the font, so a const_cast here is safe.
-	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetLargeFont() : nullptr);
-
-	// Centre the banner roughly on screen (Canvas gives us the viewport size).
-	const float CenterX = Canvas ? Canvas->SizeX * 0.5f : 400.0f;
-	const float CenterY = Canvas ? Canvas->SizeY * 0.5f : 300.0f;
-
-	const FString OverText = TEXT("GAME OVER");
-	const FString HintText = TEXT("Press R to restart");
-
-	// DrawText positions from the top-left of the string, so nudge left to look centred.
-	DrawText(OverText, FLinearColor::Red, CenterX - 120.0f, CenterY - 40.0f, Font, 2.5f);
-	DrawText(HintText, FLinearColor::White, CenterX - 110.0f, CenterY + 20.0f, Font, 1.4f);
-}
-
-void ATDHUD::DrawVictory()
-{
-	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetLargeFont() : nullptr);
-
-	const float CenterX = Canvas ? Canvas->SizeX * 0.5f : 400.0f;
-	const float CenterY = Canvas ? Canvas->SizeY * 0.5f : 300.0f;
-
-	const FString VictoryText = TEXT("VICTORY");
-	const FString HintText = TEXT("Press R to restart");
-
-	DrawText(VictoryText, FLinearColor::Green, CenterX - 100.0f, CenterY - 40.0f, Font, 2.5f);
-	DrawText(HintText, FLinearColor::White, CenterX - 110.0f, CenterY + 20.0f, Font, 1.4f);
 }

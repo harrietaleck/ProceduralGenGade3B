@@ -7,6 +7,37 @@
 #include "HealthComponent.h"
 #include "Components/TextBlock.h"
 #include "Components/ProgressBar.h"
+#include "TimerManager.h"
+
+void UTDHUDWidget::FlashLootInsufficient()
+{
+	if (!LootText)
+	{
+		return;
+	}
+
+	DefaultLootColor = LootText->GetColorAndOpacity().GetSpecifiedColor();
+	LootText->SetColorAndOpacity(FLinearColor(1.0f, 0.2f, 0.2f));
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(LootFlashTimerHandle);
+		World->GetTimerManager().SetTimer(
+			LootFlashTimerHandle,
+			this,
+			&UTDHUDWidget::HideLootFlash,
+			2.5f,
+			/*bLoop=*/false);
+	}
+}
+
+void UTDHUDWidget::HideLootFlash()
+{
+	if (LootText)
+	{
+		LootText->SetColorAndOpacity(DefaultLootColor);
+	}
+}
 
 void UTDHUDWidget::InitializeHUD(ATDGameMode* InGameMode)
 {

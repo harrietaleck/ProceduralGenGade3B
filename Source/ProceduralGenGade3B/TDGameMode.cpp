@@ -12,6 +12,8 @@
 #include "TDPlayerController.h"
 #include "TDHUD.h"
 #include "TDHUDWidget.h"
+#include "TDEndScreenWidget.h"
+#include "TDWarningBannerWidget.h"
 #include "TDCameraPawn.h"
 #include "HeroCharacter.h"
 #include "Kismet/GameplayStatics.h"
@@ -41,6 +43,8 @@ ATDGameMode::ATDGameMode()
 	{
 		HUDWidgetClass = HUDWidgetFinder.Class;
 	}
+
+	EndScreenWidgetClass = UTDEndScreenWidget::StaticClass();
 }
 
 void ATDGameMode::BeginPlay()
@@ -122,17 +126,38 @@ void ATDGameMode::BeginPlay()
 		WaveManager->OnWaveComplete.AddDynamic(this, &ATDGameMode::HandleWaveComplete);
 	}
 
-	// Create the UMG match HUD last, now that Tower and WaveManager both exist for it to
-	// bind to. A missing HUDWidgetClass (no WBP_TDHUD asset yet) is a silent no-op.
-	if (HUDWidgetClass)
+	// Create the UMG match HUD and end-screen overlay last, now that Tower and WaveManager
+	// both exist for them to bind to.
+	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
 	{
-		if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+		if (HUDWidgetClass)
 		{
 			if (UTDHUDWidget* Widget = CreateWidget<UTDHUDWidget>(PC, HUDWidgetClass))
 			{
-				Widget->AddToViewport();
-				Widget->InitializeHUD(this);
+				MatchHUDWidget = Widget;
+				MatchHUDWidget->AddToViewport(0);
+				MatchHUDWidget->InitializeHUD(this);
 			}
+		}
+
+		const TSubclassOf<UTDEndScreenWidget> ScreenClass = EndScreenWidgetClass
+			? EndScreenWidgetClass
+			: TSubclassOf<UTDEndScreenWidget>(UTDEndScreenWidget::StaticClass());
+		if (UTDEndScreenWidget* Screen = CreateWidget<UTDEndScreenWidget>(PC, ScreenClass))
+		{
+			EndScreenWidget = Screen;
+			EndScreenWidget->AddToViewport(100);
+			OnGameOver.AddDynamic(EndScreenWidget, &UTDEndScreenWidget::ShowGameOver);
+			if (WaveManager)
+			{
+				WaveManager->OnVictory.AddDynamic(EndScreenWidget, &UTDEndScreenWidget::ShowVictory);
+			}
+		}
+
+		if (UTDWarningBannerWidget* Warning = CreateWidget<UTDWarningBannerWidget>(PC, UTDWarningBannerWidget::StaticClass()))
+		{
+			WarningBannerWidget = Warning;
+			WarningBannerWidget->AddToViewport(50);
 		}
 	}
 }
@@ -145,6 +170,18 @@ int32 ATDGameMode::GetCurrentWave() const
 bool ATDGameMode::IsVictory() const
 {
 	return WaveManager && WaveManager->IsVictory();
+}
+
+void ATDGameMode::ShowInsufficientFundsWarning()
+{
+	if (WarningBannerWidget)
+	{
+		WarningBannerWidget->ShowWarning(TEXT("Not enough Loot for a defender"));
+	}
+	if (MatchHUDWidget)
+	{
+		MatchHUDWidget->FlashLootInsufficient();
+	}
 }
 
 void ATDGameMode::RestartGame()
