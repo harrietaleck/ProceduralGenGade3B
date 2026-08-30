@@ -3,10 +3,12 @@
 #include "TDGameMode.h"
 #include "ProceduralTerrain.h"
 #include "Tower.h"
+#include "Defender.h"
 #include "Enemy.h"
 #include "EnemySpawner.h"
 #include "WaveManager.h"
 #include "BuildPadMarker.h"
+#include "HealthComponent.h"
 #include "TDPlayerController.h"
 #include "TDHUD.h"
 #include "TDHUDWidget.h"
@@ -117,6 +119,7 @@ void ATDGameMode::BeginPlay()
 	if (WaveManager && Spawner)
 	{
 		WaveManager->Initialize(Spawner, /*bStartImmediately=*/true);
+		WaveManager->OnWaveComplete.AddDynamic(this, &ATDGameMode::HandleWaveComplete);
 	}
 
 	// Create the UMG match HUD last, now that Tower and WaveManager both exist for it to
@@ -211,7 +214,12 @@ bool ATDGameMode::SpawnTowerWithRetry()
 
 void ATDGameMode::SpawnBuildPadMarkers()
 {
-	if (!BuildPadMarkerClass)
+	SpawnBuildPadMarkersFromIndex(0);
+}
+
+void ATDGameMode::SpawnBuildPadMarkersFromIndex(int32 StartSlotIndex)
+{
+	if (!Terrain || !BuildPadMarkerClass || StartSlotIndex < 0)
 	{
 		return;
 	}
@@ -219,15 +227,59 @@ void ATDGameMode::SpawnBuildPadMarkers()
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-	// Mark every generated build pad with a visual platform, so valid placement locations
-	// are always obvious (brief: "is it clear to the player how/where they can build?").
-	for (const FDefenderSlot& Slot : Terrain->GetDefenderSlots())
+	const TArray<FDefenderSlot>& Slots = Terrain->GetDefenderSlots();
+	for (int32 I = StartSlotIndex; I < Slots.Num(); ++I)
 	{
+		const FDefenderSlot& Slot = Slots[I];
 		if (ABuildPadMarker* Marker = GetWorld()->SpawnActor<ABuildPadMarker>(BuildPadMarkerClass, Slot.Location + FVector(0.0f, 0.0f, 4.0f), FRotator::ZeroRotator, SpawnParams))
 		{
 			BuildPadMarkers.Add(Marker);
 		}
 	}
+}
+
+void ATDGameMode::ApplyDefenderUpkeep()
+{
+	int32 TotalUpkeep = 0;
+	int32 DefenderCount = 0;
+	for (TActorIterator<ADefender> It(GetWorld()); It; ++It)
+	{
+		ADefender* Defender = *It;
+		if (!Defender || !Defender->HealthComponent || Defender->HealthComponent->IsDead())
+		{
+			continue;
+		}
+
+		++DefenderCount;
+		const int32 PerDefender = Defender->UpkeepPerWave > 0 ? Defender->UpkeepPerWave : DefenderUpkeepPerWave;
+		TotalUpkeep += PerDefender;
+	}
+
+	if (TotalUpkeep <= 0)
+	{
+		return;
+	}
+
+	Resources = FMath::Max(0, Resources - TotalUpkeep);
+	OnResourcesChanged.Broadcast(Resources);
+	UE_LOG(LogTemp, Display, TEXT("TDGameMode: defender upkeep charged %d Loot (%d defenders)."), TotalUpkeep, DefenderCount);
+}
+
+void ATDGameMode::HandleWaveComplete(int32 WaveNumber)
+{
+	if (!Terrain || bGameOver || IsVictory())
+	{
+		return;
+	}
+
+	const int32 OldSlotCount = Terrain->GetDefenderSlots().Num();
+	const int32 ExtendedLanes = Terrain->ExpandWorldAfterWave();
+	if (ExtendedLanes > 0)
+	{
+		SpawnBuildPadMarkersFromIndex(OldSlotCount);
+	}
+
+	ApplyDefenderUpkeep();
 }
 
 void ATDGameMode::DestroySpawnedWorldActors()

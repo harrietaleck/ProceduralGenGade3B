@@ -35,9 +35,18 @@ class PROCEDURALGENGADE3B_API AEnemy : public AActor
 public:
 	AEnemy();
 
-	/** Movement speed along the path, in Unreal units per second (Basic Enemy spec: 350). */
+	/** Movement speed along the path, in Unreal units per second. Tuned for the 200uu cell
+	 *  grid so a full border-to-tower walk takes ~25–35s — deliberate but not crawling. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0.0"))
-	float MoveSpeed = 350.0f;
+	float MoveSpeed = 150.0f;
+
+	/** How quickly the enemy reaches full MoveSpeed from a standstill (uu/s²). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "1.0"))
+	float Acceleration = 68.0f;
+
+	/** How quickly the mesh yaws to face the direction of travel (higher = snappier). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0.1"))
+	float TurnRate = 2.6f;
 
 	/** Damage dealt per attack to the tower or a defender (Basic Enemy spec: 10). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0.0"))
@@ -108,6 +117,9 @@ private:
 
 	/** Counts down between attacks. */
 	float AttackTimer = 0.0f;
+
+	/** Live travel speed — ramps up from zero so enemies ease into motion after spawning. */
+	float CurrentSpeed = 0.0f;
 
 	// --- helpers ---
 	void MoveAlongPath(float DeltaSeconds);

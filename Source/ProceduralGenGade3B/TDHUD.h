@@ -44,18 +44,17 @@ private:
 
 	/** Draws the centred "Not Enough Loot" warning while active. */
 	void DrawInsufficientFundsMessage();
-	/** Draw the top-left status readout (Loot, Citadel health, wave). */
-	void DrawStatus(ATDGameMode* GameMode);
+	/** Draw pause overlay and the readable info panel (defenders, cost, seed, controls). */
+	void DrawInfoPanel(ATDGameMode* GameMode);
 
-	/** Draw a small floating health bar over every living defender, so it's always clear
-	 *  how much health each one has left. */
+	/** Draw a line of HUD text on top of the info panel with consistent sizing. */
+	void DrawPanelText(const FString& Text, const FLinearColor& Color, float X, float Y, UFont* Font, float Scale);
+
+	/** Draw a small floating health bar over every living defender. */
 	void DrawDefenderHealthBars();
 
 	/** Draw a small floating health bar over every living enemy. */
 	void DrawEnemyHealthBars();
-
-	/** Draw pause overlay and control hints (seed, defender cost, key bindings). */
-	void DrawPauseAndHints(ATDGameMode* GameMode);
 
 	/** Projects a world location to screen space and draws a background + health-coloured
 	 *  fill bar there. Shared by defender (and future enemy/tower) health bars. */

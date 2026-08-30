@@ -35,6 +35,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules", meta = (ClampMin = "0"))
 	int32 StartingResources = 200;
 
+	/** Loot deducted after each cleared wave for every living defender (lecture: economy
+	 *  grows from kills but drains while defenders are fielded). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules", meta = (ClampMin = "0"))
+	int32 DefenderUpkeepPerWave = 8;
+
 	/** Which tower class to spawn (defaults to the C++ ATower; can be a Blueprint child). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<ATower> TowerClass;
@@ -165,6 +170,16 @@ private:
 
 	/** Spawns a visual platform on every one of the terrain's current build slots. */
 	void SpawnBuildPadMarkers();
+
+	/** Spawns markers only for build slots added since the last call (used after path expansion). */
+	void SpawnBuildPadMarkersFromIndex(int32 StartSlotIndex);
+
+	/** Deduct upkeep for all living defenders after a wave ends. */
+	void ApplyDefenderUpkeep();
+
+	/** Wave-complete hook: extend lanes, add new pads, charge upkeep. */
+	UFUNCTION()
+	void HandleWaveComplete(int32 WaveNumber);
 
 	/** Destroys the tower and every build-pad marker spawned so far, so a failed world-validation
 	 *  attempt can regenerate cleanly rather than leaving stale actors from the last attempt. */

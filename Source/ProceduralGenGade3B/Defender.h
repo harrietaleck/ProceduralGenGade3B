@@ -22,6 +22,10 @@ class PROCEDURALGENGADE3B_API ADefender : public AActor
 public:
 	ADefender();
 
+	/** Resource upkeep charged per wave for each living defender. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender", meta = (ClampMin = "0"))
+	int32 UpkeepPerWave = 8;
+
 	/** Resource cost to place this defender. Read by the player controller before spending. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender", meta = (ClampMin = "0"))
 	int32 Cost = 50;

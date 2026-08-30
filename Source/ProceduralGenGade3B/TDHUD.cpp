@@ -14,6 +14,16 @@
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 
+namespace
+{
+	static constexpr float InfoPanelX = 20.0f;
+	static constexpr float InfoPanelY = 200.0f;
+	static constexpr float InfoPanelPadding = 12.0f;
+	static constexpr float InfoLineSpacing = 36.0f;
+	static constexpr float InfoPrimaryScale = 1.9f;
+	static constexpr float InfoSecondaryScale = 1.65f;
+}
+
 void ATDHUD::DrawHUD()
 {
 	Super::DrawHUD();
@@ -25,10 +35,9 @@ void ATDHUD::DrawHUD()
 		return;
 	}
 
-	DrawStatus(GameMode);
+	DrawInfoPanel(GameMode);
 	DrawDefenderHealthBars();
 	DrawEnemyHealthBars();
-	DrawPauseAndHints(GameMode);
 	DrawInsufficientFundsMessage();
 
 	if (GameMode->IsGameOver())
@@ -41,44 +50,122 @@ void ATDHUD::DrawHUD()
 	}
 }
 
-void ATDHUD::DrawStatus(ATDGameMode* GameMode)
+void ATDHUD::DrawPanelText(const FString& Text, const FLinearColor& Color, float X, float Y, UFont* Font, float Scale)
 {
-	// GetLargeFont() returns a const UFont*, but AHUD::DrawText wants a non-const UFont*.
-	// DrawText only reads the font, so a const_cast here is safe.
+	DrawText(Text, Color, X, Y, Font, Scale);
+}
+
+void ATDHUD::DrawInfoPanel(ATDGameMode* GameMode)
+{
+	if (!GameMode || !Canvas)
+	{
+		return;
+	}
+
 	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetLargeFont() : nullptr);
 
-	// Loot, Wave status, and Citadel health now live in the real UMG HUD (UTDHUDWidget /
-	// WBP_TDHUD) — see TDHUDWidget.cpp. Kept here in Canvas: the defender summary below (no
-	// UMG equivalent yet), the insufficient-funds banner, and the Game Over / Victory screens.
-
-	// --- Defender summary: how many are alive and their combined health, at a glance ---
+	int32 AliveCount = 0;
+	float TotalCurrent = 0.0f;
+	float TotalMax = 0.0f;
+	for (TActorIterator<ADefender> It(GetWorld()); It; ++It)
 	{
-		int32 AliveCount = 0;
-		float TotalCurrent = 0.0f;
-		float TotalMax = 0.0f;
-		for (TActorIterator<ADefender> It(GetWorld()); It; ++It)
+		ADefender* Defender = *It;
+		UHealthComponent* Health = Defender ? Defender->HealthComponent : nullptr;
+		if (!Health || Health->IsDead())
 		{
-			ADefender* Defender = *It;
-			UHealthComponent* Health = Defender ? Defender->HealthComponent : nullptr;
-			if (!Health || Health->IsDead())
-			{
-				continue;
-			}
-			++AliveCount;
-			TotalCurrent += Health->GetCurrentHealth();
-			TotalMax += Health->MaxHealth;
+			continue;
 		}
+		++AliveCount;
+		TotalCurrent += Health->GetCurrentHealth();
+		TotalMax += Health->MaxHealth;
+	}
 
-		const FString DefenderText = AliveCount > 0
-			? FString::Printf(TEXT("Defenders: %d (%d / %d HP)"), AliveCount, FMath::RoundToInt(TotalCurrent), FMath::RoundToInt(TotalMax))
-			: TEXT("Defenders: 0");
+	const FString DefenderText = AliveCount > 0
+		? FString::Printf(TEXT("Defenders: %d (%d / %d HP)"), AliveCount, FMath::RoundToInt(TotalCurrent), FMath::RoundToInt(TotalMax))
+		: TEXT("Defenders: 0");
 
-		// Deep purple identifies this as the "defenders" line at a glance, distinct from the
-		// Citadel's red/green health colouring above it. Kept dark/saturated (rather than a
-		// pale lavender) so it stays readable against light terrain in the background.
-		// Positioned well below the UMG HUD's top-left "Wave X / Y" text so the two never overlap.
-		const FLinearColor DefenderColor(0.35f, 0.0f, 0.55f);
-		DrawText(DefenderText, DefenderColor, 40.0f, 220.0f, Font, 1.4f);
+	int32 DefenderCost = 50;
+	int32 DefenderUpkeep = 8;
+	int32 LivingDefenders = 0;
+	if (ATDPlayerController* PC = Cast<ATDPlayerController>(GetOwningPlayerController()))
+	{
+		if (PC->DefenderClass)
+		{
+			DefenderCost = PC->DefenderClass.GetDefaultObject()->Cost;
+			DefenderUpkeep = PC->DefenderClass.GetDefaultObject()->UpkeepPerWave;
+		}
+	}
+	for (TActorIterator<ADefender> It(GetWorld()); It; ++It)
+	{
+		ADefender* Defender = *It;
+		if (Defender && Defender->HealthComponent && !Defender->HealthComponent->IsDead())
+		{
+			++LivingDefenders;
+		}
+	}
+
+	const FString CostText = FString::Printf(TEXT("Defender Cost: %d  |  Upkeep: %d / wave each"), DefenderCost, DefenderUpkeep);
+	const FString UpkeepText = FString::Printf(TEXT("Fielded upkeep this wave: %d"), LivingDefenders * DefenderUpkeep);
+	const FString SeedText = GameMode->GetTerrain()
+		? FString::Printf(TEXT("Map Seed: %d  |  Grid: %d  |  Lanes: %d"),
+			GameMode->GetTerrain()->Seed,
+			GameMode->GetTerrain()->GridSize,
+			GameMode->GetTerrain()->GetTotalLaneCount())
+		: FString();
+	const FString HintText = TEXT("P: Pause  |  R: Restart  |  Click pad: Place defender");
+
+	const TArray<FString> Lines = SeedText.IsEmpty()
+		? TArray<FString>{ DefenderText, CostText, UpkeepText, HintText }
+		: TArray<FString>{ DefenderText, CostText, UpkeepText, SeedText, HintText };
+
+	const TArray<float> Scales = SeedText.IsEmpty()
+		? TArray<float>{ InfoPrimaryScale, InfoSecondaryScale, InfoSecondaryScale, InfoSecondaryScale }
+		: TArray<float>{ InfoPrimaryScale, InfoSecondaryScale, InfoSecondaryScale, InfoSecondaryScale, InfoSecondaryScale };
+
+	float PanelWidth = 0.0f;
+	float PanelHeight = InfoPanelPadding * 2.0f;
+	for (int32 I = 0; I < Lines.Num(); ++I)
+	{
+		float LineWidth = 0.0f;
+		float LineHeight = 0.0f;
+		GetTextSize(Lines[I], LineWidth, LineHeight, Font, Scales[I]);
+		PanelWidth = FMath::Max(PanelWidth, LineWidth);
+		PanelHeight += LineHeight + (I + 1 < Lines.Num() ? InfoLineSpacing - LineHeight : 0.0f);
+	}
+
+	DrawRect(
+		FLinearColor(0.02f, 0.02f, 0.05f, 0.72f),
+		InfoPanelX,
+		InfoPanelY,
+		PanelWidth + InfoPanelPadding * 2.0f,
+		PanelHeight);
+
+	float TextY = InfoPanelY + InfoPanelPadding;
+	const float TextX = InfoPanelX + InfoPanelPadding;
+
+	DrawPanelText(DefenderText, FLinearColor(0.82f, 0.62f, 1.0f), TextX, TextY, Font, InfoPrimaryScale);
+	TextY += InfoLineSpacing;
+
+	DrawPanelText(CostText, FLinearColor::White, TextX, TextY, Font, InfoSecondaryScale);
+	TextY += InfoLineSpacing;
+
+	DrawPanelText(UpkeepText, FLinearColor(0.95f, 0.8f, 0.55f), TextX, TextY, Font, InfoSecondaryScale);
+	TextY += InfoLineSpacing;
+
+	if (!SeedText.IsEmpty())
+	{
+		DrawPanelText(SeedText, FLinearColor(0.92f, 0.92f, 0.92f), TextX, TextY, Font, InfoSecondaryScale);
+		TextY += InfoLineSpacing;
+	}
+
+	DrawPanelText(HintText, FLinearColor(1.0f, 0.95f, 0.55f), TextX, TextY, Font, InfoSecondaryScale);
+
+	if (GameMode->IsPaused())
+	{
+		const float CenterX = Canvas->SizeX * 0.5f;
+		const float CenterY = Canvas->SizeY * 0.5f;
+		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.45f), 0.f, 0.f, Canvas->SizeX, Canvas->SizeY);
+		DrawText(TEXT("PAUSED"), FLinearColor(1.f, 0.95f, 0.3f), CenterX - 90.0f, CenterY - 24.0f, Font, 2.8f);
 	}
 }
 
@@ -121,44 +208,6 @@ void ATDHUD::DrawEnemyHealthBars()
 
 		const FVector BarLocation = Enemy->GetActorLocation() + FVector(0.0f, 0.0f, 90.0f);
 		DrawWorldHealthBar(BarLocation, Health->GetHealthPercent(), 55.0f, 6.0f);
-	}
-}
-
-void ATDHUD::DrawPauseAndHints(ATDGameMode* GameMode)
-{
-	if (!GameMode)
-	{
-		return;
-	}
-
-	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetMediumFont() : nullptr);
-
-	int32 DefenderCost = 50;
-	if (ATDPlayerController* PC = Cast<ATDPlayerController>(GetOwningPlayerController()))
-	{
-		if (PC->DefenderClass)
-		{
-			DefenderCost = PC->DefenderClass.GetDefaultObject()->Cost;
-		}
-	}
-
-	const FString CostText = FString::Printf(TEXT("Defender Cost: %d"), DefenderCost);
-	DrawText(CostText, FLinearColor(0.85f, 0.85f, 0.85f), 40.0f, 250.0f, Font, 1.0f);
-
-	if (AProceduralTerrain* Terrain = GameMode->GetTerrain())
-	{
-		const FString SeedText = FString::Printf(TEXT("Map Seed: %d"), Terrain->Seed);
-		DrawText(SeedText, FLinearColor(0.6f, 0.6f, 0.6f), 40.0f, 275.0f, Font, 0.9f);
-	}
-
-	DrawText(TEXT("P: Pause | R: Restart | Click pad: Place defender"), FLinearColor(0.55f, 0.55f, 0.55f), 40.0f, 300.0f, Font, 0.85f);
-
-	if (GameMode->IsPaused())
-	{
-		const float CenterX = Canvas ? Canvas->SizeX * 0.5f : 400.0f;
-		const float CenterY = Canvas ? Canvas->SizeY * 0.5f : 300.0f;
-		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.45f), 0.f, 0.f, Canvas->SizeX, Canvas->SizeY);
-		DrawText(TEXT("PAUSED"), FLinearColor(1.f, 0.95f, 0.3f), CenterX - 70.0f, CenterY - 20.0f, Font, 2.2f);
 	}
 }
 

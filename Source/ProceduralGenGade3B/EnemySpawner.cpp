@@ -66,8 +66,8 @@ AEnemy* AEnemySpawner::SpawnSingleEnemy()
 	NextPathIndex = (NextPathIndex + 1) % Paths.Num();
 	const FEnemyPath& Path = Paths[PathIndex];
 
-	// Spawn slightly above the path plane; the enemy re-snaps itself in SetPath().
-	const FVector SpawnLocation = Path.SpawnPoint + FVector(0.0f, 0.0f, 50.0f);
+	// Spawn at the path start with the same height offset the movement code uses.
+	const FVector SpawnLocation = Path.SpawnPoint + FVector(0.0f, 0.0f, EnemyClass.GetDefaultObject()->GroundClearance);
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 

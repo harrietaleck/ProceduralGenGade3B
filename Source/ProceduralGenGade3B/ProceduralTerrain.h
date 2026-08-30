@@ -123,7 +123,31 @@ public:
 	 *  is carved. 0 = the raw, blocky cell-by-cell line; higher values round it into a smoother
 	 *  curve. The spawn point and tower point are always kept exact regardless of this value. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Paths", meta = (ClampMin = "0", ClampMax = "5"))
-	int32 PathSmoothingIterations = 2;
+	int32 PathSmoothingIterations = 1;
+
+	/** After each cleared wave the whole grid grows and lanes can branch (lecture feedback). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Grid", meta = (ClampMin = "0"))
+	int32 GridRingGrowthPerWave = 2;
+
+	/** How many times the grid is allowed to grow outward during a match. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Grid", meta = (ClampMin = "0"))
+	int32 MaxGridExpansions = 8;
+
+	/** Absolute cap on grid width/height after repeated growth. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Grid", meta = (ClampMin = "8"))
+	int32 MaxGridSize = 64;
+
+	/** New forked lanes carved from existing paths after each wave. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Paths", meta = (ClampMin = "0"))
+	int32 BranchesAddedPerWave = 2;
+
+	/** Hard cap on total enemy lanes (main + branches). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Paths", meta = (ClampMin = "3"))
+	int32 MaxTotalLanes = 16;
+
+	/** Branch lanes are carved narrower than the main routes. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Paths", meta = (ClampMin = "0", ClampMax = "3"))
+	int32 BranchPathHalfWidth = 0;
 
 	/** Material applied to the terrain mesh. Defaults to a vertex-colour material so the
 	 *  path/buildable/tower cell colours are visible. Assignable to a custom material later. */
@@ -177,6 +201,16 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Terrain|Debug")
 	void RunStressTest(int32 NumIterations = 20);
+
+	/** Grow the grid, extend spawns, and branch new lanes (called after each wave). */
+	UFUNCTION(BlueprintCallable, Category = "Terrain")
+	int32 ExpandWorldAfterWave();
+
+	UFUNCTION(BlueprintPure, Category = "Terrain")
+	int32 GetGridExpansionCount() const { return GridExpansionCount; }
+
+	UFUNCTION(BlueprintPure, Category = "Terrain")
+	int32 GetTotalLaneCount() const { return PathCellLines.Num(); }
 
 	// ---- Data queries used by the rest of the game (Blueprint-friendly) ----
 
@@ -244,9 +278,24 @@ private:
 	UPROPERTY()
 	TArray<FDefenderSlot> DefenderSlots;
 
+	/** Centre-line grid cells for each carved path (used to extend/branch lanes between waves). */
+	TArray<TArray<FIntPoint>> PathCellLines;
+
+	/** How many whole-grid growth steps have been applied this match. */
+	int32 GridExpansionCount = 0;
+
 	// ---- Generation helper stages ----
 	void InitialiseGrid();
 	void CarvePaths();
+	void PaintPathCell(int32 X, int32 Y, int32 HalfWidthOverride = -1);
+	void RebuildEnemyPathsFromCellLines();
+	void AppendNewBuildableSlots();
+	bool ExpandGridByOneRing();
+	void ExtendAllPathsOneCellOutward();
+	int32 BranchNewPaths(int32 Count);
+	void AppendRandomWalkToPoint(TArray<FIntPoint>& Line, FIntPoint Start, FIntPoint Target, int32 PaintHalfWidth);
+	void RefreshTowerCell();
+	void RebuildTerrainVisuals();
 	void BuildHeightmap();
 	void MarkBuildableSlots();
 	void BuildMesh();

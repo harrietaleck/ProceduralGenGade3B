@@ -12,7 +12,7 @@
 #include "UObject/ConstructorHelpers.h"
 
 // How close (uu) the enemy must get to a waypoint before it targets the next one.
-static constexpr float WaypointAcceptRadius = 40.0f;
+static constexpr float WaypointAcceptRadius = 55.0f;
 
 AEnemy::AEnemy()
 {
@@ -51,13 +51,11 @@ void AEnemy::BeginPlay()
 void AEnemy::SetPath(const TArray<FVector>& InWaypoints)
 {
 	Waypoints = InWaypoints;
+	CurrentWaypoint = 0;
+	CurrentSpeed = 0.0f;
 
-	// Snap to the first waypoint and head toward the second (if any).
-	if (Waypoints.Num() > 0)
-	{
-		SetActorLocation(Waypoints[0] + FVector(0.0f, 0.0f, GroundClearance));
-	}
-	CurrentWaypoint = Waypoints.Num() > 1 ? 1 : 0;
+	// Do not teleport to waypoint 0 here — the spawner already places us at the spawn
+	// point. MoveAlongPath will skip any waypoints we are already standing on.
 }
 
 void AEnemy::Tick(float DeltaSeconds)
@@ -72,6 +70,7 @@ void AEnemy::Tick(float DeltaSeconds)
 	// If something we can hit is in range, stop and attack it; otherwise keep walking.
 	if (AActor* Target = FindTargetInRange())
 	{
+		CurrentSpeed = FMath::Max(0.0f, CurrentSpeed - Acceleration * 2.0f * DeltaSeconds);
 		TryAttack(Target, DeltaSeconds);
 	}
 	else
@@ -82,35 +81,77 @@ void AEnemy::Tick(float DeltaSeconds)
 
 void AEnemy::MoveAlongPath(float DeltaSeconds)
 {
-	// No more waypoints => we've arrived (and the tower, if any, is handled by attacking).
+	if (Waypoints.Num() == 0)
+	{
+		return;
+	}
+
+	FVector Location = GetActorLocation();
+	const float AcceptRadiusSq = WaypointAcceptRadius * WaypointAcceptRadius;
+
+	// After Chaikin smoothing the first few waypoints can sit very close together. Skip
+	// any we have already reached without teleporting — snapping was the main source of the
+	// jerky "stutter" right after spawn.
+	while (Waypoints.IsValidIndex(CurrentWaypoint))
+	{
+		const FVector TargetPos = Waypoints[CurrentWaypoint] + FVector(0.0f, 0.0f, GroundClearance);
+		if (FVector::DistSquared2D(Location, TargetPos) > AcceptRadiusSq)
+		{
+			break;
+		}
+		++CurrentWaypoint;
+	}
+
 	if (!Waypoints.IsValidIndex(CurrentWaypoint))
 	{
 		return;
 	}
 
 	const FVector TargetPos = Waypoints[CurrentWaypoint] + FVector(0.0f, 0.0f, GroundClearance);
-	const FVector Location = GetActorLocation();
-	const FVector ToTarget = TargetPos - Location;
+	FVector ToTarget = TargetPos - Location;
+	ToTarget.Z = 0.0f; // Paths are flat — keep movement horizontal for steady speed.
 	const float Distance = ToTarget.Size();
-	const float Step = MoveSpeed * DeltaSeconds;
 
-	if (Distance <= FMath::Max(Step, WaypointAcceptRadius))
+	if (Distance <= KINDA_SMALL_NUMBER)
 	{
-		// Reached this waypoint; advance to the next one.
-		SetActorLocation(TargetPos);
 		++CurrentWaypoint;
+		return;
+	}
+
+	const FVector Direction = ToTarget / Distance;
+
+	// Ease off before sharp corners so enemies arc through bends instead of skating at full speed.
+	float TargetSpeed = MoveSpeed;
+	if (Waypoints.IsValidIndex(CurrentWaypoint + 1))
+	{
+		FVector ToNext = Waypoints[CurrentWaypoint + 1] - Waypoints[CurrentWaypoint];
+		ToNext.Z = 0.0f;
+		const float NextLen = ToNext.Size();
+		if (NextLen > KINDA_SMALL_NUMBER)
+		{
+			ToNext /= NextLen;
+			const float TurnAlignment = FVector::DotProduct(Direction, ToNext); // 1 = straight, 0 = 90°
+			const float TurnFactor = FMath::Lerp(0.55f, 1.0f, FMath::Clamp((TurnAlignment + 1.0f) * 0.5f, 0.0f, 1.0f));
+			TargetSpeed = MoveSpeed * TurnFactor;
+		}
+	}
+
+	if (CurrentSpeed < TargetSpeed)
+	{
+		CurrentSpeed = FMath::Min(TargetSpeed, CurrentSpeed + Acceleration * DeltaSeconds);
 	}
 	else
 	{
-		const FVector Direction = ToTarget / Distance;
-		SetActorLocation(Location + Direction * Step);
-
-		// Face the direction of travel (ignore pitch so the sphere stays upright).
-		FRotator Facing = Direction.Rotation();
-		Facing.Pitch = 0.0f;
-		Facing.Roll = 0.0f;
-		SetActorRotation(Facing);
+		CurrentSpeed = FMath::Max(TargetSpeed, CurrentSpeed - Acceleration * DeltaSeconds);
 	}
+	const float Step = CurrentSpeed * DeltaSeconds;
+	const float MoveAmount = FMath::Min(Step, Distance);
+	FVector NewLocation = Location + Direction * MoveAmount;
+	NewLocation.Z = TargetPos.Z;
+	SetActorLocation(NewLocation);
+
+	const FRotator TargetFacing(0.0f, Direction.Rotation().Yaw, 0.0f);
+	SetActorRotation(FMath::RInterpTo(GetActorRotation(), TargetFacing, DeltaSeconds, TurnRate));
 }
 
 void AEnemy::TryAttack(AActor* Target, float DeltaSeconds)

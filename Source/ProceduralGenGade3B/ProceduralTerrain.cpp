@@ -41,6 +41,34 @@ static TArray<FVector> ChaikinSmooth(const TArray<FVector>& Points, int32 Iterat
 	return Current;
 }
 
+// Drop waypoints that sit too close together so enemies follow gentle arcs instead of
+// micro-correcting every few units (reads much more natural at walking pace).
+static TArray<FVector> ThinWaypoints(const TArray<FVector>& Points, float MinSpacing)
+{
+	if (Points.Num() <= 2)
+	{
+		return Points;
+	}
+
+	TArray<FVector> Result;
+	Result.Add(Points[0]);
+	const float MinSpacingSq = MinSpacing * MinSpacing;
+
+	for (int32 I = 1; I < Points.Num(); ++I)
+	{
+		if (FVector::DistSquared2D(Points[I], Result.Last()) >= MinSpacingSq)
+		{
+			Result.Add(Points[I]);
+		}
+	}
+
+	if (!Result.Last().Equals(Points.Last(), 1.0f))
+	{
+		Result.Add(Points.Last());
+	}
+	return Result;
+}
+
 AProceduralTerrain::AProceduralTerrain()
 {
 	// Terrain is static once generated, so we never need per-frame ticking.
@@ -164,6 +192,8 @@ void AProceduralTerrain::GenerateTerrain()
 		// Clear previously published data.
 		EnemyPaths.Reset();
 		DefenderSlots.Reset();
+		PathCellLines.Reset();
+		GridExpansionCount = 0;
 
 		// Run the generation pipeline in order (each stage depends on the previous one).
 		InitialiseGrid();
@@ -433,39 +463,58 @@ void AProceduralTerrain::InitialiseGrid()
 // centre (so it always terminates) but occasionally wiggles sideways for an organic curve.
 // The ordered centre-line cells become the waypoints the enemies will follow.
 // --------------------------------------------------------------------------------------
+void AProceduralTerrain::PaintPathCell(int32 X, int32 Y, int32 HalfWidthOverride)
+{
+	const int32 Half = HalfWidthOverride >= 0 ? HalfWidthOverride : PathHalfWidth;
+	for (int32 OY = -Half; OY <= Half; ++OY)
+	{
+		for (int32 OX = -Half; OX <= Half; ++OX)
+		{
+			const int32 NX = X + OX;
+			const int32 NY = Y + OY;
+			if (InBounds(NX, NY) && Cells[CellIndex(NX, NY)] != ECellType::Tower)
+			{
+				Cells[CellIndex(NX, NY)] = ECellType::Path;
+			}
+		}
+	}
+}
+
+void AProceduralTerrain::RebuildEnemyPathsFromCellLines()
+{
+	EnemyPaths.Reset();
+	for (const TArray<FIntPoint>& Line : PathCellLines)
+	{
+		FEnemyPath Path;
+		for (const FIntPoint& C : Line)
+		{
+			Path.Waypoints.Add(ActorToWorld().TransformPosition(CellCenterLocal(C.X, C.Y, PathPlaneHeight)));
+		}
+		if (Path.Waypoints.Num() > 0)
+		{
+			if (PathSmoothingIterations > 0)
+			{
+				Path.Waypoints = ChaikinSmooth(Path.Waypoints, PathSmoothingIterations);
+			}
+			Path.Waypoints = ThinWaypoints(Path.Waypoints, CellSize * 0.65f);
+			Path.SpawnPoint = Path.Waypoints[0];
+			EnemyPaths.Add(MoveTemp(Path));
+		}
+	}
+}
+
 void AProceduralTerrain::CarvePaths()
 {
 	const int32 CX = GridSize / 2;
 	const int32 CY = GridSize / 2;
 
-	// Records, per path, the ordered centre-line cells (used later to build world waypoints).
-	TArray<TArray<FIntPoint>> PathCellLines;
 	PathCellLines.Reserve(NumPaths);
 
-	// Spawn points are kept one cell inset from the absolute mesh edge/corners. Recast erodes
-	// walkable area near a mesh boundary (and especially at a corner, where two edges converge),
-	// so a spawn placed exactly on the outer edge — particularly a literal grid corner — can end
-	// up disconnected from the NavMesh even though the geometry itself is flat and walkable.
+	// Spawn points are kept one cell inset from the absolute mesh edge/corners so spawns stay
+	// connected to the walkable mesh near boundaries and corners.
 	const int32 Inset = 1;
 	const int32 Side = FMath::Max(GridSize - 1 - 2 * Inset, 1);
 	const int32 Perimeter = 4 * Side;
-
-	// Helper: paint a cell (and PathHalfWidth neighbours) as Path, never overwriting the tower.
-	auto PaintPath = [this](int32 X, int32 Y)
-	{
-		for (int32 OY = -PathHalfWidth; OY <= PathHalfWidth; ++OY)
-		{
-			for (int32 OX = -PathHalfWidth; OX <= PathHalfWidth; ++OX)
-			{
-				const int32 NX = X + OX;
-				const int32 NY = Y + OY;
-				if (InBounds(NX, NY) && Cells[CellIndex(NX, NY)] != ECellType::Tower)
-				{
-					Cells[CellIndex(NX, NY)] = ECellType::Path;
-				}
-			}
-		}
-	};
 
 	for (int32 P = 0; P < NumPaths; ++P)
 	{
@@ -491,7 +540,7 @@ void AProceduralTerrain::CarvePaths()
 		while ((X != CX || Y != CY) && Guard++ < MaxGuard)
 		{
 			Line.Add(FIntPoint(X, Y));
-			PaintPath(X, Y);
+			PaintPathCell(X, Y);
 
 			const int32 DX = FMath::Sign(CX - X); // -1, 0 or +1 toward the centre on X.
 			const int32 DY = FMath::Sign(CY - Y); // -1, 0 or +1 toward the centre on Y.
@@ -523,29 +572,380 @@ void AProceduralTerrain::CarvePaths()
 
 		// Ensure the final centre cell is included as the last waypoint.
 		Line.Add(FIntPoint(CX, CY));
-		PaintPath(CX, CY);
+		PaintPathCell(CX, CY);
 	}
 
-	// Restore the centre as the Tower cell (PaintPath skips it, but be explicit).
+	// Restore the centre as the Tower cell (PaintPathCell skips it, but be explicit).
 	Cells[CellIndex(CX, CY)] = ECellType::Tower;
 
-	// --- Convert the centre-line cells into world-space enemy paths ---
-	for (const TArray<FIntPoint>& Line : PathCellLines)
+	RebuildEnemyPathsFromCellLines();
+}
+
+void AProceduralTerrain::RefreshTowerCell()
+{
+	const int32 CX = GridSize / 2;
+	const int32 CY = GridSize / 2;
+	Cells[CellIndex(CX, CY)] = ECellType::Tower;
+	TowerLocation = ActorToWorld().TransformPosition(CellCenterLocal(CX, CY, PathPlaneHeight));
+}
+
+void AProceduralTerrain::RebuildTerrainVisuals()
+{
+	RefreshTowerCell();
+	BuildHeightmap();
+	AppendNewBuildableSlots();
+	BuildMesh();
+	RebuildEnemyPathsFromCellLines();
+}
+
+bool AProceduralTerrain::ExpandGridByOneRing()
+{
+	if (GridRingGrowthPerWave <= 0 || GridExpansionCount >= MaxGridExpansions)
 	{
-		FEnemyPath Path;
-		for (const FIntPoint& C : Line)
+		return false;
+	}
+
+	const int32 Growth = GridRingGrowthPerWave;
+	const int32 OldSize = GridSize;
+	const int32 NewSize = OldSize + Growth * 2;
+	if (NewSize > MaxGridSize)
+	{
+		return false;
+	}
+
+	TArray<ECellType> NewCells;
+	NewCells.Init(ECellType::Terrain, NewSize * NewSize);
+
+	for (int32 Y = 0; Y < OldSize; ++Y)
+	{
+		for (int32 X = 0; X < OldSize; ++X)
 		{
-			Path.Waypoints.Add(ActorToWorld().TransformPosition(CellCenterLocal(C.X, C.Y, PathPlaneHeight)));
+			NewCells[(Y + Growth) * NewSize + (X + Growth)] = Cells[Y * OldSize + X];
 		}
-		if (Path.Waypoints.Num() > 0)
+	}
+
+	Cells = MoveTemp(NewCells);
+	GridSize = NewSize;
+
+	for (TArray<FIntPoint>& Line : PathCellLines)
+	{
+		for (FIntPoint& Point : Line)
 		{
-			if (PathSmoothingIterations > 0)
+			Point.X += Growth;
+			Point.Y += Growth;
+		}
+	}
+
+	++GridExpansionCount;
+	return true;
+}
+
+void AProceduralTerrain::ExtendAllPathsOneCellOutward()
+{
+	for (TArray<FIntPoint>& Line : PathCellLines)
+	{
+		if (Line.Num() < 2)
+		{
+			continue;
+		}
+
+		const FIntPoint OutDir(Line[0].X - Line[1].X, Line[0].Y - Line[1].Y);
+		if (OutDir.X == 0 && OutDir.Y == 0)
+		{
+			continue;
+		}
+
+		const FIntPoint NewCell(Line[0].X + OutDir.X, Line[0].Y + OutDir.Y);
+		if (!InBounds(NewCell.X, NewCell.Y))
+		{
+			continue;
+		}
+
+		if (Cells[CellIndex(NewCell.X, NewCell.Y)] != ECellType::Terrain)
+		{
+			continue;
+		}
+
+		Line.Insert(NewCell, 0);
+		PaintPathCell(NewCell.X, NewCell.Y);
+	}
+}
+
+void AProceduralTerrain::AppendRandomWalkToPoint(TArray<FIntPoint>& Line, FIntPoint Start, FIntPoint Target, int32 PaintHalfWidth)
+{
+	if (Line.Num() == 0 || Line.Last() != Start)
+	{
+		Line.Add(Start);
+	}
+
+	int32 X = Start.X;
+	int32 Y = Start.Y;
+	const int32 CX = GridSize / 2;
+	const int32 CY = GridSize / 2;
+	int32 Guard = 0;
+	const int32 MaxGuard = GridSize * GridSize + 10;
+
+	while ((X != Target.X || Y != Target.Y) && Guard++ < MaxGuard)
+	{
+		const int32 DX = FMath::Sign(Target.X - X);
+		const int32 DY = FMath::Sign(Target.Y - Y);
+
+		bool bMoveX;
+		if (DX != 0 && DY != 0)
+		{
+			bMoveX = (Rng.RandRange(0, 1) == 0);
+		}
+		else
+		{
+			bMoveX = (DX != 0);
+		}
+
+		if (Rng.FRand() < 0.12f)
+		{
+			if (bMoveX)
 			{
-				Path.Waypoints = ChaikinSmooth(Path.Waypoints, PathSmoothingIterations);
+				const int32 NY = Y + (Rng.RandRange(0, 1) == 0 ? 1 : -1);
+				if (NY > 0 && NY < GridSize - 1)
+				{
+					Y = NY;
+					const FIntPoint Step(X, Y);
+					if (Line.Last() != Step)
+					{
+						Line.Add(Step);
+						PaintPathCell(X, Y, PaintHalfWidth);
+					}
+					continue;
+				}
 			}
-			Path.SpawnPoint = Path.Waypoints[0];
-			EnemyPaths.Add(MoveTemp(Path));
+			else
+			{
+				const int32 NX = X + (Rng.RandRange(0, 1) == 0 ? 1 : -1);
+				if (NX > 0 && NX < GridSize - 1)
+				{
+					X = NX;
+					const FIntPoint Step(X, Y);
+					if (Line.Last() != Step)
+					{
+						Line.Add(Step);
+						PaintPathCell(X, Y, PaintHalfWidth);
+					}
+					continue;
+				}
+			}
 		}
+
+		if (bMoveX)
+		{
+			X += DX;
+		}
+		else
+		{
+			Y += DY;
+		}
+
+		const FIntPoint Step(X, Y);
+		if (Line.Last() != Step)
+		{
+			Line.Add(Step);
+			if (!(X == CX && Y == CY))
+			{
+				PaintPathCell(X, Y, PaintHalfWidth);
+			}
+		}
+	}
+}
+
+int32 AProceduralTerrain::BranchNewPaths(int32 Count)
+{
+	if (Count <= 0 || PathCellLines.Num() == 0)
+	{
+		return 0;
+	}
+
+	int32 Added = 0;
+	const FIntPoint TowerCell(GridSize / 2, GridSize / 2);
+
+	for (int32 Attempt = 0; Attempt < Count * 4 && Added < Count && PathCellLines.Num() < MaxTotalLanes; ++Attempt)
+	{
+		const int32 ParentIndex = Rng.RandRange(0, PathCellLines.Num() - 1);
+		const TArray<FIntPoint>& Parent = PathCellLines[ParentIndex];
+		if (Parent.Num() < 8)
+		{
+			continue;
+		}
+
+		const int32 MinFork = FMath::Max(2, Parent.Num() / 5);
+		const int32 MaxFork = FMath::Max(MinFork + 1, (Parent.Num() * 3) / 5);
+		const int32 ForkIndex = Rng.RandRange(MinFork, MaxFork);
+		const FIntPoint ForkCell = Parent[ForkIndex];
+		const FIntPoint PrevCell = Parent[FMath::Max(0, ForkIndex - 1)];
+
+		FIntPoint Tangent(ForkCell.X - PrevCell.X, ForkCell.Y - PrevCell.Y);
+		if (Tangent.X == 0 && Tangent.Y == 0)
+		{
+			continue;
+		}
+
+		FIntPoint SideDir(0, 0);
+		if (FMath::Abs(Tangent.X) >= FMath::Abs(Tangent.Y))
+		{
+			SideDir = FIntPoint(0, Rng.RandRange(0, 1) == 0 ? 1 : -1);
+		}
+		else
+		{
+			SideDir = FIntPoint(Rng.RandRange(0, 1) == 0 ? 1 : -1, 0);
+		}
+
+		TArray<FIntPoint> Branch;
+		Branch.Add(ForkCell);
+		FIntPoint Current = ForkCell;
+		const int32 SideSteps = Rng.RandRange(2, 4);
+		bool bSideOk = true;
+
+		for (int32 Step = 0; Step < SideSteps; ++Step)
+		{
+			Current.X += SideDir.X;
+			Current.Y += SideDir.Y;
+			if (!InBounds(Current.X, Current.Y) || Cells[CellIndex(Current.X, Current.Y)] == ECellType::Tower)
+			{
+				bSideOk = false;
+				break;
+			}
+
+			Branch.Add(Current);
+			PaintPathCell(Current.X, Current.Y, BranchPathHalfWidth);
+		}
+
+		if (!bSideOk || Branch.Num() < 2)
+		{
+			continue;
+		}
+
+		AppendRandomWalkToPoint(Branch, Current, TowerCell, BranchPathHalfWidth);
+		if (Branch.Last() != TowerCell)
+		{
+			Branch.Add(TowerCell);
+		}
+
+		PathCellLines.Add(MoveTemp(Branch));
+		++Added;
+	}
+
+	return Added;
+}
+
+int32 AProceduralTerrain::ExpandWorldAfterWave()
+{
+	if (PathCellLines.Num() == 0)
+	{
+		return 0;
+	}
+
+	int32 Changes = 0;
+
+	if (ExpandGridByOneRing())
+	{
+		ExtendAllPathsOneCellOutward();
+		++Changes;
+	}
+
+	const int32 BranchesAdded = BranchNewPaths(BranchesAddedPerWave);
+	Changes += BranchesAdded;
+
+	if (Changes == 0)
+	{
+		return 0;
+	}
+
+	RebuildTerrainVisuals();
+
+	UE_LOG(LogTemp, Display, TEXT("ProceduralTerrain: post-wave expansion — grid=%d, lanes=%d, branches added=%d."),
+		GridSize, PathCellLines.Num(), BranchesAdded);
+	return Changes;
+}
+
+void AProceduralTerrain::AppendNewBuildableSlots()
+{
+	if (DefenderSlots.Num() >= MaxDefenderSlots)
+	{
+		return;
+	}
+
+	const int32 OffX[4] = { 1, -1, 0, 0 };
+	const int32 OffY[4] = { 0, 0, 1, -1 };
+	TArray<FIntPoint> Candidates;
+
+	auto HasSlotNear = [this](const FIntPoint& Cell) -> bool
+	{
+		const FVector WorldPos = ActorToWorld().TransformPosition(CellCenterLocal(Cell.X, Cell.Y, PathPlaneHeight));
+		for (const FDefenderSlot& Slot : DefenderSlots)
+		{
+			if (FVector::DistSquared2D(Slot.Location, WorldPos) <= FMath::Square(CellSize * 0.6f))
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+
+	for (int32 Y = 0; Y < GridSize; ++Y)
+	{
+		for (int32 X = 0; X < GridSize; ++X)
+		{
+			if (Cells[CellIndex(X, Y)] != ECellType::Terrain)
+			{
+				continue;
+			}
+			if (HasSlotNear(FIntPoint(X, Y)))
+			{
+				continue;
+			}
+
+			for (int32 I = 0; I < 4; ++I)
+			{
+				const int32 NX = X + OffX[I];
+				const int32 NY = Y + OffY[I];
+				if (InBounds(NX, NY) && Cells[CellIndex(NX, NY)] == ECellType::Path)
+				{
+					Candidates.Add(FIntPoint(X, Y));
+					break;
+				}
+			}
+		}
+	}
+
+	for (int32 I = Candidates.Num() - 1; I > 0; --I)
+	{
+		const int32 J = Rng.RandRange(0, I);
+		Candidates.Swap(I, J);
+	}
+
+	const int32 SlotsToAdd = FMath::Min(MaxDefenderSlots - DefenderSlots.Num(), Candidates.Num());
+	for (int32 I = 0; I < SlotsToAdd; ++I)
+	{
+		const FIntPoint C = Candidates[I];
+		Cells[CellIndex(C.X, C.Y)] = ECellType::Buildable;
+
+		for (int32 OY = -1; OY <= 1; ++OY)
+		{
+			for (int32 OX = -1; OX <= 1; ++OX)
+			{
+				const int32 NX = C.X + OX;
+				const int32 NY = C.Y + OY;
+				if (InBounds(NX, NY))
+				{
+					VertexHeights[VertIndex(NX,     NY)]     = PathPlaneHeight;
+					VertexHeights[VertIndex(NX + 1, NY)]     = PathPlaneHeight;
+					VertexHeights[VertIndex(NX,     NY + 1)] = PathPlaneHeight;
+					VertexHeights[VertIndex(NX + 1, NY + 1)] = PathPlaneHeight;
+				}
+			}
+		}
+
+		FDefenderSlot Slot;
+		Slot.Location = ActorToWorld().TransformPosition(CellCenterLocal(C.X, C.Y, PathPlaneHeight));
+		Slot.bOccupied = false;
+		DefenderSlots.Add(Slot);
 	}
 }
 
@@ -580,6 +980,24 @@ void AProceduralTerrain::BuildHeightmap()
 				VertexHeights[VertIndex(X + 1, Y)]     = PathPlaneHeight;
 				VertexHeights[VertIndex(X,     Y + 1)] = PathPlaneHeight;
 				VertexHeights[VertIndex(X + 1, Y + 1)] = PathPlaneHeight;
+			}
+			else if (Type == ECellType::Buildable)
+			{
+				for (int32 OY = -1; OY <= 1; ++OY)
+				{
+					for (int32 OX = -1; OX <= 1; ++OX)
+					{
+						const int32 NX = X + OX;
+						const int32 NY = Y + OY;
+						if (InBounds(NX, NY))
+						{
+							VertexHeights[VertIndex(NX,     NY)]     = PathPlaneHeight;
+							VertexHeights[VertIndex(NX + 1, NY)]     = PathPlaneHeight;
+							VertexHeights[VertIndex(NX,     NY + 1)] = PathPlaneHeight;
+							VertexHeights[VertIndex(NX + 1, NY + 1)] = PathPlaneHeight;
+						}
+					}
+				}
 			}
 		}
 	}
