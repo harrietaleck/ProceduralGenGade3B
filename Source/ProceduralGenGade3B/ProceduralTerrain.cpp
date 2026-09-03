@@ -15,6 +15,7 @@
 #include "NavMesh/RecastNavMesh.h"
 #include "EngineUtils.h"
 #include "DrawDebugHelpers.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 
 // Everything flat (paths, tower pad, buildable pads) sits on this Z plane in local space.
@@ -1249,6 +1250,55 @@ void AProceduralTerrain::EnsureDefaultDecorationMeshes()
 	{
 		DefaultSphereMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 	}
+
+	// Fill empty scatter pools from VRS_LowPolyNatureEssentials so TerrainProp actors
+	// use the pack meshes instead of cylinder/sphere/cube placeholders.
+	auto TryAddMesh = [](TArray<TObjectPtr<UStaticMesh>>& Pool, const TCHAR* Path)
+	{
+		if (UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, Path))
+		{
+			Pool.Add(Mesh);
+		}
+	};
+
+	if (TreeMeshes.Num() == 0)
+	{
+		TryAddMesh(TreeMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/Oak/SM_OakAdultD.SM_OakAdultD"));
+		TryAddMesh(TreeMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/Birch/SM_BirchTreeAdultA.SM_BirchTreeAdultA"));
+		TryAddMesh(TreeMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/Birch/SM_BirchTreeYoungCSimple.SM_BirchTreeYoungCSimple"));
+		TryAddMesh(TreeMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/GenericTrees/SM_GenericTreeB.SM_GenericTreeB"));
+		TryAddMesh(TreeMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/GenericTrees/SM_GenericTreeD.SM_GenericTreeD"));
+		TryAddMesh(TreeMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/Pines/SM_PineVariantAMatureB.SM_PineVariantAMatureB"));
+		TryAddMesh(TreeMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/Pines/SM_PineVariantAGrowingB.SM_PineVariantAGrowingB"));
+		TryAddMesh(TreeMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/Pines/SM_PineVariantAYoungC.SM_PineVariantAYoungC"));
+		TryAddMesh(TreeMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/WeepingWillow/SM_WillowTreeAdultA.SM_WillowTreeAdultA"));
+		TryAddMesh(TreeMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/WitheredTrees/SM_WitheredTreeB.SM_WitheredTreeB"));
+		TryAddMesh(TreeMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/WitheredTrees/SM_SmallWitheredTreeB.SM_SmallWitheredTreeB"));
+		TryAddMesh(TreeMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Bushes/SM_BushA.SM_BushA"));
+		TryAddMesh(TreeMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Bushes/SM_Bush8.SM_Bush8"));
+	}
+
+	if (RockMeshes.Num() == 0)
+	{
+		TryAddMesh(RockMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Rocks/SM_RockBigC.SM_RockBigC"));
+		TryAddMesh(RockMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Rocks/SM_RockNormD.SM_RockNormD"));
+		TryAddMesh(RockMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Rocks/SM_RockBlueD.SM_RockBlueD"));
+		TryAddMesh(RockMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Rocks/SM_RockSmallA.SM_RockSmallA"));
+		TryAddMesh(RockMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Rocks/SM_RockSmallE.SM_RockSmallE"));
+		TryAddMesh(RockMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/TreeStumps/SM_TreeStumpNormalC.SM_TreeStumpNormalC"));
+		TryAddMesh(RockMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/TreeStumps/SM_TreeStumpShortD.SM_TreeStumpShortD"));
+		TryAddMesh(RockMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/TreeLogs/SM_TreeLogOakB.SM_TreeLogOakB"));
+	}
+
+	if (BuildingMeshes.Num() == 0)
+	{
+		TryAddMesh(BuildingMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Arch/RuinedWalls/SM_RuinedWallA.SM_RuinedWallA"));
+		TryAddMesh(BuildingMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Arch/RuinedWalls/SM_RuinedWallRubbleA.SM_RuinedWallRubbleA"));
+		TryAddMesh(BuildingMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Arch/Fence/SM_SWFModA.SM_SWFModA"));
+		TryAddMesh(BuildingMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Arch/Fence/SM_SWFModShortA.SM_SWFModShortA"));
+		TryAddMesh(BuildingMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Props/Campfire/SM_CampfireASmall.SM_CampfireASmall"));
+		TryAddMesh(BuildingMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Props/Planks/SM_PlankStackB.SM_PlankStackB"));
+	}
 }
 
 void AProceduralTerrain::ClearDecorations()
@@ -1380,15 +1430,26 @@ void AProceduralTerrain::SpawnDecorationAtCell(int32 X, int32 Y, ETerrainDecorat
 	FVector AccentOffset = FVector::ZeroVector;
 	FVector AccentScale = FVector::OneVector;
 
+	const bool bUsingPackTree = TreeMeshes.Num() > 0;
+	const bool bUsingPackRock = RockMeshes.Num() > 0;
+	const bool bUsingPackBuilding = BuildingMeshes.Num() > 0;
+
 	switch (Kind)
 	{
 	case ETerrainDecorationKind::Tree:
 	{
-		const float TrunkHeight = Rng.FRandRange(2.8f, 4.2f);
-		const float TrunkRadius = Rng.FRandRange(0.35f, 0.55f);
-		BaseScale = FVector(TrunkRadius, TrunkRadius, TrunkHeight);
-		if (!TreeMeshes.Num())
+		if (bUsingPackTree)
 		{
+			// Nature Essentials trees are authored at real size — vary slightly, keep uniform.
+			const float TreeScale = Rng.FRandRange(0.75f, 1.25f);
+			BaseScale = FVector(TreeScale);
+		}
+		else
+		{
+			// Legacy placeholder: stretched cylinder trunk + sphere canopy.
+			const float TrunkHeight = Rng.FRandRange(2.8f, 4.2f);
+			const float TrunkRadius = Rng.FRandRange(0.35f, 0.55f);
+			BaseScale = FVector(TrunkRadius, TrunkRadius, TrunkHeight);
 			BaseMesh = DefaultCylinderMesh;
 			AccentMesh = DefaultSphereMesh;
 			AccentOffset = FVector(0.0f, 0.0f, 50.0f * TrunkHeight);
@@ -1398,17 +1459,35 @@ void AProceduralTerrain::SpawnDecorationAtCell(int32 X, int32 Y, ETerrainDecorat
 	}
 	case ETerrainDecorationKind::Rock:
 	{
-		const float RockSize = Rng.FRandRange(0.9f, 1.8f);
-		BaseScale = FVector(RockSize, RockSize * Rng.FRandRange(0.8f, 1.2f), RockSize * Rng.FRandRange(0.6f, 1.0f));
+		if (bUsingPackRock)
+		{
+			const float RockSize = Rng.FRandRange(0.7f, 1.35f);
+			BaseScale = FVector(
+				RockSize,
+				RockSize * Rng.FRandRange(0.85f, 1.15f),
+				RockSize * Rng.FRandRange(0.8f, 1.1f));
+		}
+		else
+		{
+			const float RockSize = Rng.FRandRange(0.9f, 1.8f);
+			BaseScale = FVector(RockSize, RockSize * Rng.FRandRange(0.8f, 1.2f), RockSize * Rng.FRandRange(0.6f, 1.0f));
+		}
 		break;
 	}
 	case ETerrainDecorationKind::Building:
 	{
-		const float Width = Rng.FRandRange(1.4f, 2.4f);
-		const float Depth = Rng.FRandRange(1.2f, 2.0f);
-		const float Height = Rng.FRandRange(1.8f, 3.2f);
-		BaseScale = FVector(Width, Depth, Height);
-		BaseMesh = PickDecorationMesh(Kind);
+		if (bUsingPackBuilding)
+		{
+			const float BuildingScale = Rng.FRandRange(0.85f, 1.2f);
+			BaseScale = FVector(BuildingScale);
+		}
+		else
+		{
+			const float Width = Rng.FRandRange(1.4f, 2.4f);
+			const float Depth = Rng.FRandRange(1.2f, 2.0f);
+			const float Height = Rng.FRandRange(1.8f, 3.2f);
+			BaseScale = FVector(Width, Depth, Height);
+		}
 		break;
 	}
 	default:
