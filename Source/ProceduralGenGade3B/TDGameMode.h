@@ -64,9 +64,13 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<UTDHUDWidget> HUDWidgetClass;
 
-	/** Full-screen game over / victory overlay (C++ widget by default). */
+	/** Full-screen defeat overlay (C++ widget by default; assign your Gameoverscreen BP here). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<UTDEndScreenWidget> EndScreenWidgetClass;
+
+	/** Full-screen victory overlay (optional; if unset, EndScreenWidgetClass is used for both). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
+	TSubclassOf<UTDEndScreenWidget> VictoryScreenWidgetClass;
 
 	/** Meta-currency granted on the first match if the wallet is empty (lets defenders work immediately). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules|Meta")
@@ -221,7 +225,10 @@ private:
 	TObjectPtr<UTDHUDWidget> MatchHUDWidget;
 
 	UPROPERTY()
-	TObjectPtr<UTDEndScreenWidget> EndScreenWidget;
+	TObjectPtr<UTDEndScreenWidget> EndScreenWidget;   // defeat screen instance
+
+	UPROPERTY()
+	TObjectPtr<UTDEndScreenWidget> VictoryScreenWidget; // victory screen instance (may share EndScreenWidget if class not set)
 
 	UPROPERTY()
 	TObjectPtr<UTDWarningBannerWidget> WarningBannerWidget;

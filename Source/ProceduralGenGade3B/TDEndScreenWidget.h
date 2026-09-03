@@ -93,6 +93,15 @@ protected:
 	TObjectPtr<UTextBlock> LightLanternsText;
 
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> BeamHealthText;
+
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> TierText;
+
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> WavesText;
+
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UButton> RetryButton;
 
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
@@ -106,6 +115,11 @@ private:
 
 	void EnsureFallbackLayout();
 	void EnsureThemeArt();
+	void EnsureBlueprintLayoutFitsScreen();
+	void ResolveOptionalWidgetBindings();
+	void EnsureResultTextWidgets();
+	void LayoutDefeatResultWidgets();
+	void ApplyMatchResultToWidgets(const FMatchResult& Result);
 	void ApplyTheme(bool bVictory, EBeamHealthTier Tier);
 	void ApplyTierTypography(const FMatchResult& Result);
 

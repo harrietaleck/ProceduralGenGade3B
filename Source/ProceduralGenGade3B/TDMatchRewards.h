@@ -56,10 +56,20 @@ struct FMatchResult
 	int32 TowerBeamHealthPercent = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Match")
+	int32 WavesCleared = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Match")
+	int32 TotalWaves = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Match")
 	EBeamHealthTier BeamTier = EBeamHealthTier::Fragile;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Match")
 	FMetaCurrencyRewards Rewards;
+
+	/** Wallet totals from the in-match HUD at the moment the match ended. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Match")
+	FMetaCurrencyRewards Wallet;
 };
 
 UCLASS()

@@ -74,8 +74,11 @@ FMatchResult UTDMatchRewards::BuildMatchResult(
 	Result.TowerBeamHealthPercent = FMath::RoundToInt(HealthFraction * 100.0f);
 	Result.BeamTier = GetBeamHealthTier(Result.TowerBeamHealthPercent);
 
-	const float TierMult = TierMultiplier(Result.BeamTier);
 	const int32 WaveBonus = FMath::Max(0, WavesCleared);
+	Result.WavesCleared = WaveBonus;
+	Result.TotalWaves = TotalWaves;
+
+	const float TierMult = TierMultiplier(Result.BeamTier);
 	Result.Score = ScaleReward(WaveBonus * 180, 1.0f, bVictory)
 		+ ScaleReward(Result.TowerBeamHealthPercent * 12, 1.0f, bVictory)
 		+ (bVictory ? 400 : 0);

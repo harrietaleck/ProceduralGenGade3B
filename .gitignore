@@ -35,3 +35,7 @@ LaunchEditorWithMCP.bat
 
 # Corrupt / retired UI packages kept locally only
 Content/UI/_Deprecated/
+
+# Accidental editor-only temp UI levels
+Content/UI/Level/
+Content/UI/StartScreenLvl.umap

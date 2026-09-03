@@ -150,7 +150,8 @@ void ATDHUD::DrawInfoPanel(ATDGameMode* GameMode)
 
 	DrawPanelText(HintText, FLinearColor(1.0f, 0.95f, 0.55f), TextX, TextY, Font, InfoSecondaryScale);
 
-	if (GameMode->IsPaused())
+	// Only show the PAUSED overlay for a real player-pause, not for game-over/victory.
+	if (GameMode->IsPaused() && !GameMode->IsGameOver() && !GameMode->IsVictory())
 	{
 		const float CenterX = Canvas->SizeX * 0.5f;
 		const float CenterY = Canvas->SizeY * 0.5f;

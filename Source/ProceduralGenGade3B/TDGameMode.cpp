@@ -20,6 +20,7 @@
 #include "TDMetaProgressionSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "Blueprint/UserWidget.h"
+#include "Widgets/Layout/Anchors.h"
 #include "EngineUtils.h"
 
 ATDGameMode::ATDGameMode()
@@ -143,17 +144,37 @@ void ATDGameMode::BeginPlay()
 			}
 		}
 
-		const TSubclassOf<UTDEndScreenWidget> ScreenClass = EndScreenWidgetClass
+		// Defeat screen
+		const TSubclassOf<UTDEndScreenWidget> DefeatClass = EndScreenWidgetClass
 			? EndScreenWidgetClass
 			: TSubclassOf<UTDEndScreenWidget>(UTDEndScreenWidget::StaticClass());
-		if (UTDEndScreenWidget* Screen = CreateWidget<UTDEndScreenWidget>(PC, ScreenClass))
+		if (UTDEndScreenWidget* Screen = CreateWidget<UTDEndScreenWidget>(PC, DefeatClass))
 		{
 			EndScreenWidget = Screen;
 			EndScreenWidget->AddToViewport(100);
-			if (WaveManager)
+			EndScreenWidget->SetAnchorsInViewport(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+			EndScreenWidget->SetAlignmentInViewport(FVector2D(0.0f, 0.0f));
+		}
+
+		// Victory screen — use dedicated class if set, otherwise reuse the defeat widget
+		if (VictoryScreenWidgetClass)
+		{
+			if (UTDEndScreenWidget* VScreen = CreateWidget<UTDEndScreenWidget>(PC, VictoryScreenWidgetClass))
 			{
-				WaveManager->OnVictory.AddDynamic(this, &ATDGameMode::HandleMatchVictory);
+				VictoryScreenWidget = VScreen;
+				VictoryScreenWidget->AddToViewport(100);
+				VictoryScreenWidget->SetAnchorsInViewport(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+				VictoryScreenWidget->SetAlignmentInViewport(FVector2D(0.0f, 0.0f));
 			}
+		}
+		else
+		{
+			VictoryScreenWidget = EndScreenWidget; // same widget handles both
+		}
+
+		if (WaveManager && (EndScreenWidget || VictoryScreenWidget))
+		{
+			WaveManager->OnVictory.AddDynamic(this, &ATDGameMode::HandleMatchVictory);
 		}
 
 		if (UTDWarningBannerWidget* Warning = CreateWidget<UTDWarningBannerWidget>(PC, UTDWarningBannerWidget::StaticClass()))
@@ -198,6 +219,10 @@ void ATDGameMode::RestartGame()
 	if (EndScreenWidget)
 	{
 		EndScreenWidget->HideScreen();
+	}
+	if (VictoryScreenWidget && VictoryScreenWidget != EndScreenWidget)
+	{
+		VictoryScreenWidget->HideScreen();
 	}
 
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
@@ -455,15 +480,38 @@ void ATDGameMode::EnsureDefaultWidgetClasses()
 
 	if (!EndScreenWidgetClass || EndScreenWidgetClass == UTDEndScreenWidget::StaticClass())
 	{
-		if (UClass* FoundEnd = LoadClass<UTDEndScreenWidget>(
-			nullptr, TEXT("/Game/UI/WBP_EndScreen_V2.WBP_EndScreen_V2_C")))
+		// Try your custom Gameoverscreen Blueprint first, fall back to the V2 generic, then pure C++
+		UClass* FoundDefeat = LoadClass<UTDEndScreenWidget>(nullptr, TEXT("/Game/UI/ScreenWidgets/Gameoverscreen.Gameoverscreen_C"));
+		if (!FoundDefeat)
 		{
-			EndScreenWidgetClass = FoundEnd;
+			FoundDefeat = LoadClass<UTDEndScreenWidget>(nullptr, TEXT("/Game/UI/WBP_EndScreen_V2.WBP_EndScreen_V2_C"));
+		}
+		if (FoundDefeat)
+		{
+			EndScreenWidgetClass = FoundDefeat;
 		}
 		else
 		{
 			EndScreenWidgetClass = UTDEndScreenWidget::StaticClass();
-			UE_LOG(LogTemp, Warning, TEXT("TDGameMode: WBP_EndScreen_V2 not found — using C++ end screen fallback."));
+			UE_LOG(LogTemp, Warning, TEXT("TDGameMode: No defeat screen Blueprint found — using C++ fallback."));
+		}
+	}
+
+	if (!VictoryScreenWidgetClass)
+	{
+		// Try your custom VictoryScreen Blueprint first, fall back to the V2 generic
+		UClass* FoundVictory = LoadClass<UTDEndScreenWidget>(nullptr, TEXT("/Game/UI/ScreenWidgets/VictoryScreen.VictoryScreen_C"));
+		if (!FoundVictory)
+		{
+			FoundVictory = LoadClass<UTDEndScreenWidget>(nullptr, TEXT("/Game/UI/WBP_EndScreen_V2.WBP_EndScreen_V2_C"));
+			if (FoundVictory)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("TDGameMode: VictoryScreen Blueprint not found — using WBP_EndScreen_V2."));
+			}
+		}
+		if (FoundVictory)
+		{
+			VictoryScreenWidgetClass = FoundVictory;
 		}
 	}
 }
@@ -623,6 +671,7 @@ void ATDGameMode::FinalizeMatchResult(bool bVictory)
 		TowerMaxHealth,
 		WavesCleared,
 		TotalWaves);
+	LastMatchResult.Wallet = GetMetaWallet();
 
 	if (UGameInstance* GI = GetGameInstance())
 	{
@@ -635,13 +684,16 @@ void ATDGameMode::FinalizeMatchResult(bool bVictory)
 
 void ATDGameMode::ShowEndScreen(bool bVictory)
 {
-	if (!EndScreenWidget)
+	UTDEndScreenWidget* TargetWidget = bVictory ? VictoryScreenWidget : EndScreenWidget;
+	if (!TargetWidget)
 	{
 		return;
 	}
 
+	// Do NOT call SetGamePaused here — that triggers the engine's built-in pause menu
+	// widget instead of our end screen. Gameplay is already frozen because the wave
+	// manager and spawner were stopped before ShowEndScreen was called.
 	bPaused = true;
-	UGameplayStatics::SetGamePaused(this, true);
 
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
 	{
@@ -653,11 +705,11 @@ void ATDGameMode::ShowEndScreen(bool bVictory)
 
 	if (bVictory)
 	{
-		EndScreenWidget->ShowVictory();
+		TargetWidget->ShowVictory();
 	}
 	else
 	{
-		EndScreenWidget->ShowGameOver();
+		TargetWidget->ShowGameOver();
 	}
 }
 
