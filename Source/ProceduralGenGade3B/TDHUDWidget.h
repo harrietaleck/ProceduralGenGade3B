@@ -38,27 +38,27 @@ public:
 	// elements the Widget Blueprint's designer view must contain. ---
 
 	/** Top-left: "Wave 3 / 5". */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> WaveText;
 
 	/** Top-centre: "Preparing...", "Wave Starting", "Wave Active", "Wave Complete", etc. */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> WaveStatusText;
 
 	/** Top-right: "Loot: 175". */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> LootText;
 
 	/** Bottom-left: the Citadel's health bar. */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UProgressBar> TowerHealthBar;
 
 	/** Bottom-left: "82 / 100 HP" underneath the bar. */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> TowerHealthText;
 
 	/** Bottom-right: "7 Remaining". */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> EnemiesRemainingText;
 
 	/** Optional: persistent meta-currency readout (leaf/logs/gems/lanterns). */

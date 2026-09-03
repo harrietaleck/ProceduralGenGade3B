@@ -32,3 +32,6 @@ Thumbs.db
 .cursor/
 LaunchEditorWithMCP.bat
 *.slnx
+
+# Corrupt / retired UI packages kept locally only
+Content/UI/_Deprecated/
