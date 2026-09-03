@@ -84,4 +84,8 @@ private:
 	void HitTargetAndDie();
 
 	void ApplyVisuals();
+
+	/** Reused per projectile so ConfigureVisuals does not create MID-on-MID chains. */
+	UPROPERTY()
+	TObjectPtr<class UMaterialInstanceDynamic> CachedDynMat;
 };

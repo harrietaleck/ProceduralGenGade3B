@@ -16,6 +16,8 @@
 #include "TDWarningBannerWidget.h"
 #include "TDCameraPawn.h"
 #include "HeroCharacter.h"
+#include "TDMatchRewards.h"
+#include "TDMetaProgressionSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "Blueprint/UserWidget.h"
 #include "EngineUtils.h"
@@ -44,12 +46,27 @@ ATDGameMode::ATDGameMode()
 		HUDWidgetClass = HUDWidgetFinder.Class;
 	}
 
-	EndScreenWidgetClass = UTDEndScreenWidget::StaticClass();
+	static ConstructorHelpers::FClassFinder<UTDEndScreenWidget> EndScreenFinder(TEXT("/Game/UI/WBP_EndScreen"));
+	if (EndScreenFinder.Succeeded())
+	{
+		EndScreenWidgetClass = EndScreenFinder.Class;
+	}
+	else
+	{
+		EndScreenWidgetClass = UTDEndScreenWidget::StaticClass();
+	}
+
+	StartingMetaWallet.ForestEssence = 40;
+	StartingMetaWallet.WoodenMight = 30;
+	StartingMetaWallet.GemStones = 12;
+	StartingMetaWallet.LightLanterns = 20;
 }
 
 void ATDGameMode::BeginPlay()
 {
 	Super::BeginPlay();
+
+	EnsureStartingMetaWallet();
 
 	// Seed the economy.
 	Resources = StartingResources;
@@ -147,10 +164,9 @@ void ATDGameMode::BeginPlay()
 		{
 			EndScreenWidget = Screen;
 			EndScreenWidget->AddToViewport(100);
-			OnGameOver.AddDynamic(EndScreenWidget, &UTDEndScreenWidget::ShowGameOver);
 			if (WaveManager)
 			{
-				WaveManager->OnVictory.AddDynamic(EndScreenWidget, &UTDEndScreenWidget::ShowVictory);
+				WaveManager->OnVictory.AddDynamic(this, &ATDGameMode::HandleMatchVictory);
 			}
 		}
 
@@ -159,6 +175,8 @@ void ATDGameMode::BeginPlay()
 			WarningBannerWidget = Warning;
 			WarningBannerWidget->AddToViewport(50);
 		}
+
+		RefreshMetaHUD();
 	}
 }
 
@@ -187,7 +205,21 @@ void ATDGameMode::ShowInsufficientFundsWarning()
 void ATDGameMode::RestartGame()
 {
 	bPaused = false;
+	bGameOver = false;
+	BeamUpgradeLevel = 0;
 	UGameplayStatics::SetGamePaused(this, false);
+
+	if (EndScreenWidget)
+	{
+		EndScreenWidget->HideScreen();
+	}
+
+	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+	{
+		FInputModeGameOnly InputMode;
+		PC->SetInputMode(InputMode);
+		PC->bShowMouseCursor = true;
+	}
 
 	// Reopen the current level. Because the terrain randomises its seed on BeginPlay, this
 	// produces a fresh map, fresh economy and fresh waves — a brand-new game.
@@ -239,6 +271,7 @@ bool ATDGameMode::SpawnTowerWithRetry()
 		const bool bLocationMatches = Tower && FVector::DistSquared(Tower->GetActorLocation(), TowerSpawnLocation) <= TowerPlacementToleranceSq;
 		if (Tower && bLocationMatches)
 		{
+			BaseTowerAttackDamage = Tower->AttackDamage;
 			return true;
 		}
 
@@ -418,6 +451,210 @@ void ATDGameMode::NotifyEnemyKilled(AEnemy* DeadEnemy)
 	}
 }
 
+void ATDGameMode::EnsureStartingMetaWallet()
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UTDMetaProgressionSubsystem* Meta = GI->GetSubsystem<UTDMetaProgressionSubsystem>())
+		{
+			const FMetaCurrencyRewards Wallet = Meta->GetWallet();
+			const bool bWalletEmpty = Wallet.ForestEssence == 0
+				&& Wallet.WoodenMight == 0
+				&& Wallet.GemStones == 0
+				&& Wallet.LightLanterns == 0;
+			if (bWalletEmpty)
+			{
+				Meta->AddRewards(StartingMetaWallet);
+			}
+		}
+	}
+}
+
+FMetaCurrencyRewards ATDGameMode::GetMetaWallet() const
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (const UTDMetaProgressionSubsystem* Meta = GI->GetSubsystem<UTDMetaProgressionSubsystem>())
+		{
+			return Meta->GetWallet();
+		}
+	}
+	return FMetaCurrencyRewards();
+}
+
+bool ATDGameMode::TrySpendMeta(const FMetaCurrencyRewards& Cost)
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UTDMetaProgressionSubsystem* Meta = GI->GetSubsystem<UTDMetaProgressionSubsystem>())
+		{
+			if (Meta->TrySpend(Cost))
+			{
+				RefreshMetaHUD();
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool ATDGameMode::CanAffordMeta(const FMetaCurrencyRewards& Cost) const
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (const UTDMetaProgressionSubsystem* Meta = GI->GetSubsystem<UTDMetaProgressionSubsystem>())
+		{
+			return Meta->CanAfford(Cost);
+		}
+	}
+	return false;
+}
+
+bool ATDGameMode::IsInteractionBlocked() const
+{
+	return bPaused || bGameOver || IsVictory();
+}
+
+bool ATDGameMode::TryUpgradeTowerBeam()
+{
+	if (!Tower || bGameOver || IsVictory())
+	{
+		return false;
+	}
+
+	if (BeamUpgradeLevel >= MaxBeamUpgradeLevel)
+	{
+		ShowInsufficientFundsWarning();
+		return false;
+	}
+
+	FMetaCurrencyRewards Cost;
+	Cost.LightLanterns = BeamUpgradeLanternCost;
+	if (!TrySpendMeta(Cost))
+	{
+		if (WarningBannerWidget)
+		{
+			WarningBannerWidget->ShowWarning(TEXT("Not enough Light Lanterns for beam upgrade"));
+		}
+		return false;
+	}
+
+	if (BaseTowerAttackDamage <= 0.0f)
+	{
+		BaseTowerAttackDamage = Tower->AttackDamage;
+	}
+
+	++BeamUpgradeLevel;
+	Tower->AttackDamage = BaseTowerAttackDamage + BeamUpgradeLevel * BeamUpgradeDamageBonus;
+	RefreshMetaHUD();
+	return true;
+}
+
+void ATDGameMode::RefreshMetaHUD() const
+{
+	if (!MatchHUDWidget)
+	{
+		return;
+	}
+
+	if (ATDPlayerController* PC = Cast<ATDPlayerController>(GetWorld()->GetFirstPlayerController()))
+	{
+		MatchHUDWidget->RefreshMetaCurrency(GetMetaWallet(), BeamUpgradeLevel, PC->IsPlacingStrongDefender());
+	}
+	else
+	{
+		MatchHUDWidget->RefreshMetaCurrency(GetMetaWallet(), BeamUpgradeLevel, false);
+	}
+}
+
+void ATDGameMode::FinalizeMatchResult(bool bVictory)
+{
+	int32 WavesCleared = 0;
+	const int32 TotalWaves = WaveManager ? WaveManager->GetTotalWaves() : 0;
+	if (WaveManager)
+	{
+		if (bVictory)
+		{
+			WavesCleared = TotalWaves;
+		}
+		else
+		{
+			const EWaveState WaveState = WaveManager->GetWaveState();
+			const int32 CurrentWave = WaveManager->GetCurrentWave();
+			if (WaveState == EWaveState::Complete)
+			{
+				WavesCleared = CurrentWave;
+			}
+			else
+			{
+				WavesCleared = FMath::Max(0, CurrentWave - 1);
+			}
+		}
+	}
+
+	float TowerHealth = 0.0f;
+	float TowerMaxHealth = 1.0f;
+	if (Tower && Tower->HealthComponent)
+	{
+		TowerHealth = Tower->HealthComponent->GetCurrentHealth();
+		TowerMaxHealth = Tower->HealthComponent->MaxHealth;
+	}
+
+	LastMatchResult = UTDMatchRewards::BuildMatchResult(
+		bVictory,
+		TowerHealth,
+		TowerMaxHealth,
+		WavesCleared,
+		TotalWaves);
+
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UTDMetaProgressionSubsystem* Meta = GI->GetSubsystem<UTDMetaProgressionSubsystem>())
+		{
+			Meta->AddRewards(LastMatchResult.Rewards);
+		}
+	}
+}
+
+void ATDGameMode::ShowEndScreen(bool bVictory)
+{
+	if (!EndScreenWidget)
+	{
+		return;
+	}
+
+	bPaused = true;
+	UGameplayStatics::SetGamePaused(this, true);
+
+	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+	{
+		FInputModeUIOnly InputMode;
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		PC->SetInputMode(InputMode);
+		PC->bShowMouseCursor = true;
+	}
+
+	if (bVictory)
+	{
+		EndScreenWidget->ShowVictory();
+	}
+	else
+	{
+		EndScreenWidget->ShowGameOver();
+	}
+}
+
+void ATDGameMode::HandleMatchVictory()
+{
+	if (bGameOver)
+	{
+		return;
+	}
+
+	FinalizeMatchResult(true);
+	ShowEndScreen(true);
+}
+
 void ATDGameMode::NotifyTowerDestroyed()
 {
 	if (bGameOver)
@@ -437,5 +674,7 @@ void ATDGameMode::NotifyTowerDestroyed()
 	}
 
 	OnGameOver.Broadcast();
+	FinalizeMatchResult(false);
+	ShowEndScreen(false);
 	UE_LOG(LogTemp, Display, TEXT("TDGameMode: GAME OVER - the tower was destroyed."));
 }

@@ -9,6 +9,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "TDMatchRewards.h"
 #include "TDHUDWidget.generated.h"
 
 class ATDGameMode;
@@ -59,6 +60,17 @@ public:
 	/** Bottom-right: "7 Remaining". */
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
 	TObjectPtr<UTextBlock> EnemiesRemainingText;
+
+	/** Optional: persistent meta-currency readout (leaf/logs/gems/lanterns). */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> MetaCurrencyText;
+
+	/** Optional: which defender type is selected + controls hint. */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> DefenderModeText;
+
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void RefreshMetaCurrency(const FMetaCurrencyRewards& Wallet, int32 BeamLevel, bool bStrongDefenderSelected);
 
 private:
 	UPROPERTY()

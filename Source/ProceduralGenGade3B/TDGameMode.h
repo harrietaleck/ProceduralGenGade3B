@@ -7,6 +7,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
+#include "TDMatchRewards.h"
 #include "TDGameMode.generated.h"
 
 class AProceduralTerrain;
@@ -66,6 +67,22 @@ public:
 	/** Full-screen game over / victory overlay (C++ widget by default). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<UTDEndScreenWidget> EndScreenWidgetClass;
+
+	/** Meta-currency granted on the first match if the wallet is empty (lets defenders work immediately). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules|Meta")
+	FMetaCurrencyRewards StartingMetaWallet;
+
+	/** Light Lantern cost for each tower beam upgrade during a match. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules|Meta", meta = (ClampMin = "1"))
+	int32 BeamUpgradeLanternCost = 12;
+
+	/** Extra tower damage per beam upgrade level. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules|Meta", meta = (ClampMin = "0.1"))
+	float BeamUpgradeDamageBonus = 8.0f;
+
+	/** Maximum beam upgrades purchasable in one match. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules|Meta", meta = (ClampMin = "1"))
+	int32 MaxBeamUpgradeLevel = 5;
 
 	/** Active match HUD widget instance (may be null if no WBP asset is configured). */
 	UFUNCTION(BlueprintPure, Category = "Rules")
@@ -133,6 +150,37 @@ public:
 	/** Convenience for the HUD: the current wave number (0 if waves haven't started). */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	int32 GetCurrentWave() const;
+
+	/** Score + meta-currency rewards from the most recently finished match. */
+	UFUNCTION(BlueprintPure, Category = "Rules")
+	FMatchResult GetLastMatchResult() const { return LastMatchResult; }
+
+	/** Current persistent meta-currency wallet. */
+	UFUNCTION(BlueprintPure, Category = "Rules|Meta")
+	FMetaCurrencyRewards GetMetaWallet() const;
+
+	/** Spend meta-currency if the wallet can afford it. */
+	UFUNCTION(BlueprintCallable, Category = "Rules|Meta")
+	bool TrySpendMeta(const FMetaCurrencyRewards& Cost);
+
+	/** True when the wallet can cover a defender or upgrade cost. */
+	UFUNCTION(BlueprintPure, Category = "Rules|Meta")
+	bool CanAffordMeta(const FMetaCurrencyRewards& Cost) const;
+
+	/** True while paused, defeated, or victorious — blocks placement and upgrades. */
+	UFUNCTION(BlueprintPure, Category = "Rules")
+	bool IsInteractionBlocked() const;
+
+	/** Push current meta-currency totals into the match HUD. */
+	void RefreshMetaHUD() const;
+
+	/** Spend Light Lanterns to permanently boost the tower beam for this match. */
+	UFUNCTION(BlueprintCallable, Category = "Rules|Meta")
+	bool TryUpgradeTowerBeam();
+
+	/** How many beam upgrades have been purchased this match. */
+	UFUNCTION(BlueprintPure, Category = "Rules|Meta")
+	int32 GetBeamUpgradeLevel() const { return BeamUpgradeLevel; }
 
 	// ---- Notifications called by other actors ----
 
@@ -203,6 +251,21 @@ private:
 	/** Wave-complete hook: extend lanes, add new pads, charge upkeep. */
 	UFUNCTION()
 	void HandleWaveComplete(int32 WaveNumber);
+
+	/** Computes rewards from tower beam health, banks meta-currency, then shows the end screen. */
+	UFUNCTION()
+	void HandleMatchVictory();
+
+	void FinalizeMatchResult(bool bVictory);
+	void ShowEndScreen(bool bVictory);
+
+	UPROPERTY()
+	FMatchResult LastMatchResult;
+
+	int32 BeamUpgradeLevel = 0;
+	float BaseTowerAttackDamage = 0.0f;
+
+	void EnsureStartingMetaWallet();
 
 	/** Destroys the tower and every build-pad marker spawned so far, so a failed world-validation
 	 *  attempt can regenerate cleanly rather than leaving stale actors from the last attempt. */

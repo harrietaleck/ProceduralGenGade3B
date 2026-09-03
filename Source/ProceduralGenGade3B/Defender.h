@@ -7,6 +7,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "TDMatchRewards.h"
 #include "Defender.generated.h"
 
 class UHealthComponent;
@@ -29,6 +30,14 @@ public:
 	/** Resource cost to place this defender. Read by the player controller before spending. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender", meta = (ClampMin = "0"))
 	int32 Cost = 50;
+
+	/** Persistent meta-currency spent when placing this defender type. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender|Meta")
+	FMetaCurrencyRewards MetaCost;
+
+	/** True for gem-priced elite defenders (used by the HUD hint text). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender|Meta")
+	bool bStrongDefender = false;
 
 	/** How far the defender can hit enemies (uu). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender", meta = (ClampMin = "0.0"))
@@ -79,8 +88,11 @@ protected:
 
 private:
 	/** Simple cube visual + root. */
+protected:
 	UPROPERTY(VisibleAnywhere, Category = "Defender", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> MeshComponent;
+
+private:
 
 	FTimerHandle FireTimerHandle;
 

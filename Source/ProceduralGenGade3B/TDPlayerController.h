@@ -10,6 +10,7 @@
 #include "TDPlayerController.generated.h"
 
 class ADefender;
+class ATDGameMode;
 
 UCLASS()
 class PROCEDURALGENGADE3B_API ATDPlayerController : public APlayerController
@@ -26,6 +27,13 @@ public:
 	/** How close (uu, on the ground plane) a click must be to a slot to count as selecting it. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "TowerDefense", meta = (ClampMin = "1.0"))
 	float SlotClickTolerance = 160.0f;
+
+	/** Elite defender class toggled with Tab (costs Gem Stones from the meta wallet). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "TowerDefense|Meta")
+	TSubclassOf<ADefender> StrongDefenderClass;
+
+	UFUNCTION(BlueprintPure, Category = "TowerDefense|Meta")
+	bool IsPlacingStrongDefender() const { return bPlacingStrongDefender; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -44,7 +52,18 @@ protected:
 	/** N-key handler: toggle the engine's NavMesh debug overlay. */
 	void OnToggleNavMeshDebug();
 
+	/** Tab: toggle basic vs strong defender placement. */
+	void OnToggleDefenderMode();
+
+	/** U: spend Light Lanterns to upgrade the tower beam. */
+	void OnUpgradeBeamPressed();
+
 private:
+	bool bPlacingStrongDefender = false;
+
+	TSubclassOf<ADefender> GetActiveDefenderClass() const;
+	bool CanAffordDefender(const ADefender* Defaults, const ATDGameMode* GameMode) const;
+
 	/** True if the terrain's stored slot state says a defender already occupies this world slot. */
 	bool IsSlotOccupied(const FVector& SlotLocation) const;
 

@@ -191,3 +191,24 @@ void UTDHUDWidget::RefreshWaveCounter()
 	WaveText->SetText(FText::FromString(FString::Printf(TEXT("Wave %d / %d"),
 		WaveManagerRef->GetCurrentWave(), WaveManagerRef->GetTotalWaves())));
 }
+
+void UTDHUDWidget::RefreshMetaCurrency(const FMetaCurrencyRewards& Wallet, int32 BeamLevel, bool bStrongDefenderSelected)
+{
+	if (MetaCurrencyText)
+	{
+		MetaCurrencyText->SetText(FText::FromString(FString::Printf(
+			TEXT("Essence %d | Wood %d | Gems %d | Lanterns %d"),
+			Wallet.ForestEssence,
+			Wallet.WoodenMight,
+			Wallet.GemStones,
+			Wallet.LightLanterns)));
+	}
+
+	if (DefenderModeText)
+	{
+		DefenderModeText->SetText(FText::FromString(FString::Printf(
+			TEXT("%s Defender | Beam Lv %d | [Tab] swap | [U] upgrade beam"),
+			bStrongDefenderSelected ? TEXT("Strong") : TEXT("Basic"),
+			BeamLevel)));
+	}
+}
