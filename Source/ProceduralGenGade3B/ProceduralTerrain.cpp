@@ -1251,18 +1251,50 @@ void AProceduralTerrain::EnsureDefaultDecorationMeshes()
 		DefaultSphereMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 	}
 
-	// Fill empty scatter pools from VRS_LowPolyNatureEssentials so TerrainProp actors
-	// use the pack meshes instead of cylinder/sphere/cube placeholders.
+	auto CompactNulls = [](TArray<TObjectPtr<UStaticMesh>>& Pool)
+	{
+		for (int32 Index = Pool.Num() - 1; Index >= 0; --Index)
+		{
+			if (!Pool[Index])
+			{
+				Pool.RemoveAt(Index);
+			}
+		}
+	};
+
+	CompactNulls(TreeMeshes);
+	CompactNulls(RockMeshes);
+	CompactNulls(BuildingMeshes);
+
+	// Always (re)fill scatter pools from VRS_LowPolyNatureEssentials so TerrainProp actors
+	// keep pack meshes even if instance arrays were cleared or filled with placeholders.
 	auto TryAddMesh = [](TArray<TObjectPtr<UStaticMesh>>& Pool, const TCHAR* Path)
 	{
 		if (UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, Path))
 		{
-			Pool.Add(Mesh);
+			Pool.AddUnique(Mesh);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("ProceduralTerrain: failed to load decoration mesh '%s'"), Path);
 		}
 	};
 
-	if (TreeMeshes.Num() == 0)
+	auto PoolHasNatureMesh = [](const TArray<TObjectPtr<UStaticMesh>>& Pool) -> bool
 	{
+		for (const TObjectPtr<UStaticMesh>& Mesh : Pool)
+		{
+			if (Mesh && Mesh->GetPathName().Contains(TEXT("/VRS_LowPolyNatureEssentials/")))
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+
+	if (!PoolHasNatureMesh(TreeMeshes))
+	{
+		TreeMeshes.Reset();
 		TryAddMesh(TreeMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/Oak/SM_OakAdultD.SM_OakAdultD"));
 		TryAddMesh(TreeMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/Birch/SM_BirchTreeAdultA.SM_BirchTreeAdultA"));
 		TryAddMesh(TreeMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/Birch/SM_BirchTreeYoungCSimple.SM_BirchTreeYoungCSimple"));
@@ -1278,8 +1310,9 @@ void AProceduralTerrain::EnsureDefaultDecorationMeshes()
 		TryAddMesh(TreeMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Bushes/SM_Bush8.SM_Bush8"));
 	}
 
-	if (RockMeshes.Num() == 0)
+	if (!PoolHasNatureMesh(RockMeshes))
 	{
+		RockMeshes.Reset();
 		TryAddMesh(RockMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Rocks/SM_RockBigC.SM_RockBigC"));
 		TryAddMesh(RockMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Rocks/SM_RockNormD.SM_RockNormD"));
 		TryAddMesh(RockMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Rocks/SM_RockBlueD.SM_RockBlueD"));
@@ -1290,8 +1323,9 @@ void AProceduralTerrain::EnsureDefaultDecorationMeshes()
 		TryAddMesh(RockMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Env/Trees/TreeLogs/SM_TreeLogOakB.SM_TreeLogOakB"));
 	}
 
-	if (BuildingMeshes.Num() == 0)
+	if (!PoolHasNatureMesh(BuildingMeshes))
 	{
+		BuildingMeshes.Reset();
 		TryAddMesh(BuildingMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Arch/RuinedWalls/SM_RuinedWallA.SM_RuinedWallA"));
 		TryAddMesh(BuildingMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Arch/RuinedWalls/SM_RuinedWallRubbleA.SM_RuinedWallRubbleA"));
 		TryAddMesh(BuildingMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Arch/Fence/SM_SWFModA.SM_SWFModA"));
@@ -1299,6 +1333,10 @@ void AProceduralTerrain::EnsureDefaultDecorationMeshes()
 		TryAddMesh(BuildingMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Props/Campfire/SM_CampfireASmall.SM_CampfireASmall"));
 		TryAddMesh(BuildingMeshes, TEXT("/Game/VRS_LowPolyNatureEssentials/Meshes/Props/Planks/SM_PlankStackB.SM_PlankStackB"));
 	}
+
+	UE_LOG(LogTemp, Display,
+		TEXT("ProceduralTerrain: decoration pools ready (trees=%d rocks=%d buildings=%d)"),
+		TreeMeshes.Num(), RockMeshes.Num(), BuildingMeshes.Num());
 }
 
 void AProceduralTerrain::ClearDecorations()
@@ -1383,10 +1421,21 @@ UStaticMesh* AProceduralTerrain::PickDecorationMesh(ETerrainDecorationKind Kind)
 
 	if (Pool && Pool->Num() > 0)
 	{
-		const int32 Index = Rng.RandRange(0, Pool->Num() - 1);
-		if ((*Pool)[Index])
+		for (int32 Attempt = 0; Attempt < Pool->Num(); ++Attempt)
 		{
-			return (*Pool)[Index];
+			const int32 Index = Rng.RandRange(0, Pool->Num() - 1);
+			if ((*Pool)[Index])
+			{
+				return (*Pool)[Index];
+			}
+		}
+
+		for (const TObjectPtr<UStaticMesh>& Candidate : *Pool)
+		{
+			if (Candidate)
+			{
+				return Candidate;
+			}
 		}
 	}
 
@@ -1430,9 +1479,9 @@ void AProceduralTerrain::SpawnDecorationAtCell(int32 X, int32 Y, ETerrainDecorat
 	FVector AccentOffset = FVector::ZeroVector;
 	FVector AccentScale = FVector::OneVector;
 
-	const bool bUsingPackTree = TreeMeshes.Num() > 0;
-	const bool bUsingPackRock = RockMeshes.Num() > 0;
-	const bool bUsingPackBuilding = BuildingMeshes.Num() > 0;
+	const bool bUsingPackTree = BaseMesh && BaseMesh->GetPathName().Contains(TEXT("/VRS_LowPolyNatureEssentials/"));
+	const bool bUsingPackRock = BaseMesh && BaseMesh->GetPathName().Contains(TEXT("/VRS_LowPolyNatureEssentials/"));
+	const bool bUsingPackBuilding = BaseMesh && BaseMesh->GetPathName().Contains(TEXT("/VRS_LowPolyNatureEssentials/"));
 
 	switch (Kind)
 	{

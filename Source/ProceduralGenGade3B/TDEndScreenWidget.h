@@ -105,6 +105,7 @@ private:
 	bool bBuiltFallbackLayout = false;
 
 	void EnsureFallbackLayout();
+	void EnsureThemeArt();
 	void ApplyTheme(bool bVictory, EBeamHealthTier Tier);
 	void ApplyTierTypography(const FMatchResult& Result);
 

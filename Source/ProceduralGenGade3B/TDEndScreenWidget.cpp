@@ -15,6 +15,7 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Engine/Texture2D.h"
 #include "Kismet/GameplayStatics.h"
 
 namespace
@@ -83,6 +84,7 @@ void UTDEndScreenWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 	EnsureFallbackLayout();
+	EnsureThemeArt();
 
 	if (!bBuiltFallbackLayout)
 	{
@@ -203,8 +205,40 @@ void UTDEndScreenWidget::EnsureFallbackLayout()
 	}
 }
 
+void UTDEndScreenWidget::EnsureThemeArt()
+{
+	auto AssignTexture = [](UImage* Image, const TArray<const TCHAR*>& Paths)
+	{
+		if (!Image)
+		{
+			return;
+		}
+
+		for (const TCHAR* Path : Paths)
+		{
+			if (UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, Path))
+			{
+				Image->SetBrushFromTexture(Texture, true);
+				return;
+			}
+		}
+	};
+
+	// Always re-bind so soft refs lost after package moves still show art at runtime.
+	AssignTexture(VictoryBackground, {
+		TEXT("/Game/UI/SourceArt/Victory-image.Victory-image"),
+		TEXT("/Game/UI/SourceArt/VictoryBackground-image.VictoryBackground-image")
+	});
+	AssignTexture(DefeatBackground, {
+		TEXT("/Game/UI/SourceArt/Gameover-image.Gameover-image"),
+		TEXT("/Game/UI/SourceArt/Defeatbackground-image.Defeatbackground-image")
+	});
+}
+
 void UTDEndScreenWidget::ApplyTheme(bool bVictory, EBeamHealthTier Tier)
 {
+	EnsureThemeArt();
+
 	const bool bUsesConceptArt = VictoryBackground != nullptr;
 	const FLinearColor TitleColor = bVictory
 		? FLinearColor(0.92f, 0.78f, 0.28f)

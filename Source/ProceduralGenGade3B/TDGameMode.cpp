@@ -21,7 +21,6 @@
 #include "Kismet/GameplayStatics.h"
 #include "Blueprint/UserWidget.h"
 #include "EngineUtils.h"
-#include "UObject/ConstructorHelpers.h"
 
 ATDGameMode::ATDGameMode()
 {
@@ -37,24 +36,9 @@ ATDGameMode::ATDGameMode()
 	WaveManagerClass = AWaveManager::StaticClass();
 	BuildPadMarkerClass = ABuildPadMarker::StaticClass();
 
-	// Default to the UMG match HUD asset if one exists at this path (created via the UMG
-	// editor tools as a child of UTDHUDWidget). Missing gracefully means no HUD is shown
-	// rather than a hard error — matches how meshes are defaulted elsewhere in this project.
-	static ConstructorHelpers::FClassFinder<UTDHUDWidget> HUDWidgetFinder(TEXT("/Game/UI/WBP_MatchHUD_V2"));
-	if (HUDWidgetFinder.Succeeded())
-	{
-		HUDWidgetClass = HUDWidgetFinder.Class;
-	}
-
-	static ConstructorHelpers::FClassFinder<UTDEndScreenWidget> EndScreenFinder(TEXT("/Game/UI/WBP_EndScreen_V2"));
-	if (EndScreenFinder.Succeeded())
-	{
-		EndScreenWidgetClass = EndScreenFinder.Class;
-	}
-	else
-	{
-		EndScreenWidgetClass = UTDEndScreenWidget::StaticClass();
-	}
+	// Widget Blueprint classes are loaded in BeginPlay via LoadClass (not ConstructorHelpers)
+	// so missing/moved packages do not spam CDO Constructor errors on editor startup.
+	EndScreenWidgetClass = UTDEndScreenWidget::StaticClass();
 
 	StartingMetaWallet.ForestEssence = 40;
 	StartingMetaWallet.WoodenMight = 30;
@@ -65,6 +49,8 @@ ATDGameMode::ATDGameMode()
 void ATDGameMode::BeginPlay()
 {
 	Super::BeginPlay();
+
+	EnsureDefaultWidgetClasses();
 
 	EnsureStartingMetaWallet();
 
@@ -448,6 +434,37 @@ void ATDGameMode::NotifyEnemyKilled(AEnemy* DeadEnemy)
 	if (DeadEnemy)
 	{
 		AddResources(DeadEnemy->ResourceReward);
+	}
+}
+
+void ATDGameMode::EnsureDefaultWidgetClasses()
+{
+	// Prefer V2 widgets; fall back silently if a package was moved or failed to compile.
+	if (!HUDWidgetClass)
+	{
+		if (UClass* FoundHUD = LoadClass<UTDHUDWidget>(
+			nullptr, TEXT("/Game/UI/WBP_MatchHUD_V2.WBP_MatchHUD_V2_C")))
+		{
+			HUDWidgetClass = FoundHUD;
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("TDGameMode: WBP_MatchHUD_V2 not found — match HUD will be skipped."));
+		}
+	}
+
+	if (!EndScreenWidgetClass || EndScreenWidgetClass == UTDEndScreenWidget::StaticClass())
+	{
+		if (UClass* FoundEnd = LoadClass<UTDEndScreenWidget>(
+			nullptr, TEXT("/Game/UI/WBP_EndScreen_V2.WBP_EndScreen_V2_C")))
+		{
+			EndScreenWidgetClass = FoundEnd;
+		}
+		else
+		{
+			EndScreenWidgetClass = UTDEndScreenWidget::StaticClass();
+			UE_LOG(LogTemp, Warning, TEXT("TDGameMode: WBP_EndScreen_V2 not found — using C++ end screen fallback."));
+		}
 	}
 }
 

@@ -267,6 +267,9 @@ private:
 
 	void EnsureStartingMetaWallet();
 
+	/** Resolve default Match HUD / End Screen Widget Blueprints without ConstructorHelpers. */
+	void EnsureDefaultWidgetClasses();
+
 	/** Destroys the tower and every build-pad marker spawned so far, so a failed world-validation
 	 *  attempt can regenerate cleanly rather than leaving stale actors from the last attempt. */
 	void DestroySpawnedWorldActors();
