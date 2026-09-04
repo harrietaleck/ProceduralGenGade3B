@@ -1,6 +1,8 @@
 // HealthComponent.cpp — see HealthComponent.h for the overview.
 
 #include "HealthComponent.h"
+#include "Enemy.h"
+#include "TDGameMode.h"
 
 UHealthComponent::UHealthComponent()
 {
@@ -28,6 +30,18 @@ void UHealthComponent::ApplyDamage(float Amount, AActor* Killer)
 
 	CurrentHealth = FMath::Clamp(CurrentHealth - Amount, 0.0f, MaxHealth);
 	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
+
+	// Count player combat hits against enemies for the end-screen score.
+	if (Cast<AEnemy>(GetOwner()))
+	{
+		if (UWorld* World = GetWorld())
+		{
+			if (ATDGameMode* GameMode = World->GetAuthGameMode<ATDGameMode>())
+			{
+				GameMode->NotifyEnemyHit();
+			}
+		}
+	}
 
 	// Transition to dead exactly once.
 	if (CurrentHealth <= 0.0f)

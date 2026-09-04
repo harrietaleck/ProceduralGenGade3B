@@ -7,6 +7,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
+#include "TDMatchRewards.h"
 #include "TDGameMode.generated.h"
 
 class AProceduralTerrain;
@@ -18,6 +19,8 @@ class ABuildPadMarker;
 class UTDHUDWidget;
 class UTDEndScreenWidget;
 class UTDWarningBannerWidget;
+class UUserWidget;
+class UButton;
 
 // Broadcast whenever the player's resource count changes (UI binds to this).
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnResourcesChanged, int32, NewAmount);
@@ -63,9 +66,33 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<UTDHUDWidget> HUDWidgetClass;
 
-	/** Full-screen game over / victory overlay (C++ widget by default). */
+	/** Full-screen defeat overlay (C++ widget by default; assign your Gameoverscreen BP here). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<UTDEndScreenWidget> EndScreenWidgetClass;
+
+	/** Full-screen victory overlay. Supports the existing plain VictoryScreen UserWidget. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
+	TSubclassOf<UUserWidget> VictoryScreenWidgetClass;
+
+	/** Pause / settings overlay (Blueprint UserWidget — settings controls stay in Blueprint). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
+	TSubclassOf<UUserWidget> SettingsWidgetClass;
+
+	/** Meta-currency granted on the first match if the wallet is empty (lets defenders work immediately). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules|Meta")
+	FMetaCurrencyRewards StartingMetaWallet;
+
+	/** Light Lantern cost for each tower beam upgrade during a match. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules|Meta", meta = (ClampMin = "1"))
+	int32 BeamUpgradeLanternCost = 12;
+
+	/** Extra tower damage per beam upgrade level. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules|Meta", meta = (ClampMin = "0.1"))
+	float BeamUpgradeDamageBonus = 8.0f;
+
+	/** Maximum beam upgrades purchasable in one match. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules|Meta", meta = (ClampMin = "1"))
+	int32 MaxBeamUpgradeLevel = 5;
 
 	/** Active match HUD widget instance (may be null if no WBP asset is configured). */
 	UFUNCTION(BlueprintPure, Category = "Rules")
@@ -110,13 +137,37 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void RestartGame();
 
-	/** Toggle match pause (freezes gameplay actors; UI remains visible). */
+	/** Leave the match and open the Blueprint start menu level. */
+	UFUNCTION(BlueprintCallable, Category = "Rules")
+	void ReturnToMainMenu();
+
+	/** Hide the between-wave results screen and start the next wave. */
+	UFUNCTION(BlueprintCallable, Category = "Rules")
+	void ContinueToNextWave();
+
+	/** Hide victory results and replay the wave that was just completed. */
+	UFUNCTION(BlueprintCallable, Category = "Rules")
+	void RetryCurrentWave();
+
+	/** Toggle match pause and show/hide the settings widget. */
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void TogglePause();
+
+	/** Open the settings widget and pause match interaction. */
+	UFUNCTION(BlueprintCallable, Category = "Rules")
+	void ShowSettings();
+
+	/** Close settings and resume the match (call from Blueprint Resume buttons). */
+	UFUNCTION(BlueprintCallable, Category = "Rules")
+	void ResumeFromSettings();
 
 	/** True while the match is paused. */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	bool IsPaused() const { return bPaused; }
+
+	/** True while the settings overlay is visible. */
+	UFUNCTION(BlueprintPure, Category = "Rules")
+	bool IsSettingsVisible() const;
 
 	/** The procedural terrain located at startup (source of paths / slots / tower location). */
 	UFUNCTION(BlueprintPure, Category = "Rules")
@@ -134,16 +185,58 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	int32 GetCurrentWave() const;
 
+	/** Score + meta-currency rewards from the most recently finished match. */
+	UFUNCTION(BlueprintPure, Category = "Rules")
+	FMatchResult GetLastMatchResult() const { return LastMatchResult; }
+
+	/** Current persistent meta-currency wallet. */
+	UFUNCTION(BlueprintPure, Category = "Rules|Meta")
+	FMetaCurrencyRewards GetMetaWallet() const;
+
+	/** Spend meta-currency if the wallet can afford it. */
+	UFUNCTION(BlueprintCallable, Category = "Rules|Meta")
+	bool TrySpendMeta(const FMetaCurrencyRewards& Cost);
+
+	/** True when the wallet can cover a defender or upgrade cost. */
+	UFUNCTION(BlueprintPure, Category = "Rules|Meta")
+	bool CanAffordMeta(const FMetaCurrencyRewards& Cost) const;
+
+	/** True while paused, defeated, or victorious — blocks placement and upgrades. */
+	UFUNCTION(BlueprintPure, Category = "Rules")
+	bool IsInteractionBlocked() const;
+
+	/** Push current meta-currency totals into the match HUD. */
+	void RefreshMetaHUD() const;
+
+	/** Live match score from placements / hits / kills / surviving defenders. */
+	UFUNCTION(BlueprintPure, Category = "Rules")
+	int32 GetLiveMatchScore() const;
+
+	/** Spend Light Lanterns to permanently boost the tower beam for this match. */
+	UFUNCTION(BlueprintCallable, Category = "Rules|Meta")
+	bool TryUpgradeTowerBeam();
+
+	/** How many beam upgrades have been purchased this match. */
+	UFUNCTION(BlueprintPure, Category = "Rules|Meta")
+	int32 GetBeamUpgradeLevel() const { return BeamUpgradeLevel; }
+
 	// ---- Notifications called by other actors ----
 
 	/** Called by an enemy when it dies: award its bounty. */
 	void NotifyEnemyKilled(AEnemy* DeadEnemy);
+
+	/** Count a successful hit on an enemy (tower / defender / projectile). */
+	void NotifyEnemyHit();
+
+	/** Count a defender that was successfully placed this match. */
+	void NotifyDefenderPlaced();
 
 	/** Called by the tower when it dies: end the game. */
 	void NotifyTowerDestroyed();
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
 
 private:
 	/** Live resource total. */
@@ -173,10 +266,18 @@ private:
 	TObjectPtr<UTDHUDWidget> MatchHUDWidget;
 
 	UPROPERTY()
-	TObjectPtr<UTDEndScreenWidget> EndScreenWidget;
+	TObjectPtr<UTDEndScreenWidget> EndScreenWidget;   // defeat screen instance
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> VictoryScreenWidget;
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> SettingsWidget;
 
 	UPROPERTY()
 	TObjectPtr<UTDWarningBannerWidget> WarningBannerWidget;
+
+	FTimerHandle MenuStretchTimerHandle;
 
 	/** Visual platforms spawned on every generated build pad this attempt — tracked so a failed
 	 *  world-validation pass can tear them down before regenerating. */
@@ -200,9 +301,41 @@ private:
 	/** Deduct upkeep for all living defenders after a wave ends. */
 	void ApplyDefenderUpkeep();
 
-	/** Wave-complete hook: extend lanes, add new pads, charge upkeep. */
+	/** Wave-complete hook: extend lanes, add new pads, charge upkeep, show results. */
 	UFUNCTION()
 	void HandleWaveComplete(int32 WaveNumber);
+
+	/** Final-wave win hook (no-op if results were already shown on the last wave clear). */
+	UFUNCTION()
+	void HandleMatchVictory();
+
+	void FinalizeMatchResult(bool bVictory, int32 WavesClearedOverride = -1);
+	void ShowEndScreen(bool bVictory);
+	void HideEndScreens();
+	void RestoreGameplayInput();
+	void BindSettingsButtons();
+	void BindVictoryScreenButtons();
+	void PresentVictoryScreen();
+
+	UPROPERTY()
+	FMatchResult LastMatchResult;
+
+	/** Cumulative rewards already banked this match (so each wave only pays the delta). */
+	FMetaCurrencyRewards PaidMatchRewards;
+
+	bool bWaveResultsVisible = false;
+
+	int32 BeamUpgradeLevel = 0;
+	float BaseTowerAttackDamage = 0.0f;
+
+	int32 MatchDefendersPlaced = 0;
+	int32 MatchHitsLanded = 0;
+	int32 MatchEnemiesKilled = 0;
+
+	void EnsureStartingMetaWallet();
+
+	/** Resolve default Match HUD / End Screen Widget Blueprints without ConstructorHelpers. */
+	void EnsureDefaultWidgetClasses();
 
 	/** Destroys the tower and every build-pad marker spawned so far, so a failed world-validation
 	 *  attempt can regenerate cleanly rather than leaving stale actors from the last attempt. */

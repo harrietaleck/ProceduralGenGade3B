@@ -9,6 +9,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "TDMatchRewards.h"
 #include "TDHUDWidget.generated.h"
 
 class ATDGameMode;
@@ -16,6 +17,7 @@ class ATower;
 class AWaveManager;
 class UTextBlock;
 class UProgressBar;
+class UButton;
 enum class EWaveState : uint8;
 
 UCLASS()
@@ -37,28 +39,71 @@ public:
 	// elements the Widget Blueprint's designer view must contain. ---
 
 	/** Top-left: "Wave 3 / 5". */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> WaveText;
 
 	/** Top-centre: "Preparing...", "Wave Starting", "Wave Active", "Wave Complete", etc. */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> WaveStatusText;
 
 	/** Top-right: "Loot: 175". */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> LootText;
 
 	/** Bottom-left: the Citadel's health bar. */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UProgressBar> TowerHealthBar;
 
 	/** Bottom-left: "82 / 100 HP" underneath the bar. */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> TowerHealthText;
 
 	/** Bottom-right: "7 Remaining". */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> EnemiesRemainingText;
+
+	/** Optional: persistent meta-currency readout (leaf/logs/gems/lanterns). */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> MetaCurrencyText;
+
+	/** Optional: which defender type is selected + controls hint. */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> DefenderModeText;
+
+	/** Optional: pause / settings button on the match HUD. */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UButton> PauseButton;
+
+	/** Optional alternate settings button name used by WBP_MatchHUD_V2. */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UButton> SettingButton;
+
+	/** Live match score (WBP_MatchHUD_V2: Score). */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Score;
+
+	/** Forest Essence amount (WBP_MatchHUD_V2: forestScore). */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> forestScore;
+
+	/** Wooden Might amount (WBP_MatchHUD_V2: WoodScore). */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> WoodScore;
+
+	/** Gem Stones amount (WBP_MatchHUD_V2: GemScore). */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> GemScore;
+
+	/** Light Lanterns amount (WBP_MatchHUD_V2: LightScore). */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> LightScore;
+
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void RefreshMetaCurrency(const FMetaCurrencyRewards& Wallet, int32 BeamLevel, bool bStrongDefenderSelected);
+
+	/** Push the live match score into the HUD Score text. */
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void RefreshMatchScore(int32 MatchScore);
 
 private:
 	UPROPERTY()
@@ -95,6 +140,17 @@ private:
 
 	UFUNCTION()
 	void HandleVictory();
+
+	UFUNCTION()
+	void HandlePauseClicked();
+
+	UFUNCTION()
+	void HandleSettingsClicked();
+
+	void ResolveHudBindings();
+	void BindHudButtons();
+	void ConfigureHudHitTesting();
+	void StretchTopBanner();
 
 	/** Refreshes the parts of the display that don't have their own dedicated delegate
 	 *  (the "Wave X / Y" counter, which changes alongside several different events). */

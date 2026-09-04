@@ -87,6 +87,63 @@ void AWaveManager::StopWaves()
 	GetWorldTimerManager().ClearTimer(BreakTimerHandle);
 }
 
+void AWaveManager::HoldForResultsScreen()
+{
+	GetWorldTimerManager().ClearTimer(BreakTimerHandle);
+}
+
+void AWaveManager::ContinueToNextWave()
+{
+	if (bStopped || State == EWaveState::Victory)
+	{
+		return;
+	}
+
+	GetWorldTimerManager().ClearTimer(BreakTimerHandle);
+	BeginNextWave();
+}
+
+void AWaveManager::RetryCurrentWave()
+{
+	if (!Spawner || !Waves.IsValidIndex(CurrentWaveIndex))
+	{
+		return;
+	}
+
+	GetWorldTimerManager().ClearTimer(CountdownTimerHandle);
+	GetWorldTimerManager().ClearTimer(SpawnTimerHandle);
+	GetWorldTimerManager().ClearTimer(BreakTimerHandle);
+
+	// Final victory calls StopWaves; explicitly reopen the manager for this replay.
+	bStopped = false;
+	EnemiesSpawnedThisWave = 0;
+	ActiveEnemyCount = 0;
+	State = EWaveState::CountingDown;
+	CountdownSecondsRemaining = CountdownSeconds;
+
+	OnEnemiesRemainingChanged.Broadcast(0);
+	OnWaveCountdownTick.Broadcast(CountdownSecondsRemaining);
+
+	if (CountdownSecondsRemaining <= 0)
+	{
+		CountdownTick();
+		return;
+	}
+
+	GetWorldTimerManager().SetTimer(
+		CountdownTimerHandle, this, &AWaveManager::CountdownTick, 1.0f, /*bLoop=*/true);
+}
+
+void AWaveManager::DeclareVictory()
+{
+	if (State == EWaveState::Victory)
+	{
+		return;
+	}
+
+	TriggerVictory();
+}
+
 void AWaveManager::BeginNextWave()
 {
 	if (bStopped)
@@ -229,8 +286,8 @@ void AWaveManager::CheckWaveCompletion()
 	State = EWaveState::Complete;
 	OnWaveComplete.Broadcast(GetCurrentWave());
 
-	// Give the player a breather, then automatically roll into the next wave's countdown.
-	GetWorldTimerManager().SetTimer(BreakTimerHandle, this, &AWaveManager::BeginNextWave, BreakDuration, /*bLoop=*/false);
+	// Do not auto-start the next wave — GameMode shows the results screen and calls
+	// ContinueToNextWave() when the player is ready.
 }
 
 void AWaveManager::TriggerVictory()

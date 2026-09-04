@@ -12,6 +12,7 @@
 #include "Enemy.generated.h"
 
 class UHealthComponent;
+class UPointLightComponent;
 class UStaticMeshComponent;
 
 /**
@@ -78,6 +79,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0.0"))
 	float GroundClearance = 50.0f;
 
+	/** Duration of the glow-and-scale portal arrival effect. Set to zero to disable it. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Spawn Effect", meta = (ClampMin = "0.0"))
+	float SpawnEffectDuration = 0.85f;
+
+	/** Light intensity at the start of the portal arrival effect. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Spawn Effect", meta = (ClampMin = "0.0"))
+	float SpawnGlowIntensity = 6500.0f;
+
+	/** Colour of the portal glow around a newly spawned enemy. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Spawn Effect")
+	FLinearColor SpawnGlowColor = FLinearColor(0.15f, 0.9f, 1.0f);
+
 	/** The reusable health/damage/death component. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy")
 	TObjectPtr<UHealthComponent> HealthComponent;
@@ -103,6 +116,10 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Enemy", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> MeshComponent;
 
+	/** Brief cyan light that fades as this enemy emerges from its portal. */
+	UPROPERTY(VisibleAnywhere, Category = "Enemy|Spawn Effect", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UPointLightComponent> SpawnGlow;
+
 	/** Ordered world-space path points from the spawn point to the tower. */
 	UPROPERTY()
 	TArray<FVector> Waypoints;
@@ -120,7 +137,11 @@ private:
 	/** Live travel speed — ramps up from zero so enemies ease into motion after spawning. */
 	float CurrentSpeed = 0.0f;
 
+	float SpawnEffectElapsed = 0.0f;
+	FVector SpawnTargetScale = FVector::OneVector;
+
 	// --- helpers ---
+	void UpdateSpawnEffect(float DeltaSeconds);
 	void MoveAlongPath(float DeltaSeconds);
 	/** Attack a target on cooldown by applying damage to its HealthComponent. */
 	void TryAttack(AActor* Target, float DeltaSeconds);

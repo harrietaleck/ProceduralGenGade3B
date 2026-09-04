@@ -36,6 +36,11 @@ ADefender::ADefender()
 	CreateDefaultSubobject<UDamageFlashComponent>(TEXT("DamageFlash"));
 
 	ProjectileClass = AProjectile::StaticClass();
+
+	MetaCost.ForestEssence = 8;
+	MetaCost.WoodenMight = 5;
+	MetaCost.GemStones = 0;
+	MetaCost.LightLanterns = 0;
 }
 
 void ADefender::BeginPlay()

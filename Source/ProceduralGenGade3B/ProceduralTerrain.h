@@ -196,13 +196,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations", meta = (ClampMin = "0"))
 	int32 DecorationPathBufferCells = 2;
 
-	/** Optional custom meshes (leave empty to use engine placeholder shapes). */
+	/** Tree meshes for TerrainProp scatter. Empty = auto-load VRS_LowPolyNatureEssentials trees/bushes. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations|Meshes")
 	TArray<TObjectPtr<UStaticMesh>> TreeMeshes;
 
+	/** Rock / stump / log meshes. Empty = auto-load VRS_LowPolyNatureEssentials rocks. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations|Meshes")
 	TArray<TObjectPtr<UStaticMesh>> RockMeshes;
 
+	/** Ruin / fence / prop meshes. Empty = auto-load VRS_LowPolyNatureEssentials arch props. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations|Meshes")
 	TArray<TObjectPtr<UStaticMesh>> BuildingMeshes;
 

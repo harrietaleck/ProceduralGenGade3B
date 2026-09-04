@@ -2,6 +2,7 @@
 
 #include "TDPlayerController.h"
 #include "Defender.h"
+#include "StrongDefender.h"
 #include "ProceduralTerrain.h"
 #include "TDGameMode.h"
 #include "TDHUDWidget.h"
@@ -11,6 +12,7 @@ ATDPlayerController::ATDPlayerController()
 {
 	// Default to the plain C++ defender unless overridden.
 	DefenderClass = ADefender::StaticClass();
+	StrongDefenderClass = AStrongDefender::StaticClass();
 
 	// Ticks every frame to draw the build-pad hover highlight.
 	PrimaryActorTick.bCanEverTick = true;
@@ -37,10 +39,15 @@ void ATDPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::R, IE_Pressed, this, &ATDPlayerController::OnRestartPressed);
 
 	// Bind P to pause/unpause the match.
-	InputComponent->BindKey(EKeys::P, IE_Pressed, this, &ATDPlayerController::OnPausePressed);
+	FInputKeyBinding& PauseBinding =
+		InputComponent->BindKey(EKeys::P, IE_Pressed, this, &ATDPlayerController::OnPausePressed);
+	PauseBinding.bExecuteWhenPaused = true;
 
 	// Bind N to toggle the NavMesh debug overlay.
 	InputComponent->BindKey(EKeys::N, IE_Pressed, this, &ATDPlayerController::OnToggleNavMeshDebug);
+
+	InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ATDPlayerController::OnToggleDefenderMode);
+	InputComponent->BindKey(EKeys::U, IE_Pressed, this, &ATDPlayerController::OnUpgradeBeamPressed);
 }
 
 void ATDPlayerController::OnToggleNavMeshDebug()
@@ -66,11 +73,61 @@ void ATDPlayerController::OnRestartPressed()
 	}
 }
 
+void ATDPlayerController::OnToggleDefenderMode()
+{
+	if (ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>())
+	{
+		if (GameMode->IsGameOver() || GameMode->IsVictory() || GameMode->IsInteractionBlocked())
+		{
+			return;
+		}
+	}
+
+	if (!StrongDefenderClass)
+	{
+		return;
+	}
+
+	bPlacingStrongDefender = !bPlacingStrongDefender;
+
+	if (ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>())
+	{
+		GameMode->RefreshMetaHUD();
+	}
+}
+
+void ATDPlayerController::OnUpgradeBeamPressed()
+{
+	if (ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>())
+	{
+		GameMode->TryUpgradeTowerBeam();
+	}
+}
+
+TSubclassOf<ADefender> ATDPlayerController::GetActiveDefenderClass() const
+{
+	if (bPlacingStrongDefender && StrongDefenderClass)
+	{
+		return StrongDefenderClass;
+	}
+	return DefenderClass;
+}
+
+bool ATDPlayerController::CanAffordDefender(const ADefender* Defaults, const ATDGameMode* GameMode) const
+{
+	if (!Defaults || !GameMode)
+	{
+		return false;
+	}
+	return GameMode->GetResources() >= Defaults->Cost && GameMode->CanAffordMeta(Defaults->MetaCost);
+}
+
 void ATDPlayerController::OnPlaceDefenderClicked()
 {
 	// No placing while paused or after the game ends.
 	ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>();
-	if (!GameMode || GameMode->IsGameOver() || GameMode->IsPaused() || !DefenderClass)
+	const TSubclassOf<ADefender> ActiveClass = GetActiveDefenderClass();
+	if (!GameMode || GameMode->IsInteractionBlocked() || !ActiveClass)
 	{
 		return;
 	}
@@ -89,25 +146,29 @@ void ATDPlayerController::OnPlaceDefenderClicked()
 
 	// Check affordability using the defender's own Cost, but don't spend yet — Loot is only
 	// ever deducted for a placement that actually happens (see below).
-	const int32 Cost = DefenderClass.GetDefaultObject()->Cost;
-	if (GameMode->GetResources() < Cost)
+	const ADefender* Defaults = ActiveClass.GetDefaultObject();
+	if (!CanAffordDefender(Defaults, GameMode))
 	{
-		// Reject the placement and tell the player why, without touching their Loot.
 		GameMode->ShowInsufficientFundsWarning();
 		return;
 	}
+
+	const int32 Cost = Defaults->Cost;
+	const FMetaCurrencyRewards MetaCost = Defaults->MetaCost;
 
 	// Spawn the defender on the slot, raised so its base rests on the ground.
 	// (Named DefenderSpawnLocation to avoid hiding the inherited APlayerController::SpawnLocation.)
 	const FVector DefenderSpawnLocation = SlotLocation + FVector(0.0f, 0.0f, 60.0f);
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	ADefender* NewDefender = GetWorld()->SpawnActor<ADefender>(DefenderClass, DefenderSpawnLocation, FRotator::ZeroRotator, SpawnParams);
+	ADefender* NewDefender = GetWorld()->SpawnActor<ADefender>(ActiveClass, DefenderSpawnLocation, FRotator::ZeroRotator, SpawnParams);
 
 	// Only pay for a placement that actually succeeded.
 	if (NewDefender)
 	{
 		GameMode->TrySpendResources(Cost);
+		GameMode->TrySpendMeta(MetaCost);
+		GameMode->NotifyDefenderPlaced();
 		NewDefender->SetOccupiedSlot(SlotLocation);
 		if (AProceduralTerrain* Terrain = GameMode->GetTerrain())
 		{
@@ -171,7 +232,8 @@ void ATDPlayerController::Tick(float DeltaSeconds)
 void ATDPlayerController::UpdateBuildPadHighlight() const
 {
 	ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>();
-	if (!GameMode || GameMode->IsGameOver() || GameMode->IsPaused() || !DefenderClass)
+	const TSubclassOf<ADefender> ActiveClass = GetActiveDefenderClass();
+	if (!GameMode || GameMode->IsInteractionBlocked() || !ActiveClass)
 	{
 		return;
 	}
@@ -184,8 +246,8 @@ void ATDPlayerController::UpdateBuildPadHighlight() const
 
 	// Valid = free slot AND the player can currently afford this defender.
 	const bool bOccupied = IsSlotOccupied(SlotLocation);
-	const int32 Cost = DefenderClass.GetDefaultObject()->Cost;
-	const bool bAffordable = GameMode->GetResources() >= Cost;
+	const ADefender* Defaults = ActiveClass.GetDefaultObject();
+	const bool bAffordable = CanAffordDefender(Defaults, GameMode);
 	const bool bValid = !bOccupied && bAffordable;
 
 	const FColor HighlightColor = bValid ? FColor(60, 220, 90, 140) : FColor(220, 60, 60, 140);

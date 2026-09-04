@@ -1,6 +1,6 @@
 // TerrainProp.h
 // Lightweight decorative prop spawned by AProceduralTerrain (trees, rocks, buildings).
-// Uses placeholder engine meshes by default; swap meshes from the terrain scatter arrays later.
+// Meshes come from ProceduralTerrain scatter pools (VRS_LowPolyNatureEssentials by default).
 
 #pragma once
 

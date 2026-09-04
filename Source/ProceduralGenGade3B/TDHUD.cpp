@@ -35,6 +35,13 @@ void ATDHUD::DrawHUD()
 		return;
 	}
 
+	// Hide match HUD chrome on the Blueprint start/menu level.
+	const FString LevelName = GetWorld()->GetMapName();
+	if (LevelName.Contains(TEXT("StartScreen")))
+	{
+		return;
+	}
+
 	DrawInfoPanel(GameMode);
 	DrawDefenderHealthBars();
 	DrawEnemyHealthBars();
@@ -150,7 +157,8 @@ void ATDHUD::DrawInfoPanel(ATDGameMode* GameMode)
 
 	DrawPanelText(HintText, FLinearColor(1.0f, 0.95f, 0.55f), TextX, TextY, Font, InfoSecondaryScale);
 
-	if (GameMode->IsPaused())
+	// Skip canvas PAUSED banner while SettingScreen is open.
+	if (GameMode->IsPaused() && !GameMode->IsGameOver() && !GameMode->IsVictory() && !GameMode->IsSettingsVisible())
 	{
 		const float CenterX = Canvas->SizeX * 0.5f;
 		const float CenterY = Canvas->SizeY * 0.5f;

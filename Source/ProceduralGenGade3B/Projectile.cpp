@@ -41,13 +41,31 @@ void AProjectile::ApplyVisuals()
 {
 	MeshComponent->SetRelativeScale3D(FVector(VisualScale));
 
-	if (UMaterialInterface* BaseMat = MeshComponent->GetMaterial(0))
+	if (!CachedDynMat)
 	{
-		if (UMaterialInstanceDynamic* DynMat = UMaterialInstanceDynamic::Create(BaseMat, this))
+		UMaterialInterface* BaseMat = MeshComponent->GetMaterial(0);
+		if (!BaseMat)
 		{
-			DynMat->SetVectorParameterValue(TEXT("Color"), ProjectileColor);
-			MeshComponent->SetMaterial(0, DynMat);
+			return;
 		}
+
+		if (UMaterialInstanceDynamic* ExistingMid = Cast<UMaterialInstanceDynamic>(BaseMat))
+		{
+			CachedDynMat = ExistingMid;
+		}
+		else
+		{
+			CachedDynMat = UMaterialInstanceDynamic::Create(BaseMat, this);
+			if (CachedDynMat)
+			{
+				MeshComponent->SetMaterial(0, CachedDynMat);
+			}
+		}
+	}
+
+	if (CachedDynMat)
+	{
+		CachedDynMat->SetVectorParameterValue(TEXT("Color"), ProjectileColor);
 	}
 }
 
