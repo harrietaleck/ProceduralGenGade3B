@@ -264,7 +264,7 @@ namespace
 			return;
 		}
 		FSlateFontInfo Font = Text->GetFont();
-		Font.Size = 30;
+		Font.Size = 22;
 		Text->SetFont(Font);
 		Text->SetColorAndOpacity(FLinearColor(1.0f, 0.95f, 0.78f));
 		Text->SetJustification(ETextJustify::Center);
@@ -309,7 +309,7 @@ namespace
 			Slot->SetAlignment(FVector2D(0.5f, 0.0f)); // top-center of text sits just under the icon
 			Slot->SetAutoSize(true);
 			Slot->SetZOrder(50);
-			Slot->SetOffsets(FMargin(0.0f, 2.0f, 0.0f, 0.0f));
+			Slot->SetOffsets(FMargin(0.0f, 10.0f, 0.0f, 0.0f));
 		}
 
 		Member = Text;
@@ -336,10 +336,10 @@ namespace
 		}
 
 		// Reward icon centers on Gameover-image (1920x1080): leaf/logs/gems/sun.
-		PlaceNumberUnderIcon(Owner, Tree, Canvas, Essence, TEXT("ResultReward_Essence"), 0.368f, 0.595f);
-		PlaceNumberUnderIcon(Owner, Tree, Canvas, Wood, TEXT("ResultReward_Wood"), 0.451f, 0.595f);
-		PlaceNumberUnderIcon(Owner, Tree, Canvas, Gems, TEXT("ResultReward_Gems"), 0.534f, 0.595f);
-		PlaceNumberUnderIcon(Owner, Tree, Canvas, Lanterns, TEXT("ResultReward_Lanterns"), 0.607f, 0.595f);
+		PlaceNumberUnderIcon(Owner, Tree, Canvas, Essence, TEXT("ResultReward_Essence"), 0.376f, 0.625f);
+		PlaceNumberUnderIcon(Owner, Tree, Canvas, Wood, TEXT("ResultReward_Wood"), 0.459f, 0.625f);
+		PlaceNumberUnderIcon(Owner, Tree, Canvas, Gems, TEXT("ResultReward_Gems"), 0.542f, 0.625f);
+		PlaceNumberUnderIcon(Owner, Tree, Canvas, Lanterns, TEXT("ResultReward_Lanterns"), 0.615f, 0.625f);
 	}
 
 	static void CenterScoreAcrossPanel(UTextBlock* Text)
@@ -354,19 +354,19 @@ namespace
 
 		if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Text->Slot))
 		{
-			const FAnchors OldAnchors = CanvasSlot->GetAnchors();
-			const float Y0 = OldAnchors.Minimum.Y;
-			const float Y1 = OldAnchors.Maximum.Y;
-			CanvasSlot->SetAnchors(FAnchors(0.0f, Y0, 1.0f, Y1));
-			const FMargin OldOffsets = CanvasSlot->GetOffsets();
-			CanvasSlot->SetOffsets(FMargin(0.0f, OldOffsets.Top, 0.0f, OldOffsets.Bottom));
+			// Keep score centered under the SCORE header.
+			constexpr float ScoreAnchorY = 0.480f;
+			CanvasSlot->SetAnchors(FAnchors(0.0f, ScoreAnchorY, 1.0f, ScoreAnchorY));
+			CanvasSlot->SetOffsets(FMargin(0.0f));
 			CanvasSlot->SetAlignment(FVector2D(0.5f, 0.5f));
-			CanvasSlot->SetAutoSize(false);
+			CanvasSlot->SetAutoSize(true);
+			CanvasSlot->SetZOrder(50);
 		}
 		else if (UVerticalBoxSlot* VertSlot = Cast<UVerticalBoxSlot>(Text->Slot))
 		{
 			VertSlot->SetHorizontalAlignment(HAlign_Fill);
 			VertSlot->SetVerticalAlignment(VAlign_Center);
+			VertSlot->SetPadding(FMargin(0.0f, 12.0f, 0.0f, 0.0f));
 		}
 	}
 
@@ -610,14 +610,14 @@ void UTDEndScreenWidget::LayoutDefeatResultWidgets()
 			Slot->SetAlignment(FVector2D(0.5f, 0.0f));
 			Slot->SetAutoSize(true);
 			Slot->SetZOrder(50);
-			Slot->SetOffsets(FMargin(0.0f, 2.0f, 0.0f, 0.0f));
+			Slot->SetOffsets(FMargin(0.0f, 10.0f, 0.0f, 0.0f));
 		}
 	};
 
-	PinUnderIcon(ForestEssenceText, 0.368f, 0.595f);
-	PinUnderIcon(WoodenMightText, 0.451f, 0.595f);
-	PinUnderIcon(GemStonesText, 0.534f, 0.595f);
-	PinUnderIcon(LightLanternsText, 0.607f, 0.595f);
+	PinUnderIcon(ForestEssenceText, 0.376f, 0.625f);
+	PinUnderIcon(WoodenMightText, 0.459f, 0.625f);
+	PinUnderIcon(GemStonesText, 0.542f, 0.625f);
+	PinUnderIcon(LightLanternsText, 0.615f, 0.625f);
 }
 
 void UTDEndScreenWidget::ApplyMatchResultToWidgets(const FMatchResult& Result)
@@ -700,7 +700,7 @@ void UTDEndScreenWidget::EnsureThemeArt()
 	});
 }
 
-void UTDEndScreenWidget::ApplyTheme(bool bVictory, EBeamHealthTier Tier)
+void UTDEndScreenWidget::ApplyTheme(bool bVictory, EBeamHealthTier Tier, bool bOfferNextWave)
 {
 	EnsureThemeArt();
 
@@ -722,12 +722,16 @@ void UTDEndScreenWidget::ApplyTheme(bool bVictory, EBeamHealthTier Tier)
 
 	if (TitleText)
 	{
-		TitleText->SetText(FText::FromString(bVictory ? TEXT("VICTORY!") : TEXT("DEFEAT")));
+		TitleText->SetText(FText::FromString(bVictory
+			? (bOfferNextWave ? TEXT("WAVE CLEARED") : TEXT("VICTORY!"))
+			: TEXT("DEFEAT")));
 		TitleText->SetColorAndOpacity(TitleColor);
 	}
 	if (SubtitleText)
 	{
-		SubtitleText->SetText(FText::FromString(bVictory ? TEXT("THE FOREST IS SAFE") : TEXT("THE LIGHT HAS FADED")));
+		SubtitleText->SetText(FText::FromString(bVictory
+			? (bOfferNextWave ? TEXT("PREPARE FOR THE NEXT ASSAULT") : TEXT("THE FOREST IS SAFE"))
+			: TEXT("THE LIGHT HAS FADED")));
 		SubtitleText->SetColorAndOpacity(SubtitleColor);
 	}
 	if (ScoreHeaderText)
@@ -742,13 +746,40 @@ void UTDEndScreenWidget::ApplyTheme(bool bVictory, EBeamHealthTier Tier)
 	{
 		PanelBorder->SetBrushColor(PanelColor);
 	}
+
+	// When this Blueprint only has a defeat background image, swap in victory art for wave results.
+	if (bVictory && !VictoryBackground && DefeatBackground)
+	{
+		if (UTexture2D* VictoryTex = LoadObject<UTexture2D>(nullptr, TEXT("/Game/UI/SourceArt/Victory-image.Victory-image")))
+		{
+			DefeatBackground->SetBrushFromTexture(VictoryTex, false);
+			StretchWidgetToFillParentSlot(DefeatBackground);
+			DefeatBackground->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+	}
+	else if (!bVictory && DefeatBackground)
+	{
+		if (UTexture2D* DefeatTex = LoadObject<UTexture2D>(nullptr, TEXT("/Game/UI/SourceArt/Gameover-image.Gameover-image")))
+		{
+			DefeatBackground->SetBrushFromTexture(DefeatTex, false);
+			StretchWidgetToFillParentSlot(DefeatBackground);
+		}
+	}
+
 	if (VictoryBackground)
 	{
 		VictoryBackground->SetVisibility(bVictory ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
 	if (DefeatBackground)
 	{
-		DefeatBackground->SetVisibility(bVictory ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+		if (VictoryBackground)
+		{
+			DefeatBackground->SetVisibility(bVictory ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+		}
+		else
+		{
+			DefeatBackground->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
 	}
 	if (PanelBorder && bUsesConceptArt)
 	{
@@ -761,12 +792,21 @@ void UTDEndScreenWidget::ApplyTheme(bool bVictory, EBeamHealthTier Tier)
 	if (RetryButton)
 	{
 		RetryButton->SetBackgroundColor(ButtonFill);
+		// Between waves, Retry acts as Next Wave when no NextWaveButton exists.
 		RetryButton->SetVisibility(ESlateVisibility::Visible);
+		if (UTextBlock* RetryLabel = Cast<UTextBlock>(RetryButton->GetContent()))
+		{
+			RetryLabel->SetText(FText::FromString(bOfferNextWave ? TEXT("NEXT WAVE") : TEXT("RETRY")));
+		}
 	}
 	if (NextWaveButton)
 	{
 		NextWaveButton->SetBackgroundColor(ButtonFill);
-		NextWaveButton->SetVisibility(bVictory ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		NextWaveButton->SetVisibility(bOfferNextWave ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		if (bOfferNextWave && RetryButton)
+		{
+			RetryButton->SetVisibility(ESlateVisibility::Collapsed);
+		}
 	}
 	if (MainMenuButton)
 	{
@@ -803,7 +843,13 @@ void UTDEndScreenWidget::PresentMatchResult(bool bVictory, const FMatchResult& R
 	ResolveOptionalWidgetBindings();
 	EnsureResultTextWidgets();
 	EnsureBlueprintLayoutFitsScreen();
-	ApplyTheme(bVictory, Result.BeamTier);
+
+	const bool bOfferNextWave = bVictory
+		&& Result.TotalWaves > 0
+		&& Result.WavesCleared < Result.TotalWaves;
+	bPendingNextWave = bOfferNextWave;
+
+	ApplyTheme(bVictory, Result.BeamTier, bOfferNextWave);
 	ApplyTierTypography(Result);
 	ApplyMatchResultToWidgets(Result);
 	LayoutDefeatResultWidgets();
@@ -840,6 +886,7 @@ void UTDEndScreenWidget::ShowVictory()
 
 void UTDEndScreenWidget::HideScreen()
 {
+	bPendingNextWave = false;
 	SetVisibility(ESlateVisibility::Collapsed);
 }
 
@@ -847,13 +894,23 @@ void UTDEndScreenWidget::OnRetryClicked()
 {
 	if (ATDGameMode* GameMode = Cast<ATDGameMode>(UGameplayStatics::GetGameMode(this)))
 	{
-		GameMode->RestartGame();
+		if (bPendingNextWave)
+		{
+			GameMode->ContinueToNextWave();
+		}
+		else
+		{
+			GameMode->RestartGame();
+		}
 	}
 }
 
 void UTDEndScreenWidget::OnNextWaveClicked()
 {
-	OnRetryClicked();
+	if (ATDGameMode* GameMode = Cast<ATDGameMode>(UGameplayStatics::GetGameMode(this)))
+	{
+		GameMode->ContinueToNextWave();
+	}
 }
 
 void UTDEndScreenWidget::OnMainMenuClicked()

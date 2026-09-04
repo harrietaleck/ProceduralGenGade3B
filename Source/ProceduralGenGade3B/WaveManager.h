@@ -127,6 +127,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Waves")
 	void StopWaves();
 
+	/** Cancel the automatic break timer so a results screen can be shown between waves. */
+	UFUNCTION(BlueprintCallable, Category = "Waves")
+	void HoldForResultsScreen();
+
+	/** Resume after HoldForResultsScreen — starts the next wave countdown, or victory if none remain. */
+	UFUNCTION(BlueprintCallable, Category = "Waves")
+	void ContinueToNextWave();
+
+	/** Mark the match won without firing another OnWaveComplete (used after the final wave results). */
+	UFUNCTION(BlueprintCallable, Category = "Waves")
+	void DeclareVictory();
+
 	/** The wave currently in progress (1-based; 0 before the first wave starts). */
 	UFUNCTION(BlueprintPure, Category = "Waves")
 	int32 GetCurrentWave() const { return CurrentWaveIndex + 1; }

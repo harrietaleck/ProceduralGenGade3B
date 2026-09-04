@@ -120,8 +120,10 @@ private:
 	void EnsureResultTextWidgets();
 	void LayoutDefeatResultWidgets();
 	void ApplyMatchResultToWidgets(const FMatchResult& Result);
-	void ApplyTheme(bool bVictory, EBeamHealthTier Tier);
+	void ApplyTheme(bool bVictory, EBeamHealthTier Tier, bool bOfferNextWave);
 	void ApplyTierTypography(const FMatchResult& Result);
+
+	bool bPendingNextWave = false;
 
 	UFUNCTION()
 	void OnRetryClicked();

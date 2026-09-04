@@ -131,6 +131,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void RestartGame();
 
+	/** Hide the between-wave results screen and start the next wave. */
+	UFUNCTION(BlueprintCallable, Category = "Rules")
+	void ContinueToNextWave();
+
 	/** Toggle match pause (freezes gameplay actors; UI remains visible). */
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void TogglePause();
@@ -261,19 +265,26 @@ private:
 	/** Deduct upkeep for all living defenders after a wave ends. */
 	void ApplyDefenderUpkeep();
 
-	/** Wave-complete hook: extend lanes, add new pads, charge upkeep. */
+	/** Wave-complete hook: extend lanes, add new pads, charge upkeep, show results. */
 	UFUNCTION()
 	void HandleWaveComplete(int32 WaveNumber);
 
-	/** Computes rewards from tower beam health, banks meta-currency, then shows the end screen. */
+	/** Final-wave win hook (no-op if results were already shown on the last wave clear). */
 	UFUNCTION()
 	void HandleMatchVictory();
 
-	void FinalizeMatchResult(bool bVictory);
+	void FinalizeMatchResult(bool bVictory, int32 WavesClearedOverride = -1);
 	void ShowEndScreen(bool bVictory);
+	void HideEndScreens();
+	void RestoreGameplayInput();
 
 	UPROPERTY()
 	FMatchResult LastMatchResult;
+
+	/** Cumulative rewards already banked this match (so each wave only pays the delta). */
+	FMetaCurrencyRewards PaidMatchRewards;
+
+	bool bWaveResultsVisible = false;
 
 	int32 BeamUpgradeLevel = 0;
 	float BaseTowerAttackDamage = 0.0f;

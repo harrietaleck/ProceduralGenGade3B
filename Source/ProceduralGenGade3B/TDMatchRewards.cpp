@@ -40,10 +40,10 @@ int32 UTDMatchRewards::GetRewardFontSize(EBeamHealthTier Tier)
 {
 	switch (Tier)
 	{
-	case EBeamHealthTier::Fragile: return 20;
-	case EBeamHealthTier::Steady:  return 26;
-	case EBeamHealthTier::Radiant: return 32;
-	default: return 24;
+	case EBeamHealthTier::Fragile: return 16;
+	case EBeamHealthTier::Steady:  return 20;
+	case EBeamHealthTier::Radiant: return 24;
+	default: return 18;
 	}
 }
 
@@ -51,10 +51,10 @@ int32 UTDMatchRewards::GetScoreFontSize(EBeamHealthTier Tier)
 {
 	switch (Tier)
 	{
-	case EBeamHealthTier::Fragile: return 30;
-	case EBeamHealthTier::Steady:  return 40;
-	case EBeamHealthTier::Radiant: return 50;
-	default: return 36;
+	case EBeamHealthTier::Fragile: return 24;
+	case EBeamHealthTier::Steady:  return 30;
+	case EBeamHealthTier::Radiant: return 36;
+	default: return 28;
 	}
 }
 

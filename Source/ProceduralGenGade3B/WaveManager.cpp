@@ -87,6 +87,32 @@ void AWaveManager::StopWaves()
 	GetWorldTimerManager().ClearTimer(BreakTimerHandle);
 }
 
+void AWaveManager::HoldForResultsScreen()
+{
+	GetWorldTimerManager().ClearTimer(BreakTimerHandle);
+}
+
+void AWaveManager::ContinueToNextWave()
+{
+	if (bStopped || State == EWaveState::Victory)
+	{
+		return;
+	}
+
+	GetWorldTimerManager().ClearTimer(BreakTimerHandle);
+	BeginNextWave();
+}
+
+void AWaveManager::DeclareVictory()
+{
+	if (State == EWaveState::Victory)
+	{
+		return;
+	}
+
+	TriggerVictory();
+}
+
 void AWaveManager::BeginNextWave()
 {
 	if (bStopped)
@@ -229,8 +255,8 @@ void AWaveManager::CheckWaveCompletion()
 	State = EWaveState::Complete;
 	OnWaveComplete.Broadcast(GetCurrentWave());
 
-	// Give the player a breather, then automatically roll into the next wave's countdown.
-	GetWorldTimerManager().SetTimer(BreakTimerHandle, this, &AWaveManager::BeginNextWave, BreakDuration, /*bLoop=*/false);
+	// Do not auto-start the next wave — GameMode shows the results screen and calls
+	// ContinueToNextWave() when the player is ready.
 }
 
 void AWaveManager::TriggerVictory()

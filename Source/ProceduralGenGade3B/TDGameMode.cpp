@@ -58,6 +58,8 @@ void ATDGameMode::BeginPlay()
 	MatchDefendersPlaced = 0;
 	MatchHitsLanded = 0;
 	MatchEnemiesKilled = 0;
+	PaidMatchRewards = FMetaCurrencyRewards();
+	bWaveResultsVisible = false;
 
 	// Seed the economy.
 	Resources = StartingResources;
@@ -221,6 +223,8 @@ void ATDGameMode::RestartGame()
 	MatchDefendersPlaced = 0;
 	MatchHitsLanded = 0;
 	MatchEnemiesKilled = 0;
+	PaidMatchRewards = FMetaCurrencyRewards();
+	bWaveResultsVisible = false;
 	UGameplayStatics::SetGamePaused(this, false);
 
 	if (EndScreenWidget)
@@ -355,19 +359,83 @@ void ATDGameMode::ApplyDefenderUpkeep()
 
 void ATDGameMode::HandleWaveComplete(int32 WaveNumber)
 {
-	if (!Terrain || bGameOver || IsVictory())
+	if (bGameOver)
 	{
 		return;
 	}
 
-	const int32 OldSlotCount = Terrain->GetDefenderSlots().Num();
-	const int32 ExtendedLanes = Terrain->ExpandWorldAfterWave();
-	if (ExtendedLanes > 0)
+	// Stop the automatic break→next-wave timer so the player can read the results screen.
+	if (WaveManager)
 	{
-		SpawnBuildPadMarkersFromIndex(OldSlotCount);
+		WaveManager->HoldForResultsScreen();
+	}
+
+	if (Terrain)
+	{
+		const int32 OldSlotCount = Terrain->GetDefenderSlots().Num();
+		const int32 ExtendedLanes = Terrain->ExpandWorldAfterWave();
+		if (ExtendedLanes > 0)
+		{
+			SpawnBuildPadMarkersFromIndex(OldSlotCount);
+		}
 	}
 
 	ApplyDefenderUpkeep();
+
+	const int32 TotalWaves = WaveManager ? WaveManager->GetTotalWaves() : 0;
+	const bool bFinalWave = TotalWaves > 0 && WaveNumber >= TotalWaves;
+
+	FinalizeMatchResult(true, WaveNumber);
+	ShowEndScreen(true);
+
+	if (bFinalWave && WaveManager)
+	{
+		WaveManager->DeclareVictory();
+	}
+
+	UE_LOG(LogTemp, Display, TEXT("TDGameMode: wave %d/%d complete — showing results."), WaveNumber, TotalWaves);
+}
+
+void ATDGameMode::ContinueToNextWave()
+{
+	if (bGameOver || IsVictory())
+	{
+		return;
+	}
+
+	HideEndScreens();
+	bPaused = false;
+	bWaveResultsVisible = false;
+	RestoreGameplayInput();
+
+	if (WaveManager)
+	{
+		WaveManager->ContinueToNextWave();
+	}
+}
+
+void ATDGameMode::HideEndScreens()
+{
+	if (EndScreenWidget)
+	{
+		EndScreenWidget->HideScreen();
+	}
+	if (VictoryScreenWidget && VictoryScreenWidget != EndScreenWidget)
+	{
+		VictoryScreenWidget->HideScreen();
+	}
+}
+
+void ATDGameMode::RestoreGameplayInput()
+{
+	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+	{
+		FInputModeGameAndUI InputMode;
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		InputMode.SetHideCursorDuringCapture(false);
+		PC->SetInputMode(InputMode);
+		PC->bShowMouseCursor = true;
+	}
 }
 
 void ATDGameMode::DestroySpawnedWorldActors()
@@ -498,12 +566,7 @@ void ATDGameMode::EnsureDefaultWidgetClasses()
 
 	if (!EndScreenWidgetClass || EndScreenWidgetClass == UTDEndScreenWidget::StaticClass())
 	{
-		// Try your custom Gameoverscreen Blueprint first, fall back to the V2 generic, then pure C++
 		UClass* FoundDefeat = LoadClass<UTDEndScreenWidget>(nullptr, TEXT("/Game/UI/ScreenWidgets/Gameoverscreen.Gameoverscreen_C"));
-		if (!FoundDefeat)
-		{
-			FoundDefeat = LoadClass<UTDEndScreenWidget>(nullptr, TEXT("/Game/UI/WBP_EndScreen_V2.WBP_EndScreen_V2_C"));
-		}
 		if (FoundDefeat)
 		{
 			EndScreenWidgetClass = FoundDefeat;
@@ -517,19 +580,16 @@ void ATDGameMode::EnsureDefaultWidgetClasses()
 
 	if (!VictoryScreenWidgetClass)
 	{
-		// Try your custom VictoryScreen Blueprint first, fall back to the V2 generic
+		// VictoryScreen must parent UTDEndScreenWidget to load; otherwise reuse the defeat class.
 		UClass* FoundVictory = LoadClass<UTDEndScreenWidget>(nullptr, TEXT("/Game/UI/ScreenWidgets/VictoryScreen.VictoryScreen_C"));
-		if (!FoundVictory)
-		{
-			FoundVictory = LoadClass<UTDEndScreenWidget>(nullptr, TEXT("/Game/UI/WBP_EndScreen_V2.WBP_EndScreen_V2_C"));
-			if (FoundVictory)
-			{
-				UE_LOG(LogTemp, Warning, TEXT("TDGameMode: VictoryScreen Blueprint not found — using WBP_EndScreen_V2."));
-			}
-		}
 		if (FoundVictory)
 		{
 			VictoryScreenWidgetClass = FoundVictory;
+		}
+		else if (EndScreenWidgetClass)
+		{
+			VictoryScreenWidgetClass = EndScreenWidgetClass;
+			UE_LOG(LogTemp, Warning, TEXT("TDGameMode: VictoryScreen is not a TDEndScreenWidget child — reusing EndScreenWidgetClass for wave results."));
 		}
 	}
 }
@@ -650,11 +710,15 @@ void ATDGameMode::RefreshMetaHUD() const
 	}
 }
 
-void ATDGameMode::FinalizeMatchResult(bool bVictory)
+void ATDGameMode::FinalizeMatchResult(bool bVictory, int32 WavesClearedOverride)
 {
 	int32 WavesCleared = 0;
 	const int32 TotalWaves = WaveManager ? WaveManager->GetTotalWaves() : 0;
-	if (WaveManager)
+	if (WavesClearedOverride >= 0)
+	{
+		WavesCleared = WavesClearedOverride;
+	}
+	else if (WaveManager)
 	{
 		if (bVictory)
 		{
@@ -707,11 +771,21 @@ void ATDGameMode::FinalizeMatchResult(bool bVictory)
 		SurvivingDefenders);
 	LastMatchResult.Wallet = WalletBeforePayout;
 
+	// Bank only newly earned rewards so mid-match wave screens don't double-pay.
+	FMetaCurrencyRewards Delta;
+	Delta.ForestEssence = FMath::Max(0, LastMatchResult.Rewards.ForestEssence - PaidMatchRewards.ForestEssence);
+	Delta.WoodenMight = FMath::Max(0, LastMatchResult.Rewards.WoodenMight - PaidMatchRewards.WoodenMight);
+	Delta.GemStones = FMath::Max(0, LastMatchResult.Rewards.GemStones - PaidMatchRewards.GemStones);
+	Delta.LightLanterns = FMath::Max(0, LastMatchResult.Rewards.LightLanterns - PaidMatchRewards.LightLanterns);
+
+	PaidMatchRewards = LastMatchResult.Rewards;
+	LastMatchResult.Rewards = Delta;
+
 	if (UGameInstance* GI = GetGameInstance())
 	{
 		if (UTDMetaProgressionSubsystem* Meta = GI->GetSubsystem<UTDMetaProgressionSubsystem>())
 		{
-			Meta->AddRewards(LastMatchResult.Rewards);
+			Meta->AddRewards(Delta);
 		}
 	}
 }
@@ -721,13 +795,18 @@ void ATDGameMode::ShowEndScreen(bool bVictory)
 	UTDEndScreenWidget* TargetWidget = bVictory ? VictoryScreenWidget : EndScreenWidget;
 	if (!TargetWidget)
 	{
+		TargetWidget = EndScreenWidget;
+	}
+	if (!TargetWidget)
+	{
 		return;
 	}
 
 	// Do NOT call SetGamePaused here — that triggers the engine's built-in pause menu
 	// widget instead of our end screen. Gameplay is already frozen because the wave
-	// manager and spawner were stopped before ShowEndScreen was called.
+	// manager and spawner were stopped / held before ShowEndScreen was called.
 	bPaused = true;
+	bWaveResultsVisible = true;
 
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
 	{
@@ -737,19 +816,13 @@ void ATDGameMode::ShowEndScreen(bool bVictory)
 		PC->bShowMouseCursor = true;
 	}
 
-	if (bVictory)
-	{
-		TargetWidget->PresentMatchResult(true, LastMatchResult);
-	}
-	else
-	{
-		TargetWidget->PresentMatchResult(false, LastMatchResult);
-	}
+	TargetWidget->PresentMatchResult(bVictory, LastMatchResult);
 }
 
 void ATDGameMode::HandleMatchVictory()
 {
-	if (bGameOver)
+	// Results for the final wave are already shown from HandleWaveComplete.
+	if (bGameOver || bWaveResultsVisible)
 	{
 		return;
 	}
