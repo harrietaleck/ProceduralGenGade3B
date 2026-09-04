@@ -17,6 +17,7 @@ class ATower;
 class AWaveManager;
 class UTextBlock;
 class UProgressBar;
+class UButton;
 enum class EWaveState : uint8;
 
 UCLASS()
@@ -69,6 +70,10 @@ public:
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> DefenderModeText;
 
+	/** Optional: pause / settings button on the match HUD. */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UButton> PauseButton;
+
 	UFUNCTION(BlueprintCallable, Category = "HUD")
 	void RefreshMetaCurrency(const FMetaCurrencyRewards& Wallet, int32 BeamLevel, bool bStrongDefenderSelected);
 
@@ -107,6 +112,9 @@ private:
 
 	UFUNCTION()
 	void HandleVictory();
+
+	UFUNCTION()
+	void HandlePauseClicked();
 
 	/** Refreshes the parts of the display that don't have their own dedicated delegate
 	 *  (the "Wave X / Y" counter, which changes alongside several different events). */

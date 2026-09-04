@@ -19,6 +19,8 @@ class ABuildPadMarker;
 class UTDHUDWidget;
 class UTDEndScreenWidget;
 class UTDWarningBannerWidget;
+class UUserWidget;
+class UButton;
 
 // Broadcast whenever the player's resource count changes (UI binds to this).
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnResourcesChanged, int32, NewAmount);
@@ -71,6 +73,10 @@ public:
 	/** Full-screen victory overlay (optional; if unset, EndScreenWidgetClass is used for both). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<UTDEndScreenWidget> VictoryScreenWidgetClass;
+
+	/** Pause / settings overlay (Blueprint UserWidget — settings controls stay in Blueprint). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
+	TSubclassOf<UUserWidget> SettingsWidgetClass;
 
 	/** Meta-currency granted on the first match if the wallet is empty (lets defenders work immediately). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules|Meta")
@@ -135,13 +141,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void ContinueToNextWave();
 
-	/** Toggle match pause (freezes gameplay actors; UI remains visible). */
+	/** Toggle match pause and show/hide the settings widget. */
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void TogglePause();
+
+	/** Open the settings widget and pause match interaction. */
+	UFUNCTION(BlueprintCallable, Category = "Rules")
+	void ShowSettings();
+
+	/** Close settings and resume the match (call from Blueprint Resume buttons). */
+	UFUNCTION(BlueprintCallable, Category = "Rules")
+	void ResumeFromSettings();
 
 	/** True while the match is paused. */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	bool IsPaused() const { return bPaused; }
+
+	/** True while the settings overlay is visible. */
+	UFUNCTION(BlueprintPure, Category = "Rules")
+	bool IsSettingsVisible() const;
 
 	/** The procedural terrain located at startup (source of paths / slots / tower location). */
 	UFUNCTION(BlueprintPure, Category = "Rules")
@@ -239,6 +257,9 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UTDEndScreenWidget> VictoryScreenWidget; // victory screen instance (may share EndScreenWidget if class not set)
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> SettingsWidget;
 
 	UPROPERTY()
 	TObjectPtr<UTDWarningBannerWidget> WarningBannerWidget;

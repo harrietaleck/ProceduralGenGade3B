@@ -7,6 +7,7 @@
 #include "HealthComponent.h"
 #include "Components/TextBlock.h"
 #include "Components/ProgressBar.h"
+#include "Components/Button.h"
 #include "TimerManager.h"
 
 void UTDHUDWidget::FlashLootInsufficient()
@@ -66,6 +67,19 @@ void UTDHUDWidget::InitializeHUD(ATDGameMode* InGameMode)
 		WaveManagerRef->OnWaveComplete.AddDynamic(this, &UTDHUDWidget::HandleWaveComplete);
 		WaveManagerRef->OnEnemiesRemainingChanged.AddDynamic(this, &UTDHUDWidget::HandleEnemiesRemainingChanged);
 		WaveManagerRef->OnVictory.AddDynamic(this, &UTDHUDWidget::HandleVictory);
+	}
+
+	if (!PauseButton)
+	{
+		PauseButton = Cast<UButton>(GetWidgetFromName(TEXT("PauseButton")));
+	}
+	if (!PauseButton)
+	{
+		PauseButton = Cast<UButton>(GetWidgetFromName(TEXT("SettingsButton")));
+	}
+	if (PauseButton)
+	{
+		PauseButton->OnClicked.AddDynamic(this, &UTDHUDWidget::HandlePauseClicked);
 	}
 
 	// One-time first paint so the HUD is correct immediately, before the first real event
@@ -180,6 +194,14 @@ void UTDHUDWidget::HandleVictory()
 		WaveStatusText->SetText(FText::FromString(TEXT("Victory")));
 	}
 	RefreshWaveCounter();
+}
+
+void UTDHUDWidget::HandlePauseClicked()
+{
+	if (GameMode)
+	{
+		GameMode->TogglePause();
+	}
 }
 
 void UTDHUDWidget::RefreshWaveCounter()

@@ -20,6 +20,7 @@
 #include "TDMetaProgressionSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "Blueprint/UserWidget.h"
+#include "Components/Button.h"
 #include "Widgets/Layout/Anchors.h"
 #include "EngineUtils.h"
 
@@ -50,6 +51,21 @@ ATDGameMode::ATDGameMode()
 void ATDGameMode::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Menu / start level is Blueprint-only (StartScreenLvl + StartScreen widget).
+	// Do not spawn match systems there — Play should Open Level to TowerDefense.
+	const FString LevelName = UGameplayStatics::GetCurrentLevelName(this, /*bRemovePrefixString=*/true);
+	if (LevelName.Contains(TEXT("StartScreen")))
+	{
+		if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+		{
+			PC->bShowMouseCursor = true;
+			FInputModeUIOnly InputMode;
+			InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+			PC->SetInputMode(InputMode);
+		}
+		return;
+	}
 
 	EnsureDefaultWidgetClasses();
 
@@ -178,6 +194,32 @@ void ATDGameMode::BeginPlay()
 			VictoryScreenWidget = EndScreenWidget; // same widget handles both
 		}
 
+		if (SettingsWidgetClass)
+		{
+			if (UUserWidget* Settings = CreateWidget<UUserWidget>(PC, SettingsWidgetClass))
+			{
+				SettingsWidget = Settings;
+				SettingsWidget->AddToViewport(120);
+				SettingsWidget->SetAnchorsInViewport(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+				SettingsWidget->SetAlignmentInViewport(FVector2D(0.0f, 0.0f));
+				SettingsWidget->SetVisibility(ESlateVisibility::Collapsed);
+
+				// Bind ResumeBTN when present (other settings controls stay in Blueprint).
+				auto BindResume = [this](const TCHAR* ButtonName)
+				{
+					if (!SettingsWidget)
+					{
+						return;
+					}
+					if (UButton* Btn = Cast<UButton>(SettingsWidget->GetWidgetFromName(ButtonName)))
+					{
+						Btn->OnClicked.AddDynamic(this, &ATDGameMode::ResumeFromSettings);
+					}
+				};
+				BindResume(TEXT("ResumeBTN"));
+			}
+		}
+
 		if (WaveManager && (EndScreenWidget || VictoryScreenWidget))
 		{
 			WaveManager->OnVictory.AddDynamic(this, &ATDGameMode::HandleMatchVictory);
@@ -235,6 +277,10 @@ void ATDGameMode::RestartGame()
 	{
 		VictoryScreenWidget->HideScreen();
 	}
+	if (SettingsWidget)
+	{
+		SettingsWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
 
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
 	{
@@ -251,13 +297,84 @@ void ATDGameMode::RestartGame()
 
 void ATDGameMode::TogglePause()
 {
-	if (bGameOver || IsVictory())
+	if (bGameOver || IsVictory() || bWaveResultsVisible)
 	{
 		return;
 	}
 
-	bPaused = !bPaused;
-	UGameplayStatics::SetGamePaused(this, bPaused);
+	if (bPaused || IsSettingsVisible())
+	{
+		ResumeFromSettings();
+	}
+	else
+	{
+		ShowSettings();
+	}
+}
+
+void ATDGameMode::ShowSettings()
+{
+	if (bGameOver || IsVictory() || bWaveResultsVisible)
+	{
+		return;
+	}
+
+	if (!SettingsWidget && SettingsWidgetClass)
+	{
+		if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+		{
+			SettingsWidget = CreateWidget<UUserWidget>(PC, SettingsWidgetClass);
+			if (SettingsWidget)
+			{
+				SettingsWidget->AddToViewport(120);
+				SettingsWidget->SetAnchorsInViewport(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+				SettingsWidget->SetAlignmentInViewport(FVector2D(0.0f, 0.0f));
+				if (UButton* ResumeBtn = Cast<UButton>(SettingsWidget->GetWidgetFromName(TEXT("ResumeBTN"))))
+				{
+					ResumeBtn->OnClicked.AddDynamic(this, &ATDGameMode::ResumeFromSettings);
+				}
+			}
+		}
+	}
+
+	if (!SettingsWidget)
+	{
+		// Soft-pause even without a widget so P still blocks placement.
+		bPaused = true;
+		return;
+	}
+
+	bPaused = true;
+	// Soft-pause only — SetGamePaused would open the engine pause menu.
+	SettingsWidget->SetVisibility(ESlateVisibility::Visible);
+
+	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+	{
+		FInputModeUIOnly InputMode;
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		InputMode.SetWidgetToFocus(SettingsWidget->TakeWidget());
+		PC->SetInputMode(InputMode);
+		PC->bShowMouseCursor = true;
+	}
+}
+
+void ATDGameMode::ResumeFromSettings()
+{
+	bPaused = false;
+	UGameplayStatics::SetGamePaused(this, false);
+
+	if (SettingsWidget)
+	{
+		SettingsWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	RestoreGameplayInput();
+}
+
+bool ATDGameMode::IsSettingsVisible() const
+{
+	return SettingsWidget
+		&& SettingsWidget->GetVisibility() == ESlateVisibility::Visible;
 }
 
 AProceduralTerrain* ATDGameMode::FindTerrain() const
@@ -590,6 +707,18 @@ void ATDGameMode::EnsureDefaultWidgetClasses()
 		{
 			VictoryScreenWidgetClass = EndScreenWidgetClass;
 			UE_LOG(LogTemp, Warning, TEXT("TDGameMode: VictoryScreen is not a TDEndScreenWidget child — reusing EndScreenWidgetClass for wave results."));
+		}
+	}
+
+	if (!SettingsWidgetClass)
+	{
+		if (UClass* FoundSettings = LoadClass<UUserWidget>(nullptr, TEXT("/Game/UI/ScreenWidgets/SettingScreen.SettingScreen_C")))
+		{
+			SettingsWidgetClass = FoundSettings;
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("TDGameMode: SettingScreen Blueprint not found — pause will not show settings UI."));
 		}
 	}
 }
