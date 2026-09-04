@@ -191,6 +191,12 @@ public:
 	/** Called by an enemy when it dies: award its bounty. */
 	void NotifyEnemyKilled(AEnemy* DeadEnemy);
 
+	/** Count a successful hit on an enemy (tower / defender / projectile). */
+	void NotifyEnemyHit();
+
+	/** Count a defender that was successfully placed this match. */
+	void NotifyDefenderPlaced();
+
 	/** Called by the tower when it dies: end the game. */
 	void NotifyTowerDestroyed();
 
@@ -271,6 +277,10 @@ private:
 
 	int32 BeamUpgradeLevel = 0;
 	float BaseTowerAttackDamage = 0.0f;
+
+	int32 MatchDefendersPlaced = 0;
+	int32 MatchHitsLanded = 0;
+	int32 MatchEnemiesKilled = 0;
 
 	void EnsureStartingMetaWallet();
 

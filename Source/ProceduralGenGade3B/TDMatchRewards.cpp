@@ -63,7 +63,11 @@ FMatchResult UTDMatchRewards::BuildMatchResult(
 	float TowerCurrentHealth,
 	float TowerMaxHealth,
 	int32 WavesCleared,
-	int32 TotalWaves)
+	int32 TotalWaves,
+	int32 DefendersPlaced,
+	int32 HitsLanded,
+	int32 EnemiesKilled,
+	int32 SurvivingDefenders)
 {
 	FMatchResult Result;
 	Result.bVictory = bVictory;
@@ -77,11 +81,19 @@ FMatchResult UTDMatchRewards::BuildMatchResult(
 	const int32 WaveBonus = FMath::Max(0, WavesCleared);
 	Result.WavesCleared = WaveBonus;
 	Result.TotalWaves = TotalWaves;
+	Result.DefendersPlaced = FMath::Max(0, DefendersPlaced);
+	Result.HitsLanded = FMath::Max(0, HitsLanded);
+	Result.EnemiesKilled = FMath::Max(0, EnemiesKilled);
+	Result.SurvivingDefenders = FMath::Max(0, SurvivingDefenders);
+
+	// Score = defenders(10) + hits(30) + kills(20) + surviving defenders(5)
+	Result.Score =
+		(Result.DefendersPlaced * 10)
+		+ (Result.HitsLanded * 30)
+		+ (Result.EnemiesKilled * 20)
+		+ (Result.SurvivingDefenders * 5);
 
 	const float TierMult = TierMultiplier(Result.BeamTier);
-	Result.Score = ScaleReward(WaveBonus * 180, 1.0f, bVictory)
-		+ ScaleReward(Result.TowerBeamHealthPercent * 12, 1.0f, bVictory)
-		+ (bVictory ? 400 : 0);
 
 	FMetaCurrencyRewards Base;
 	Base.ForestEssence = 90 + WaveBonus * 18;

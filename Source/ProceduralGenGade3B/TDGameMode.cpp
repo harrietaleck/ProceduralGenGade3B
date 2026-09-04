@@ -55,6 +55,10 @@ void ATDGameMode::BeginPlay()
 
 	EnsureStartingMetaWallet();
 
+	MatchDefendersPlaced = 0;
+	MatchHitsLanded = 0;
+	MatchEnemiesKilled = 0;
+
 	// Seed the economy.
 	Resources = StartingResources;
 	OnResourcesChanged.Broadcast(Resources);
@@ -214,6 +218,9 @@ void ATDGameMode::RestartGame()
 	bPaused = false;
 	bGameOver = false;
 	BeamUpgradeLevel = 0;
+	MatchDefendersPlaced = 0;
+	MatchHitsLanded = 0;
+	MatchEnemiesKilled = 0;
 	UGameplayStatics::SetGamePaused(this, false);
 
 	if (EndScreenWidget)
@@ -456,10 +463,21 @@ bool ATDGameMode::TrySpendResources(int32 Amount)
 
 void ATDGameMode::NotifyEnemyKilled(AEnemy* DeadEnemy)
 {
+	++MatchEnemiesKilled;
 	if (DeadEnemy)
 	{
 		AddResources(DeadEnemy->ResourceReward);
 	}
+}
+
+void ATDGameMode::NotifyEnemyHit()
+{
+	++MatchHitsLanded;
+}
+
+void ATDGameMode::NotifyDefenderPlaced()
+{
+	++MatchDefendersPlaced;
 }
 
 void ATDGameMode::EnsureDefaultWidgetClasses()
@@ -665,13 +683,29 @@ void ATDGameMode::FinalizeMatchResult(bool bVictory)
 		TowerMaxHealth = Tower->HealthComponent->MaxHealth;
 	}
 
+	int32 SurvivingDefenders = 0;
+	for (TActorIterator<ADefender> It(GetWorld()); It; ++It)
+	{
+		const ADefender* Defender = *It;
+		if (Defender && Defender->HealthComponent && !Defender->HealthComponent->IsDead())
+		{
+			++SurvivingDefenders;
+		}
+	}
+
+	const FMetaCurrencyRewards WalletBeforePayout = GetMetaWallet();
+
 	LastMatchResult = UTDMatchRewards::BuildMatchResult(
 		bVictory,
 		TowerHealth,
 		TowerMaxHealth,
 		WavesCleared,
-		TotalWaves);
-	LastMatchResult.Wallet = GetMetaWallet();
+		TotalWaves,
+		MatchDefendersPlaced,
+		MatchHitsLanded,
+		MatchEnemiesKilled,
+		SurvivingDefenders);
+	LastMatchResult.Wallet = WalletBeforePayout;
 
 	if (UGameInstance* GI = GetGameInstance())
 	{
@@ -705,11 +739,11 @@ void ATDGameMode::ShowEndScreen(bool bVictory)
 
 	if (bVictory)
 	{
-		TargetWidget->ShowVictory();
+		TargetWidget->PresentMatchResult(true, LastMatchResult);
 	}
 	else
 	{
-		TargetWidget->ShowGameOver();
+		TargetWidget->PresentMatchResult(false, LastMatchResult);
 	}
 }
 

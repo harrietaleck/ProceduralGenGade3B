@@ -10,6 +10,7 @@
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Image.h"
+#include "Components/OverlaySlot.h"
 #include "Components/ScaleBox.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
@@ -109,7 +110,19 @@ void UTDEndScreenWidget::NativeConstruct()
 
 void UTDEndScreenWidget::EnsureFallbackLayout()
 {
-	if (bBuiltFallbackLayout || RootCanvas)
+	// Never destroy a designer Widget Blueprint tree. Only build C++ chrome when the
+	// widget has no root at all (pure C++ UTDEndScreenWidget with no Blueprint child).
+	if (bBuiltFallbackLayout)
+	{
+		return;
+	}
+
+	if (!RootCanvas)
+	{
+		RootCanvas = Cast<UCanvasPanel>(GetRootWidget());
+	}
+
+	if (RootCanvas || GetRootWidget())
 	{
 		return;
 	}
@@ -180,12 +193,12 @@ void UTDEndScreenWidget::EnsureFallbackLayout()
 	NextWaveButton->OnClicked.AddDynamic(this, &UTDEndScreenWidget::OnNextWaveClicked);
 	MainMenuButton->OnClicked.AddDynamic(this, &UTDEndScreenWidget::OnMainMenuClicked);
 
-	auto AddRow = [Layout](UWidget* Child, float Top = 8.0f)
+	auto AddRow = [Layout](UWidget* Child, float Top = 8.0f, EHorizontalAlignment HAlign = HAlign_Center)
 	{
 		if (UVerticalBoxSlot* Slot = Layout->AddChildToVerticalBox(Child))
 		{
 			Slot->SetPadding(FMargin(0.0f, Top, 0.0f, 0.0f));
-			Slot->SetHorizontalAlignment(HAlign_Fill);
+			Slot->SetHorizontalAlignment(HAlign);
 		}
 	};
 	AddRow(TitleText, 0.0f);
@@ -193,8 +206,8 @@ void UTDEndScreenWidget::EnsureFallbackLayout()
 	AddRow(ScoreHeader, 14.0f);
 	AddRow(ScoreValueText, 2.0f);
 	AddRow(RewardsHeader, 12.0f);
-	AddRow(RewardRow, 4.0f);
-	AddRow(ButtonRow, 16.0f);
+	AddRow(RewardRow, 4.0f, HAlign_Fill);
+	AddRow(ButtonRow, 16.0f, HAlign_Fill);
 
 	PanelBorder->SetContent(Layout);
 	ScreenScaleBox->SetContent(PanelSize);
@@ -222,6 +235,138 @@ namespace
 			CanvasSlot->SetOffsets(FMargin(0.0f));
 			CanvasSlot->SetAlignment(FVector2D(0.5f, 0.5f));
 			CanvasSlot->SetAutoSize(false);
+		}
+	}
+
+	static bool IsInLayoutBox(UWidget* Widget)
+	{
+		if (!Widget || !Widget->Slot)
+		{
+			return false;
+		}
+		return Cast<UVerticalBoxSlot>(Widget->Slot)
+			|| Cast<UHorizontalBoxSlot>(Widget->Slot)
+			|| Cast<UOverlaySlot>(Widget->Slot);
+	}
+
+	static void HideIfCanvasFloater(UWidget* Widget)
+	{
+		if (Widget && Cast<UCanvasPanelSlot>(Widget->Slot) && !IsInLayoutBox(Widget))
+		{
+			Widget->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+
+	static void StyleRewardNumber(UTextBlock* Text)
+	{
+		if (!Text)
+		{
+			return;
+		}
+		FSlateFontInfo Font = Text->GetFont();
+		Font.Size = 30;
+		Text->SetFont(Font);
+		Text->SetColorAndOpacity(FLinearColor(1.0f, 0.95f, 0.78f));
+		Text->SetJustification(ETextJustify::Center);
+		Text->SetShadowOffset(FVector2D(2.0f, 2.0f));
+		Text->SetShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.85f));
+		Text->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+
+	/** Place one reward number centered under its icon box (matches the framed art). */
+	static void PlaceNumberUnderIcon(
+		UUserWidget* Owner,
+		UWidgetTree* Tree,
+		UCanvasPanel* Canvas,
+		TObjectPtr<UTextBlock>& Member,
+		const TCHAR* Name,
+		float AnchorX,
+		float AnchorY)
+	{
+		if (!Owner || !Tree || !Canvas)
+		{
+			return;
+		}
+
+		UTextBlock* Text = Cast<UTextBlock>(Owner->GetWidgetFromName(Name));
+		if (!Text)
+		{
+			Text = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), Name);
+			Canvas->AddChildToCanvas(Text);
+		}
+
+		// If it was parented into the old HorizontalBox row, move it back onto the root canvas.
+		if (Text->GetParent() != Canvas)
+		{
+			Canvas->AddChildToCanvas(Text);
+		}
+
+		StyleRewardNumber(Text);
+
+		if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Text->Slot))
+		{
+			Slot->SetAnchors(FAnchors(AnchorX, AnchorY));
+			Slot->SetAlignment(FVector2D(0.5f, 0.0f)); // top-center of text sits just under the icon
+			Slot->SetAutoSize(true);
+			Slot->SetZOrder(50);
+			Slot->SetOffsets(FMargin(0.0f, 2.0f, 0.0f, 0.0f));
+		}
+
+		Member = Text;
+	}
+
+	static void EnsureRewardNumbersUnderIcons(
+		UUserWidget* Owner,
+		UWidgetTree* Tree,
+		UCanvasPanel* Canvas,
+		TObjectPtr<UTextBlock>& Essence,
+		TObjectPtr<UTextBlock>& Wood,
+		TObjectPtr<UTextBlock>& Gems,
+		TObjectPtr<UTextBlock>& Lanterns)
+	{
+		if (!Owner || !Tree || !Canvas)
+		{
+			return;
+		}
+
+		// Collapse legacy ResultRewardRow if present.
+		if (UWidget* OldRow = Owner->GetWidgetFromName(TEXT("ResultRewardRow")))
+		{
+			OldRow->SetVisibility(ESlateVisibility::Collapsed);
+		}
+
+		// Reward icon centers on Gameover-image (1920x1080): leaf/logs/gems/sun.
+		PlaceNumberUnderIcon(Owner, Tree, Canvas, Essence, TEXT("ResultReward_Essence"), 0.368f, 0.595f);
+		PlaceNumberUnderIcon(Owner, Tree, Canvas, Wood, TEXT("ResultReward_Wood"), 0.451f, 0.595f);
+		PlaceNumberUnderIcon(Owner, Tree, Canvas, Gems, TEXT("ResultReward_Gems"), 0.534f, 0.595f);
+		PlaceNumberUnderIcon(Owner, Tree, Canvas, Lanterns, TEXT("ResultReward_Lanterns"), 0.607f, 0.595f);
+	}
+
+	static void CenterScoreAcrossPanel(UTextBlock* Text)
+	{
+		if (!Text)
+		{
+			return;
+		}
+
+		Text->SetJustification(ETextJustify::Center);
+		Text->SetAutoWrapText(false);
+
+		if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Text->Slot))
+		{
+			const FAnchors OldAnchors = CanvasSlot->GetAnchors();
+			const float Y0 = OldAnchors.Minimum.Y;
+			const float Y1 = OldAnchors.Maximum.Y;
+			CanvasSlot->SetAnchors(FAnchors(0.0f, Y0, 1.0f, Y1));
+			const FMargin OldOffsets = CanvasSlot->GetOffsets();
+			CanvasSlot->SetOffsets(FMargin(0.0f, OldOffsets.Top, 0.0f, OldOffsets.Bottom));
+			CanvasSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+			CanvasSlot->SetAutoSize(false);
+		}
+		else if (UVerticalBoxSlot* VertSlot = Cast<UVerticalBoxSlot>(Text->Slot))
+		{
+			VertSlot->SetHorizontalAlignment(HAlign_Fill);
+			VertSlot->SetVerticalAlignment(VAlign_Center);
 		}
 	}
 
@@ -366,9 +511,25 @@ void UTDEndScreenWidget::ResolveOptionalWidgetBindings()
 
 	ResolveText(ScoreValueText, TEXT("ScoreValueText"), TEXT("Score"));
 	ResolveText(ForestEssenceText, TEXT("ForestEssenceText"), TEXT("forestScore"));
+	if (!ForestEssenceText)
+	{
+		ForestEssenceText = Cast<UTextBlock>(GetWidgetFromName(TEXT("EssenceText")));
+	}
 	ResolveText(WoodenMightText, TEXT("WoodenMightText"), TEXT("WoodScore"));
+	if (!WoodenMightText)
+	{
+		WoodenMightText = Cast<UTextBlock>(GetWidgetFromName(TEXT("WoodText")));
+	}
 	ResolveText(GemStonesText, TEXT("GemStonesText"), TEXT("GemScore"));
+	if (!GemStonesText)
+	{
+		GemStonesText = Cast<UTextBlock>(GetWidgetFromName(TEXT("GemsText")));
+	}
 	ResolveText(LightLanternsText, TEXT("LightLanternsText"), TEXT("LightScore"));
+	if (!LightLanternsText)
+	{
+		LightLanternsText = Cast<UTextBlock>(GetWidgetFromName(TEXT("LanternsText")));
+	}
 	ResolveText(BeamHealthText, TEXT("BeamHealthText"));
 	ResolveText(TierText, TEXT("TierText"));
 	ResolveText(WavesText, TEXT("WavesText"));
@@ -381,122 +542,129 @@ void UTDEndScreenWidget::EnsureResultTextWidgets()
 	if (!Canvas)
 	{
 		Canvas = Cast<UCanvasPanel>(GetRootWidget());
+		RootCanvas = Canvas;
 	}
 	if (!Canvas && DefeatBackground)
 	{
 		Canvas = Cast<UCanvasPanel>(DefeatBackground->GetParent());
+		RootCanvas = Canvas;
 	}
 	if (!Canvas || !WidgetTree)
 	{
 		return;
 	}
 
-	auto StyleResultText = [](UTextBlock* Text, int32 FontSize)
+	// Hide duplicate Blueprint reward text so runtime labels own the values.
+	static const TCHAR* HideNames[] = {
+		TEXT("ForestEssenceText"), TEXT("ForestEssenceText_1"),
+		TEXT("WoodenMightText"), TEXT("WoodenMightText_1"),
+		TEXT("GemStonesText"), TEXT("GemStonesText_1"),
+		TEXT("LightLanternsText"), TEXT("LightLanternsText_1"),
+		TEXT("ResultOverlay_Score"), TEXT("ResultOverlay_Essence"),
+		TEXT("ResultOverlay_Wood"), TEXT("ResultOverlay_Gems"), TEXT("ResultOverlay_Lanterns")
+	};
+	for (const TCHAR* Name : HideNames)
+	{
+		if (UWidget* W = GetWidgetFromName(Name))
+		{
+			W->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+
+	ForestEssenceText = nullptr;
+	WoodenMightText = nullptr;
+	GemStonesText = nullptr;
+	LightLanternsText = nullptr;
+
+	EnsureRewardNumbersUnderIcons(
+		this,
+		WidgetTree,
+		Canvas,
+		ForestEssenceText,
+		WoodenMightText,
+		GemStonesText,
+		LightLanternsText);
+}
+
+void UTDEndScreenWidget::LayoutDefeatResultWidgets()
+{
+	CenterScoreAcrossPanel(ScoreValueText);
+
+	if (UWidget* OldRow = GetWidgetFromName(TEXT("ResultRewardRow")))
+	{
+		OldRow->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	// Re-pin each value under its icon (leaf / logs / gems / sun).
+	auto PinUnderIcon = [](UTextBlock* Text, float AnchorX, float AnchorY)
 	{
 		if (!Text)
 		{
 			return;
 		}
-		FSlateFontInfo Font = Text->GetFont();
-		Font.Size = FontSize;
-		Text->SetFont(Font);
-		Text->SetColorAndOpacity(FLinearColor(1.0f, 0.95f, 0.75f));
 		Text->SetJustification(ETextJustify::Center);
-		Text->SetShadowOffset(FVector2D(1.5f, 1.5f));
-		Text->SetShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.8f));
 		Text->SetVisibility(ESlateVisibility::HitTestInvisible);
-	};
-
-	auto EnsureText = [&](TObjectPtr<UTextBlock>& Member, const TCHAR* Name, int32 FontSize) -> UTextBlock*
-	{
-		if (!Member)
+		if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Text->Slot))
 		{
-			Member = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), Name);
-			if (UCanvasPanelSlot* Slot = Canvas->AddChildToCanvas(Member))
-			{
-				Slot->SetAutoSize(true);
-				Slot->SetZOrder(20);
-			}
+			Slot->SetAnchors(FAnchors(AnchorX, AnchorY));
+			Slot->SetAlignment(FVector2D(0.5f, 0.0f));
+			Slot->SetAutoSize(true);
+			Slot->SetZOrder(50);
+			Slot->SetOffsets(FMargin(0.0f, 2.0f, 0.0f, 0.0f));
 		}
-		StyleResultText(Member, FontSize);
-		return Member;
 	};
 
-	EnsureText(ScoreValueText, TEXT("ScoreValueText"), 42);
-	EnsureText(ForestEssenceText, TEXT("ForestEssenceText"), 24);
-	EnsureText(WoodenMightText, TEXT("WoodenMightText"), 24);
-	EnsureText(GemStonesText, TEXT("GemStonesText"), 24);
-	EnsureText(LightLanternsText, TEXT("LightLanternsText"), 24);
-}
-
-void UTDEndScreenWidget::LayoutDefeatResultWidgets()
-{
-	if (bBuiltFallbackLayout)
-	{
-		return;
-	}
-
-	// Place score + HUD currencies on the defeat art panel (normalized canvas anchors).
-	PositionTextOnCanvas(ScoreValueText, 0.50f, 0.38f);
-	PositionTextOnCanvas(ForestEssenceText, 0.20f, 0.56f);
-	PositionTextOnCanvas(WoodenMightText, 0.40f, 0.56f);
-	PositionTextOnCanvas(GemStonesText, 0.60f, 0.56f);
-	PositionTextOnCanvas(LightLanternsText, 0.80f, 0.56f);
-	PositionTextOnCanvas(BeamHealthText, 0.50f, 0.46f);
-	PositionTextOnCanvas(TierText, 0.50f, 0.50f);
-	PositionTextOnCanvas(WavesText, 0.50f, 0.32f);
+	PinUnderIcon(ForestEssenceText, 0.368f, 0.595f);
+	PinUnderIcon(WoodenMightText, 0.451f, 0.595f);
+	PinUnderIcon(GemStonesText, 0.534f, 0.595f);
+	PinUnderIcon(LightLanternsText, 0.607f, 0.595f);
 }
 
 void UTDEndScreenWidget::ApplyMatchResultToWidgets(const FMatchResult& Result)
 {
-	const FMetaCurrencyRewards Shown = Result.Wallet;
+	// Prefer match rewards earned this run; fall back to wallet if rewards are empty.
+	FMetaCurrencyRewards Shown = Result.Rewards;
+	const bool bRewardsEmpty = Shown.ForestEssence == 0
+		&& Shown.WoodenMight == 0
+		&& Shown.GemStones == 0
+		&& Shown.LightLanterns == 0;
+	if (bRewardsEmpty)
+	{
+		Shown = Result.Wallet;
+	}
 
-	if (ScoreValueText)
+	auto SetCenteredNumber = [this](UTextBlock* Text, int32 Value)
 	{
-		ScoreValueText->SetText(FText::FromString(FString::Printf(TEXT("SCORE  %d"), Result.Score)));
-		ScoreValueText->SetVisibility(ESlateVisibility::HitTestInvisible);
-	}
-	if (ForestEssenceText)
-	{
-		ForestEssenceText->SetText(FText::FromString(FString::Printf(TEXT("Essence  %d"), Shown.ForestEssence)));
-		ForestEssenceText->SetVisibility(ESlateVisibility::HitTestInvisible);
-	}
-	if (WoodenMightText)
-	{
-		WoodenMightText->SetText(FText::FromString(FString::Printf(TEXT("Wood  %d"), Shown.WoodenMight)));
-		WoodenMightText->SetVisibility(ESlateVisibility::HitTestInvisible);
-	}
-	if (GemStonesText)
-	{
-		GemStonesText->SetText(FText::FromString(FString::Printf(TEXT("Gems  %d"), Shown.GemStones)));
-		GemStonesText->SetVisibility(ESlateVisibility::HitTestInvisible);
-	}
-	if (LightLanternsText)
-	{
-		LightLanternsText->SetText(FText::FromString(FString::Printf(TEXT("Lanterns  %d"), Shown.LightLanterns)));
-		LightLanternsText->SetVisibility(ESlateVisibility::HitTestInvisible);
-	}
+		if (!Text)
+		{
+			return;
+		}
+		Text->SetText(FText::FromString(FString::FromInt(Value)));
+		Text->SetVisibility(ESlateVisibility::HitTestInvisible);
+		Text->SetJustification(ETextJustify::Center);
+		if (Text == ScoreValueText)
+		{
+			CenterScoreAcrossPanel(Text);
+		}
+	};
+
+	SetCenteredNumber(ScoreValueText, Result.Score);
+	SetCenteredNumber(ForestEssenceText, Shown.ForestEssence);
+	SetCenteredNumber(WoodenMightText, Shown.WoodenMight);
+	SetCenteredNumber(GemStonesText, Shown.GemStones);
+	SetCenteredNumber(LightLanternsText, Shown.LightLanterns);
+
 	if (BeamHealthText)
 	{
-		BeamHealthText->SetText(FText::Format(
-			INVTEXT("Beam Health: {0}%"),
-			FText::AsNumber(Result.TowerBeamHealthPercent)));
-		BeamHealthText->SetVisibility(ESlateVisibility::HitTestInvisible);
+		BeamHealthText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (TierText)
 	{
-		TierText->SetText(FText::Format(
-			INVTEXT("Tier: {0}"),
-			FText::FromString(BeamTierLabel(Result.BeamTier))));
-		TierText->SetVisibility(ESlateVisibility::HitTestInvisible);
+		TierText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (WavesText)
 	{
-		WavesText->SetText(FText::Format(
-			INVTEXT("Waves: {0} / {1}"),
-			FText::AsNumber(Result.WavesCleared),
-			FText::AsNumber(Result.TotalWaves)));
-		WavesText->SetVisibility(ESlateVisibility::HitTestInvisible);
+		WavesText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 }
 
@@ -638,11 +806,7 @@ void UTDEndScreenWidget::PresentMatchResult(bool bVictory, const FMatchResult& R
 	ApplyTheme(bVictory, Result.BeamTier);
 	ApplyTierTypography(Result);
 	ApplyMatchResultToWidgets(Result);
-
-	if (!bVictory)
-	{
-		LayoutDefeatResultWidgets();
-	}
+	LayoutDefeatResultWidgets();
 
 	SetVisibility(ESlateVisibility::Visible);
 	OnMatchResultPresented(bVictory, Result);
@@ -650,26 +814,28 @@ void UTDEndScreenWidget::PresentMatchResult(bool bVictory, const FMatchResult& R
 
 void UTDEndScreenWidget::ShowGameOver()
 {
-	if (ATDGameMode* GameMode = Cast<ATDGameMode>(UGameplayStatics::GetGameMode(this)))
+	FMatchResult Result;
+	if (UWorld* World = GetWorld())
 	{
-		PresentMatchResult(false, GameMode->GetLastMatchResult());
+		if (ATDGameMode* GameMode = World->GetAuthGameMode<ATDGameMode>())
+		{
+			Result = GameMode->GetLastMatchResult();
+		}
 	}
-	else
-	{
-		PresentMatchResult(false, FMatchResult());
-	}
+	PresentMatchResult(false, Result);
 }
 
 void UTDEndScreenWidget::ShowVictory()
 {
-	if (ATDGameMode* GameMode = Cast<ATDGameMode>(UGameplayStatics::GetGameMode(this)))
+	FMatchResult Result;
+	if (UWorld* World = GetWorld())
 	{
-		PresentMatchResult(true, GameMode->GetLastMatchResult());
+		if (ATDGameMode* GameMode = World->GetAuthGameMode<ATDGameMode>())
+		{
+			Result = GameMode->GetLastMatchResult();
+		}
 	}
-	else
-	{
-		PresentMatchResult(true, FMatchResult());
-	}
+	PresentMatchResult(true, Result);
 }
 
 void UTDEndScreenWidget::HideScreen()

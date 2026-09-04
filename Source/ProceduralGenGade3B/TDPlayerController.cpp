@@ -166,6 +166,7 @@ void ATDPlayerController::OnPlaceDefenderClicked()
 	{
 		GameMode->TrySpendResources(Cost);
 		GameMode->TrySpendMeta(MetaCost);
+		GameMode->NotifyDefenderPlaced();
 		NewDefender->SetOccupiedSlot(SlotLocation);
 		if (AProceduralTerrain* Terrain = GameMode->GetTerrain())
 		{

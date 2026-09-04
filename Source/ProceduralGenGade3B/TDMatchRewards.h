@@ -62,6 +62,18 @@ struct FMatchResult
 	int32 TotalWaves = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Match")
+	int32 DefendersPlaced = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Match")
+	int32 HitsLanded = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Match")
+	int32 EnemiesKilled = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Match")
+	int32 SurvivingDefenders = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Match")
 	EBeamHealthTier BeamTier = EBeamHealthTier::Fragile;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Match")
@@ -93,5 +105,9 @@ public:
 		float TowerCurrentHealth,
 		float TowerMaxHealth,
 		int32 WavesCleared,
-		int32 TotalWaves);
+		int32 TotalWaves,
+		int32 DefendersPlaced = 0,
+		int32 HitsLanded = 0,
+		int32 EnemiesKilled = 0,
+		int32 SurvivingDefenders = 0);
 };
