@@ -18,11 +18,14 @@
 #include "HeroCharacter.h"
 #include "TDMatchRewards.h"
 #include "TDMetaProgressionSubsystem.h"
+#include "TDMenuFunctionLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Components/Button.h"
 #include "Widgets/Layout/Anchors.h"
 #include "EngineUtils.h"
+#include "TimerManager.h"
 
 ATDGameMode::ATDGameMode()
 {
@@ -63,6 +66,55 @@ void ATDGameMode::BeginPlay()
 			FInputModeUIOnly InputMode;
 			InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
 			PC->SetInputMode(InputMode);
+		}
+
+		// Keep stretching menu widgets (Start / Upgrades / Defenders / Settings) while on this
+		// level — Upgrades and Store are created later when their buttons are pressed.
+		if (UWorld* World = GetWorld())
+		{
+			TWeakObjectPtr<ATDGameMode> WeakThis(this);
+			World->GetTimerManager().SetTimer(
+				MenuStretchTimerHandle,
+				FTimerDelegate::CreateLambda([WeakThis, World]()
+				{
+					if (!WeakThis.IsValid() || !IsValid(World))
+					{
+						return;
+					}
+
+					UTDMenuFunctionLibrary::StretchOpenMenuScreens(World);
+
+					// Ensure StartScreen exists if the level BP has not created it yet.
+					TArray<UUserWidget*> MenuWidgets;
+					UWidgetBlueprintLibrary::GetAllWidgetsOfClass(
+						World, MenuWidgets, UUserWidget::StaticClass(), true);
+					bool bHasStart = false;
+					for (UUserWidget* Widget : MenuWidgets)
+					{
+						if (Widget && Widget->GetClass()->GetName().Contains(TEXT("StartScreen")))
+						{
+							bHasStart = true;
+							break;
+						}
+					}
+					if (!bHasStart)
+					{
+						if (UClass* StartClass = LoadClass<UUserWidget>(
+							nullptr, TEXT("/Game/UI/ScreenWidgets/StartScreen.StartScreen_C")))
+						{
+							if (APlayerController* PC = World->GetFirstPlayerController())
+							{
+								if (UUserWidget* StartWidget = CreateWidget<UUserWidget>(PC, StartClass))
+								{
+									StartWidget->AddToViewport(100);
+									UTDMenuFunctionLibrary::StretchWidgetToFillScreen(StartWidget);
+								}
+							}
+						}
+					}
+				}),
+				0.15f,
+				/*bLoop=*/true);
 		}
 		return;
 	}
@@ -199,9 +251,8 @@ void ATDGameMode::BeginPlay()
 			if (UUserWidget* Settings = CreateWidget<UUserWidget>(PC, SettingsWidgetClass))
 			{
 				SettingsWidget = Settings;
-				SettingsWidget->AddToViewport(120);
-				SettingsWidget->SetAnchorsInViewport(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
-				SettingsWidget->SetAlignmentInViewport(FVector2D(0.0f, 0.0f));
+				SettingsWidget->AddToViewport(150);
+				UTDMenuFunctionLibrary::StretchWidgetToFillScreen(SettingsWidget, /*bCaptureMouseFocus=*/false);
 				SettingsWidget->SetVisibility(ESlateVisibility::Collapsed);
 
 				// Bind ResumeBTN when present (other settings controls stay in Blueprint).
@@ -217,6 +268,7 @@ void ATDGameMode::BeginPlay()
 					}
 				};
 				BindResume(TEXT("ResumeBTN"));
+				BindResume(TEXT("ExitResumeBTN"));
 			}
 		}
 
@@ -232,6 +284,11 @@ void ATDGameMode::BeginPlay()
 		}
 
 		RefreshMetaHUD();
+
+		// Match starts in GameAndUI so WASD / placement work after leaving the Start menu
+		// (menu levels force UIOnly). Never leave the player stuck in UI-only focus.
+		bPaused = false;
+		RestoreGameplayInput();
 	}
 }
 
@@ -326,13 +383,16 @@ void ATDGameMode::ShowSettings()
 			SettingsWidget = CreateWidget<UUserWidget>(PC, SettingsWidgetClass);
 			if (SettingsWidget)
 			{
-				SettingsWidget->AddToViewport(120);
-				SettingsWidget->SetAnchorsInViewport(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
-				SettingsWidget->SetAlignmentInViewport(FVector2D(0.0f, 0.0f));
-				if (UButton* ResumeBtn = Cast<UButton>(SettingsWidget->GetWidgetFromName(TEXT("ResumeBTN"))))
+				SettingsWidget->AddToViewport(150);
+				auto BindResume = [this](const TCHAR* ButtonName)
 				{
-					ResumeBtn->OnClicked.AddDynamic(this, &ATDGameMode::ResumeFromSettings);
-				}
+					if (UButton* ResumeBtn = Cast<UButton>(SettingsWidget->GetWidgetFromName(ButtonName)))
+					{
+						ResumeBtn->OnClicked.AddDynamic(this, &ATDGameMode::ResumeFromSettings);
+					}
+				};
+				BindResume(TEXT("ResumeBTN"));
+				BindResume(TEXT("ExitResumeBTN"));
 			}
 		}
 	}
@@ -346,13 +406,16 @@ void ATDGameMode::ShowSettings()
 
 	bPaused = true;
 	// Soft-pause only — SetGamePaused would open the engine pause menu.
+	UTDMenuFunctionLibrary::StretchWidgetToFillScreen(SettingsWidget, /*bCaptureMouseFocus=*/false);
 	SettingsWidget->SetVisibility(ESlateVisibility::Visible);
 
+	// GameAndUI (not UIOnly): UIOnly disables PlayerController binds (P / click place) and
+	// SetWidgetToFocus fails on non-focusable SettingScreen, leaving the match unrecoverable.
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
 	{
-		FInputModeUIOnly InputMode;
+		FInputModeGameAndUI InputMode;
 		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-		InputMode.SetWidgetToFocus(SettingsWidget->TakeWidget());
+		InputMode.SetHideCursorDuringCapture(false);
 		PC->SetInputMode(InputMode);
 		PC->bShowMouseCursor = true;
 	}
@@ -653,16 +716,19 @@ void ATDGameMode::NotifyEnemyKilled(AEnemy* DeadEnemy)
 	{
 		AddResources(DeadEnemy->ResourceReward);
 	}
+	RefreshMetaHUD();
 }
 
 void ATDGameMode::NotifyEnemyHit()
 {
 	++MatchHitsLanded;
+	RefreshMetaHUD();
 }
 
 void ATDGameMode::NotifyDefenderPlaced()
 {
 	++MatchDefendersPlaced;
+	RefreshMetaHUD();
 }
 
 void ATDGameMode::EnsureDefaultWidgetClasses()
@@ -822,6 +888,27 @@ bool ATDGameMode::TryUpgradeTowerBeam()
 	return true;
 }
 
+int32 ATDGameMode::GetLiveMatchScore() const
+{
+	int32 SurvivingDefenders = 0;
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<ADefender> It(World); It; ++It)
+		{
+			const ADefender* Defender = *It;
+			if (Defender && Defender->HealthComponent && !Defender->HealthComponent->IsDead())
+			{
+				++SurvivingDefenders;
+			}
+		}
+	}
+
+	return (MatchDefendersPlaced * 10)
+		+ (MatchHitsLanded * 30)
+		+ (MatchEnemiesKilled * 20)
+		+ (SurvivingDefenders * 5);
+}
+
 void ATDGameMode::RefreshMetaHUD() const
 {
 	if (!MatchHUDWidget)
@@ -937,10 +1024,13 @@ void ATDGameMode::ShowEndScreen(bool bVictory)
 	bPaused = true;
 	bWaveResultsVisible = true;
 
+	// Keep GameAndUI so result buttons (Next Wave / Retry) and P still receive input.
+	// UIOnly was trapping players when focus failed on non-focusable end-screen widgets.
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
 	{
-		FInputModeUIOnly InputMode;
+		FInputModeGameAndUI InputMode;
 		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		InputMode.SetHideCursorDuringCapture(false);
 		PC->SetInputMode(InputMode);
 		PC->bShowMouseCursor = true;
 	}

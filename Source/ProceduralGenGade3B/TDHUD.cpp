@@ -35,6 +35,13 @@ void ATDHUD::DrawHUD()
 		return;
 	}
 
+	// Hide match HUD chrome on the Blueprint start/menu level.
+	const FString LevelName = GetWorld()->GetMapName();
+	if (LevelName.Contains(TEXT("StartScreen")))
+	{
+		return;
+	}
+
 	DrawInfoPanel(GameMode);
 	DrawDefenderHealthBars();
 	DrawEnemyHealthBars();

@@ -2,6 +2,7 @@
 
 #include "HeroCharacter.h"
 #include "ProceduralTerrain.h"
+#include "TDGameMode.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -208,6 +209,15 @@ void AHeroCharacter::UpdateWalk()
 	if (!PC)
 	{
 		return;
+	}
+
+	// Soft-pause / results / game-over: don't walk while menus own the screen.
+	if (const ATDGameMode* GameMode = PC->GetWorld() ? PC->GetWorld()->GetAuthGameMode<ATDGameMode>() : nullptr)
+	{
+		if (GameMode->IsInteractionBlocked())
+		{
+			return;
+		}
 	}
 
 	float Forward = 0.0f;

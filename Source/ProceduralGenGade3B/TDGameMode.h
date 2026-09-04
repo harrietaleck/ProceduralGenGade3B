@@ -200,6 +200,10 @@ public:
 	/** Push current meta-currency totals into the match HUD. */
 	void RefreshMetaHUD() const;
 
+	/** Live match score from placements / hits / kills / surviving defenders. */
+	UFUNCTION(BlueprintPure, Category = "Rules")
+	int32 GetLiveMatchScore() const;
+
 	/** Spend Light Lanterns to permanently boost the tower beam for this match. */
 	UFUNCTION(BlueprintCallable, Category = "Rules|Meta")
 	bool TryUpgradeTowerBeam();
@@ -263,6 +267,8 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UTDWarningBannerWidget> WarningBannerWidget;
+
+	FTimerHandle MenuStretchTimerHandle;
 
 	/** Visual platforms spawned on every generated build pad this attempt — tracked so a failed
 	 *  world-validation pass can tear them down before regenerating. */

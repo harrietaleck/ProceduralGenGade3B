@@ -74,8 +74,36 @@ public:
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UButton> PauseButton;
 
+	/** Optional alternate settings button name used by WBP_MatchHUD_V2. */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UButton> SettingButton;
+
+	/** Live match score (WBP_MatchHUD_V2: Score). */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Score;
+
+	/** Forest Essence amount (WBP_MatchHUD_V2: forestScore). */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> forestScore;
+
+	/** Wooden Might amount (WBP_MatchHUD_V2: WoodScore). */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> WoodScore;
+
+	/** Gem Stones amount (WBP_MatchHUD_V2: GemScore). */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> GemScore;
+
+	/** Light Lanterns amount (WBP_MatchHUD_V2: LightScore). */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> LightScore;
+
 	UFUNCTION(BlueprintCallable, Category = "HUD")
 	void RefreshMetaCurrency(const FMetaCurrencyRewards& Wallet, int32 BeamLevel, bool bStrongDefenderSelected);
+
+	/** Push the live match score into the HUD Score text. */
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void RefreshMatchScore(int32 MatchScore);
 
 private:
 	UPROPERTY()
@@ -115,6 +143,14 @@ private:
 
 	UFUNCTION()
 	void HandlePauseClicked();
+
+	UFUNCTION()
+	void HandleSettingsClicked();
+
+	void ResolveHudBindings();
+	void BindHudButtons();
+	void ConfigureHudHitTesting();
+	void StretchTopBanner();
 
 	/** Refreshes the parts of the display that don't have their own dedicated delegate
 	 *  (the "Wave X / Y" counter, which changes alongside several different events). */
