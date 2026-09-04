@@ -118,12 +118,14 @@ private:
 	void EnsureBlueprintLayoutFitsScreen();
 	void ResolveOptionalWidgetBindings();
 	void EnsureResultTextWidgets();
+	void BindActionButtons();
 	void LayoutDefeatResultWidgets();
 	void ApplyMatchResultToWidgets(const FMatchResult& Result);
 	void ApplyTheme(bool bVictory, EBeamHealthTier Tier, bool bOfferNextWave);
 	void ApplyTierTypography(const FMatchResult& Result);
 
 	bool bPendingNextWave = false;
+	bool bPresentedVictory = false;
 
 	UFUNCTION()
 	void OnRetryClicked();

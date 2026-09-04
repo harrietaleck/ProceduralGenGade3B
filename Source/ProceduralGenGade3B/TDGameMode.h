@@ -70,9 +70,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<UTDEndScreenWidget> EndScreenWidgetClass;
 
-	/** Full-screen victory overlay (optional; if unset, EndScreenWidgetClass is used for both). */
+	/** Full-screen victory overlay. Supports the existing plain VictoryScreen UserWidget. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
-	TSubclassOf<UTDEndScreenWidget> VictoryScreenWidgetClass;
+	TSubclassOf<UUserWidget> VictoryScreenWidgetClass;
 
 	/** Pause / settings overlay (Blueprint UserWidget — settings controls stay in Blueprint). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
@@ -137,9 +137,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void RestartGame();
 
+	/** Leave the match and open the Blueprint start menu level. */
+	UFUNCTION(BlueprintCallable, Category = "Rules")
+	void ReturnToMainMenu();
+
 	/** Hide the between-wave results screen and start the next wave. */
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void ContinueToNextWave();
+
+	/** Hide victory results and replay the wave that was just completed. */
+	UFUNCTION(BlueprintCallable, Category = "Rules")
+	void RetryCurrentWave();
 
 	/** Toggle match pause and show/hide the settings widget. */
 	UFUNCTION(BlueprintCallable, Category = "Rules")
@@ -228,6 +236,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
 
 private:
 	/** Live resource total. */
@@ -260,7 +269,7 @@ private:
 	TObjectPtr<UTDEndScreenWidget> EndScreenWidget;   // defeat screen instance
 
 	UPROPERTY()
-	TObjectPtr<UTDEndScreenWidget> VictoryScreenWidget; // victory screen instance (may share EndScreenWidget if class not set)
+	TObjectPtr<UUserWidget> VictoryScreenWidget;
 
 	UPROPERTY()
 	TObjectPtr<UUserWidget> SettingsWidget;
@@ -304,6 +313,9 @@ private:
 	void ShowEndScreen(bool bVictory);
 	void HideEndScreens();
 	void RestoreGameplayInput();
+	void BindSettingsButtons();
+	void BindVictoryScreenButtons();
+	void PresentVictoryScreen();
 
 	UPROPERTY()
 	FMatchResult LastMatchResult;

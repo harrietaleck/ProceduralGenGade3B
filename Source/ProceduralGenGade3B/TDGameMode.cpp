@@ -1,4 +1,6 @@
-// TDGameMode.cpp — see TDGameMode.h for the overview.
+// TDGameMode.cpp — core startup plus included UI / world / match units.
+// Companion .inl files keep each physical file under 500 lines while remaining
+// one translation unit (required for Live Coding after a file split).
 
 #include "TDGameMode.h"
 #include "ProceduralTerrain.h"
@@ -14,7 +16,6 @@
 #include "TDHUDWidget.h"
 #include "TDEndScreenWidget.h"
 #include "TDWarningBannerWidget.h"
-#include "TDCameraPawn.h"
 #include "HeroCharacter.h"
 #include "TDMatchRewards.h"
 #include "TDMetaProgressionSubsystem.h"
@@ -23,26 +24,26 @@
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Components/Button.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/TextBlock.h"
 #include "Widgets/Layout/Anchors.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
 
 ATDGameMode::ATDGameMode()
 {
-	// Use our own player controller (mouse-driven defender placement) and a third-person
-	// hero the player walks around the battlefield (Dungeon Defenders / Orcs Must Die style).
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = true;
+	PrimaryActorTick.bTickEvenWhenPaused = true;
+
 	PlayerControllerClass = ATDPlayerController::StaticClass();
 	DefaultPawnClass = AHeroCharacter::StaticClass();
 	HUDClass = ATDHUD::StaticClass();
 
-	// Default to the plain C++ classes; a designer can override these with Blueprint children.
 	TowerClass = ATower::StaticClass();
 	SpawnerClass = AEnemySpawner::StaticClass();
 	WaveManagerClass = AWaveManager::StaticClass();
 	BuildPadMarkerClass = ABuildPadMarker::StaticClass();
-
-	// Widget Blueprint classes are loaded in BeginPlay via LoadClass (not ConstructorHelpers)
-	// so missing/moved packages do not spam CDO Constructor errors on editor startup.
 	EndScreenWidgetClass = UTDEndScreenWidget::StaticClass();
 
 	StartingMetaWallet.ForestEssence = 40;
@@ -55,9 +56,7 @@ void ATDGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Menu / start level is Blueprint-only (StartScreenLvl + StartScreen widget).
-	// Do not spawn match systems there — Play should Open Level to TowerDefense.
-	const FString LevelName = UGameplayStatics::GetCurrentLevelName(this, /*bRemovePrefixString=*/true);
+	const FString LevelName = UGameplayStatics::GetCurrentLevelName(this, true);
 	if (LevelName.Contains(TEXT("StartScreen")))
 	{
 		if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
@@ -68,8 +67,6 @@ void ATDGameMode::BeginPlay()
 			PC->SetInputMode(InputMode);
 		}
 
-		// Keep stretching menu widgets (Start / Upgrades / Defenders / Settings) while on this
-		// level — Upgrades and Store are created later when their buttons are pressed.
 		if (UWorld* World = GetWorld())
 		{
 			TWeakObjectPtr<ATDGameMode> WeakThis(this);
@@ -84,7 +81,6 @@ void ATDGameMode::BeginPlay()
 
 					UTDMenuFunctionLibrary::StretchOpenMenuScreens(World);
 
-					// Ensure StartScreen exists if the level BP has not created it yet.
 					TArray<UUserWidget*> MenuWidgets;
 					UWidgetBlueprintLibrary::GetAllWidgetsOfClass(
 						World, MenuWidgets, UUserWidget::StaticClass(), true);
@@ -107,20 +103,19 @@ void ATDGameMode::BeginPlay()
 								if (UUserWidget* StartWidget = CreateWidget<UUserWidget>(PC, StartClass))
 								{
 									StartWidget->AddToViewport(100);
-									UTDMenuFunctionLibrary::StretchWidgetToFillScreen(StartWidget);
+									UTDMenuFunctionLibrary::StretchWidgetToFillScreen(StartWidget, false);
 								}
 							}
 						}
 					}
 				}),
 				0.15f,
-				/*bLoop=*/true);
+				true);
 		}
 		return;
 	}
 
 	EnsureDefaultWidgetClasses();
-
 	EnsureStartingMetaWallet();
 
 	MatchDefendersPlaced = 0;
@@ -129,11 +124,9 @@ void ATDGameMode::BeginPlay()
 	PaidMatchRewards = FMetaCurrencyRewards();
 	bWaveResultsVisible = false;
 
-	// Seed the economy.
 	Resources = StartingResources;
 	OnResourcesChanged.Broadcast(Resources);
 
-	// Find the procedural terrain that was placed in the level.
 	Terrain = FindTerrain();
 	if (!Terrain)
 	{
@@ -141,9 +134,6 @@ void ATDGameMode::BeginPlay()
 		return;
 	}
 
-	// Build the whole world (terrain, tower, build pads) and validate it as actually placed
-	// before allowing gameplay to begin. Any failure tears down this attempt's actors and
-	// regenerates the entire world from scratch — gameplay must never start on an invalid map.
 	const int32 MaxWorldAttempts = 5;
 	bool bWorldValid = false;
 	for (int32 WorldAttempt = 1; WorldAttempt <= MaxWorldAttempts; ++WorldAttempt)
@@ -153,33 +143,27 @@ void ATDGameMode::BeginPlay()
 			DestroySpawnedWorldActors();
 		}
 
-		// Explicitly trigger generation before reading any terrain data. AProceduralTerrain's own
-		// BeginPlay deliberately does nothing, since actor BeginPlay order between this GameMode
-		// and the terrain actor is not guaranteed by Unreal — calling this here removes that
-		// ambiguity. A fresh seed each attempt (bRandomizeSeedOnBeginPlay permitting) so a failed
-		// attempt doesn't just regenerate the exact same invalid layout.
 		Terrain->PrepareForNewGame();
 
 		if (!SpawnTowerWithRetry())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("TDGameMode: world attempt %d/%d failed to place a tower — regenerating entire world."), WorldAttempt, MaxWorldAttempts);
+			UE_LOG(LogTemp, Warning, TEXT("TDGameMode: world attempt %d/%d failed to place a tower."), WorldAttempt, MaxWorldAttempts);
 			continue;
 		}
 
 		SpawnBuildPadMarkers();
-
 		bWorldValid = ValidateWorldBeforeGameplay();
 		if (bWorldValid)
 		{
 			break;
 		}
 
-		UE_LOG(LogTemp, Warning, TEXT("TDGameMode: world validation failed on attempt %d/%d — regenerating entire world."), WorldAttempt, MaxWorldAttempts);
+		UE_LOG(LogTemp, Warning, TEXT("TDGameMode: world validation failed on attempt %d/%d."), WorldAttempt, MaxWorldAttempts);
 	}
 
 	if (!bWorldValid)
 	{
-		UE_LOG(LogTemp, Error, TEXT("TDGameMode: failed to produce a valid world after %d attempts. Aborting match start — gameplay will not begin."), MaxWorldAttempts);
+		UE_LOG(LogTemp, Error, TEXT("TDGameMode: failed to produce a valid world after %d attempts."), MaxWorldAttempts);
 		DestroySpawnedWorldActors();
 		return;
 	}
@@ -187,8 +171,6 @@ void ATDGameMode::BeginPlay()
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-	// Spawn the enemy spawner and hand it the terrain (for spawn points/paths) and the tower (target).
-	// We disable its self-driven timer: the WaveManager decides when each enemy spawns.
 	Spawner = GetWorld()->SpawnActor<AEnemySpawner>(SpawnerClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
 	if (Spawner)
 	{
@@ -196,16 +178,13 @@ void ATDGameMode::BeginPlay()
 		Spawner->Initialize(Terrain, Tower);
 	}
 
-	// Spawn the wave manager and let it drive the spawner in escalating waves.
 	WaveManager = GetWorld()->SpawnActor<AWaveManager>(WaveManagerClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
 	if (WaveManager && Spawner)
 	{
-		WaveManager->Initialize(Spawner, /*bStartImmediately=*/true);
+		WaveManager->Initialize(Spawner, true);
 		WaveManager->OnWaveComplete.AddDynamic(this, &ATDGameMode::HandleWaveComplete);
 	}
 
-	// Create the UMG match HUD and end-screen overlay last, now that Tower and WaveManager
-	// both exist for them to bind to.
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
 	{
 		if (HUDWidgetClass)
@@ -218,7 +197,6 @@ void ATDGameMode::BeginPlay()
 			}
 		}
 
-		// Defeat screen
 		const TSubclassOf<UTDEndScreenWidget> DefeatClass = EndScreenWidgetClass
 			? EndScreenWidgetClass
 			: TSubclassOf<UTDEndScreenWidget>(UTDEndScreenWidget::StaticClass());
@@ -230,20 +208,16 @@ void ATDGameMode::BeginPlay()
 			EndScreenWidget->SetAlignmentInViewport(FVector2D(0.0f, 0.0f));
 		}
 
-		// Victory screen — use dedicated class if set, otherwise reuse the defeat widget
 		if (VictoryScreenWidgetClass)
 		{
-			if (UTDEndScreenWidget* VScreen = CreateWidget<UTDEndScreenWidget>(PC, VictoryScreenWidgetClass))
+			if (UUserWidget* VScreen = CreateWidget<UUserWidget>(PC, VictoryScreenWidgetClass))
 			{
 				VictoryScreenWidget = VScreen;
 				VictoryScreenWidget->AddToViewport(100);
-				VictoryScreenWidget->SetAnchorsInViewport(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
-				VictoryScreenWidget->SetAlignmentInViewport(FVector2D(0.0f, 0.0f));
+				UTDMenuFunctionLibrary::StretchWidgetToFillScreen(VictoryScreenWidget, false);
+				VictoryScreenWidget->SetVisibility(ESlateVisibility::Collapsed);
+				BindVictoryScreenButtons();
 			}
-		}
-		else
-		{
-			VictoryScreenWidget = EndScreenWidget; // same widget handles both
 		}
 
 		if (SettingsWidgetClass)
@@ -252,23 +226,9 @@ void ATDGameMode::BeginPlay()
 			{
 				SettingsWidget = Settings;
 				SettingsWidget->AddToViewport(150);
-				UTDMenuFunctionLibrary::StretchWidgetToFillScreen(SettingsWidget, /*bCaptureMouseFocus=*/false);
+				UTDMenuFunctionLibrary::StretchWidgetToFillScreen(SettingsWidget, false);
 				SettingsWidget->SetVisibility(ESlateVisibility::Collapsed);
-
-				// Bind ResumeBTN when present (other settings controls stay in Blueprint).
-				auto BindResume = [this](const TCHAR* ButtonName)
-				{
-					if (!SettingsWidget)
-					{
-						return;
-					}
-					if (UButton* Btn = Cast<UButton>(SettingsWidget->GetWidgetFromName(ButtonName)))
-					{
-						Btn->OnClicked.AddDynamic(this, &ATDGameMode::ResumeFromSettings);
-					}
-				};
-				BindResume(TEXT("ResumeBTN"));
-				BindResume(TEXT("ExitResumeBTN"));
+				BindSettingsButtons();
 			}
 		}
 
@@ -284,12 +244,16 @@ void ATDGameMode::BeginPlay()
 		}
 
 		RefreshMetaHUD();
-
-		// Match starts in GameAndUI so WASD / placement work after leaving the Start menu
-		// (menu levels force UIOnly). Never leave the player stuck in UI-only focus.
 		bPaused = false;
 		RestoreGameplayInput();
 	}
+}
+
+void ATDGameMode::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	UTDMenuFunctionLibrary::StretchOpenMenuScreens(this);
+	BindSettingsButtons();
 }
 
 int32 ATDGameMode::GetCurrentWave() const
@@ -330,9 +294,9 @@ void ATDGameMode::RestartGame()
 	{
 		EndScreenWidget->HideScreen();
 	}
-	if (VictoryScreenWidget && VictoryScreenWidget != EndScreenWidget)
+	if (VictoryScreenWidget)
 	{
-		VictoryScreenWidget->HideScreen();
+		VictoryScreenWidget->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (SettingsWidget)
 	{
@@ -346,730 +310,24 @@ void ATDGameMode::RestartGame()
 		PC->bShowMouseCursor = true;
 	}
 
-	// Reopen the current level. Because the terrain randomises its seed on BeginPlay, this
-	// produces a fresh map, fresh economy and fresh waves — a brand-new game.
-	const FName CurrentLevel(*UGameplayStatics::GetCurrentLevelName(this, /*bRemovePrefixString=*/true));
-	UGameplayStatics::OpenLevel(this, CurrentLevel);
+	UGameplayStatics::OpenLevel(this, FName(TEXT("TowerDefense")));
 }
 
-void ATDGameMode::TogglePause()
-{
-	if (bGameOver || IsVictory() || bWaveResultsVisible)
-	{
-		return;
-	}
-
-	if (bPaused || IsSettingsVisible())
-	{
-		ResumeFromSettings();
-	}
-	else
-	{
-		ShowSettings();
-	}
-}
-
-void ATDGameMode::ShowSettings()
-{
-	if (bGameOver || IsVictory() || bWaveResultsVisible)
-	{
-		return;
-	}
-
-	if (!SettingsWidget && SettingsWidgetClass)
-	{
-		if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
-		{
-			SettingsWidget = CreateWidget<UUserWidget>(PC, SettingsWidgetClass);
-			if (SettingsWidget)
-			{
-				SettingsWidget->AddToViewport(150);
-				auto BindResume = [this](const TCHAR* ButtonName)
-				{
-					if (UButton* ResumeBtn = Cast<UButton>(SettingsWidget->GetWidgetFromName(ButtonName)))
-					{
-						ResumeBtn->OnClicked.AddDynamic(this, &ATDGameMode::ResumeFromSettings);
-					}
-				};
-				BindResume(TEXT("ResumeBTN"));
-				BindResume(TEXT("ExitResumeBTN"));
-			}
-		}
-	}
-
-	if (!SettingsWidget)
-	{
-		// Soft-pause even without a widget so P still blocks placement.
-		bPaused = true;
-		return;
-	}
-
-	bPaused = true;
-	// Soft-pause only — SetGamePaused would open the engine pause menu.
-	UTDMenuFunctionLibrary::StretchWidgetToFillScreen(SettingsWidget, /*bCaptureMouseFocus=*/false);
-	SettingsWidget->SetVisibility(ESlateVisibility::Visible);
-
-	// GameAndUI (not UIOnly): UIOnly disables PlayerController binds (P / click place) and
-	// SetWidgetToFocus fails on non-focusable SettingScreen, leaving the match unrecoverable.
-	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
-	{
-		FInputModeGameAndUI InputMode;
-		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-		InputMode.SetHideCursorDuringCapture(false);
-		PC->SetInputMode(InputMode);
-		PC->bShowMouseCursor = true;
-	}
-}
-
-void ATDGameMode::ResumeFromSettings()
+void ATDGameMode::ReturnToMainMenu()
 {
 	bPaused = false;
+	bGameOver = false;
+	bWaveResultsVisible = false;
 	UGameplayStatics::SetGamePaused(this, false);
 
 	if (SettingsWidget)
 	{
 		SettingsWidget->SetVisibility(ESlateVisibility::Collapsed);
 	}
-
-	RestoreGameplayInput();
-}
-
-bool ATDGameMode::IsSettingsVisible() const
-{
-	return SettingsWidget
-		&& SettingsWidget->GetVisibility() == ESlateVisibility::Visible;
-}
-
-AProceduralTerrain* ATDGameMode::FindTerrain() const
-{
-	for (TActorIterator<AProceduralTerrain> It(GetWorld()); It; ++It)
-	{
-		return *It; // Use the first terrain found.
-	}
-	return nullptr;
-}
-
-bool ATDGameMode::SpawnTowerWithRetry()
-{
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-	// Bounded retry: if a spawn is ever rejected (nullptr) or lands away from the terrain's
-	// published tower location (e.g. blocked by another actor at that transform), regenerate the
-	// terrain and try again rather than starting a match with a missing/misplaced tower.
-	const int32 MaxTowerSpawnAttempts = 5;
-	const float TowerPlacementToleranceSq = FMath::Square(50.0f);
-	for (int32 Attempt = 1; Attempt <= MaxTowerSpawnAttempts; ++Attempt)
-	{
-		if (Tower)
-		{
-			Tower->Destroy();
-			Tower = nullptr;
-		}
-
-		const FVector TowerSpawnLocation = Terrain->GetTowerLocation() + FVector(0.0f, 0.0f, 150.0f);
-		Tower = GetWorld()->SpawnActor<ATower>(TowerClass, TowerSpawnLocation, FRotator::ZeroRotator, SpawnParams);
-
-		const bool bLocationMatches = Tower && FVector::DistSquared(Tower->GetActorLocation(), TowerSpawnLocation) <= TowerPlacementToleranceSq;
-		if (Tower && bLocationMatches)
-		{
-			BaseTowerAttackDamage = Tower->AttackDamage;
-			return true;
-		}
-
-		UE_LOG(LogTemp, Warning, TEXT("TDGameMode: tower spawn attempt %d/%d failed validation, regenerating terrain."), Attempt, MaxTowerSpawnAttempts);
-		Terrain->RandomizeAndRegenerate();
-	}
-
-	return false;
-}
-
-void ATDGameMode::SpawnBuildPadMarkers()
-{
-	SpawnBuildPadMarkersFromIndex(0);
-}
-
-void ATDGameMode::SpawnBuildPadMarkersFromIndex(int32 StartSlotIndex)
-{
-	if (!Terrain || !BuildPadMarkerClass || StartSlotIndex < 0)
-	{
-		return;
-	}
-
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-	const TArray<FDefenderSlot>& Slots = Terrain->GetDefenderSlots();
-	for (int32 I = StartSlotIndex; I < Slots.Num(); ++I)
-	{
-		const FDefenderSlot& Slot = Slots[I];
-		if (ABuildPadMarker* Marker = GetWorld()->SpawnActor<ABuildPadMarker>(BuildPadMarkerClass, Slot.Location + FVector(0.0f, 0.0f, 4.0f), FRotator::ZeroRotator, SpawnParams))
-		{
-			BuildPadMarkers.Add(Marker);
-		}
-	}
-}
-
-void ATDGameMode::ApplyDefenderUpkeep()
-{
-	int32 TotalUpkeep = 0;
-	int32 DefenderCount = 0;
-	for (TActorIterator<ADefender> It(GetWorld()); It; ++It)
-	{
-		ADefender* Defender = *It;
-		if (!Defender || !Defender->HealthComponent || Defender->HealthComponent->IsDead())
-		{
-			continue;
-		}
-
-		++DefenderCount;
-		const int32 PerDefender = Defender->UpkeepPerWave > 0 ? Defender->UpkeepPerWave : DefenderUpkeepPerWave;
-		TotalUpkeep += PerDefender;
-	}
-
-	if (TotalUpkeep <= 0)
-	{
-		return;
-	}
-
-	Resources = FMath::Max(0, Resources - TotalUpkeep);
-	OnResourcesChanged.Broadcast(Resources);
-	UE_LOG(LogTemp, Display, TEXT("TDGameMode: defender upkeep charged %d Loot (%d defenders)."), TotalUpkeep, DefenderCount);
-}
-
-void ATDGameMode::HandleWaveComplete(int32 WaveNumber)
-{
-	if (bGameOver)
-	{
-		return;
-	}
-
-	// Stop the automatic break→next-wave timer so the player can read the results screen.
-	if (WaveManager)
-	{
-		WaveManager->HoldForResultsScreen();
-	}
-
-	if (Terrain)
-	{
-		const int32 OldSlotCount = Terrain->GetDefenderSlots().Num();
-		const int32 ExtendedLanes = Terrain->ExpandWorldAfterWave();
-		if (ExtendedLanes > 0)
-		{
-			SpawnBuildPadMarkersFromIndex(OldSlotCount);
-		}
-	}
-
-	ApplyDefenderUpkeep();
-
-	const int32 TotalWaves = WaveManager ? WaveManager->GetTotalWaves() : 0;
-	const bool bFinalWave = TotalWaves > 0 && WaveNumber >= TotalWaves;
-
-	FinalizeMatchResult(true, WaveNumber);
-	ShowEndScreen(true);
-
-	if (bFinalWave && WaveManager)
-	{
-		WaveManager->DeclareVictory();
-	}
-
-	UE_LOG(LogTemp, Display, TEXT("TDGameMode: wave %d/%d complete — showing results."), WaveNumber, TotalWaves);
-}
-
-void ATDGameMode::ContinueToNextWave()
-{
-	if (bGameOver || IsVictory())
-	{
-		return;
-	}
-
 	HideEndScreens();
-	bPaused = false;
-	bWaveResultsVisible = false;
-	RestoreGameplayInput();
-
-	if (WaveManager)
-	{
-		WaveManager->ContinueToNextWave();
-	}
+	UGameplayStatics::OpenLevel(this, FName(TEXT("StartScreenLvl")));
 }
 
-void ATDGameMode::HideEndScreens()
-{
-	if (EndScreenWidget)
-	{
-		EndScreenWidget->HideScreen();
-	}
-	if (VictoryScreenWidget && VictoryScreenWidget != EndScreenWidget)
-	{
-		VictoryScreenWidget->HideScreen();
-	}
-}
-
-void ATDGameMode::RestoreGameplayInput()
-{
-	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
-	{
-		FInputModeGameAndUI InputMode;
-		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-		InputMode.SetHideCursorDuringCapture(false);
-		PC->SetInputMode(InputMode);
-		PC->bShowMouseCursor = true;
-	}
-}
-
-void ATDGameMode::DestroySpawnedWorldActors()
-{
-	if (Tower)
-	{
-		Tower->Destroy();
-		Tower = nullptr;
-	}
-	for (ABuildPadMarker* Marker : BuildPadMarkers)
-	{
-		if (Marker)
-		{
-			Marker->Destroy();
-		}
-	}
-	BuildPadMarkers.Reset();
-}
-
-bool ATDGameMode::ValidateWorldBeforeGameplay() const
-{
-	// Terrain generated, with the minimum required systems.
-	if (!Terrain || Terrain->GetEnemyPaths().Num() < 3 || Terrain->GetDefenderSlots().Num() == 0)
-	{
-		return false;
-	}
-
-	// Tower generated, and not floating: its spawned Z must closely match the terrain's
-	// published tower ground height (SpawnTowerWithRetry already guarantees XY/overall placement
-	// matches, this re-confirms it as actually placed in the world, not just requested).
-	if (!Tower)
-	{
-		return false;
-	}
-	if (FMath::Abs(Tower->GetActorLocation().Z - (Terrain->GetTowerLocation().Z + 150.0f)) > 50.0f)
-	{
-		return false;
-	}
-
-	// Build slots valid: exactly one marker per published slot, none floating.
-	if (BuildPadMarkers.Num() != Terrain->GetDefenderSlots().Num())
-	{
-		return false;
-	}
-	for (const ABuildPadMarker* Marker : BuildPadMarkers)
-	{
-		if (!Marker)
-		{
-			return false;
-		}
-	}
-
-	// No overlapping actors: the tower's world bounds must not intersect any build-pad marker's.
-	const FBox TowerBounds = Tower->GetComponentsBoundingBox(/*bNonColliding=*/true);
-	for (const ABuildPadMarker* Marker : BuildPadMarkers)
-	{
-		if (TowerBounds.Intersect(Marker->GetComponentsBoundingBox(/*bNonColliding=*/true)))
-		{
-			return false;
-		}
-	}
-
-	// Navigation coverage is logged by Terrain->ValidatePathfinding() as a diagnostic (see its
-	// own comment) but doesn't gate gameplay here — enemies move via fixed waypoints, not the
-	// NavMesh, and rebuilding navigation after the Tower actor exists would only make its own
-	// exact ground point look artificially unreachable (Recast correctly carving a hole around
-	// its BlockAll collision), not reveal anything about whether the map is actually playable.
-	Terrain->ValidatePathfinding();
-
-	return true;
-}
-
-void ATDGameMode::AddResources(int32 Amount)
-{
-	if (Amount <= 0)
-	{
-		return;
-	}
-	Resources += Amount;
-	OnResourcesChanged.Broadcast(Resources);
-}
-
-bool ATDGameMode::TrySpendResources(int32 Amount)
-{
-	if (Amount < 0 || Resources < Amount)
-	{
-		return false; // Can't afford it.
-	}
-	Resources -= Amount;
-	OnResourcesChanged.Broadcast(Resources);
-	return true;
-}
-
-void ATDGameMode::NotifyEnemyKilled(AEnemy* DeadEnemy)
-{
-	++MatchEnemiesKilled;
-	if (DeadEnemy)
-	{
-		AddResources(DeadEnemy->ResourceReward);
-	}
-	RefreshMetaHUD();
-}
-
-void ATDGameMode::NotifyEnemyHit()
-{
-	++MatchHitsLanded;
-	RefreshMetaHUD();
-}
-
-void ATDGameMode::NotifyDefenderPlaced()
-{
-	++MatchDefendersPlaced;
-	RefreshMetaHUD();
-}
-
-void ATDGameMode::EnsureDefaultWidgetClasses()
-{
-	// Prefer V2 widgets; fall back silently if a package was moved or failed to compile.
-	if (!HUDWidgetClass)
-	{
-		if (UClass* FoundHUD = LoadClass<UTDHUDWidget>(
-			nullptr, TEXT("/Game/UI/WBP_MatchHUD_V2.WBP_MatchHUD_V2_C")))
-		{
-			HUDWidgetClass = FoundHUD;
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("TDGameMode: WBP_MatchHUD_V2 not found — match HUD will be skipped."));
-		}
-	}
-
-	if (!EndScreenWidgetClass || EndScreenWidgetClass == UTDEndScreenWidget::StaticClass())
-	{
-		UClass* FoundDefeat = LoadClass<UTDEndScreenWidget>(nullptr, TEXT("/Game/UI/ScreenWidgets/Gameoverscreen.Gameoverscreen_C"));
-		if (FoundDefeat)
-		{
-			EndScreenWidgetClass = FoundDefeat;
-		}
-		else
-		{
-			EndScreenWidgetClass = UTDEndScreenWidget::StaticClass();
-			UE_LOG(LogTemp, Warning, TEXT("TDGameMode: No defeat screen Blueprint found — using C++ fallback."));
-		}
-	}
-
-	if (!VictoryScreenWidgetClass)
-	{
-		// VictoryScreen must parent UTDEndScreenWidget to load; otherwise reuse the defeat class.
-		UClass* FoundVictory = LoadClass<UTDEndScreenWidget>(nullptr, TEXT("/Game/UI/ScreenWidgets/VictoryScreen.VictoryScreen_C"));
-		if (FoundVictory)
-		{
-			VictoryScreenWidgetClass = FoundVictory;
-		}
-		else if (EndScreenWidgetClass)
-		{
-			VictoryScreenWidgetClass = EndScreenWidgetClass;
-			UE_LOG(LogTemp, Warning, TEXT("TDGameMode: VictoryScreen is not a TDEndScreenWidget child — reusing EndScreenWidgetClass for wave results."));
-		}
-	}
-
-	if (!SettingsWidgetClass)
-	{
-		if (UClass* FoundSettings = LoadClass<UUserWidget>(nullptr, TEXT("/Game/UI/ScreenWidgets/SettingScreen.SettingScreen_C")))
-		{
-			SettingsWidgetClass = FoundSettings;
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("TDGameMode: SettingScreen Blueprint not found — pause will not show settings UI."));
-		}
-	}
-}
-
-void ATDGameMode::EnsureStartingMetaWallet()
-{
-	if (UGameInstance* GI = GetGameInstance())
-	{
-		if (UTDMetaProgressionSubsystem* Meta = GI->GetSubsystem<UTDMetaProgressionSubsystem>())
-		{
-			const FMetaCurrencyRewards Wallet = Meta->GetWallet();
-			const bool bWalletEmpty = Wallet.ForestEssence == 0
-				&& Wallet.WoodenMight == 0
-				&& Wallet.GemStones == 0
-				&& Wallet.LightLanterns == 0;
-			if (bWalletEmpty)
-			{
-				Meta->AddRewards(StartingMetaWallet);
-			}
-		}
-	}
-}
-
-FMetaCurrencyRewards ATDGameMode::GetMetaWallet() const
-{
-	if (UGameInstance* GI = GetGameInstance())
-	{
-		if (const UTDMetaProgressionSubsystem* Meta = GI->GetSubsystem<UTDMetaProgressionSubsystem>())
-		{
-			return Meta->GetWallet();
-		}
-	}
-	return FMetaCurrencyRewards();
-}
-
-bool ATDGameMode::TrySpendMeta(const FMetaCurrencyRewards& Cost)
-{
-	if (UGameInstance* GI = GetGameInstance())
-	{
-		if (UTDMetaProgressionSubsystem* Meta = GI->GetSubsystem<UTDMetaProgressionSubsystem>())
-		{
-			if (Meta->TrySpend(Cost))
-			{
-				RefreshMetaHUD();
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
-bool ATDGameMode::CanAffordMeta(const FMetaCurrencyRewards& Cost) const
-{
-	if (UGameInstance* GI = GetGameInstance())
-	{
-		if (const UTDMetaProgressionSubsystem* Meta = GI->GetSubsystem<UTDMetaProgressionSubsystem>())
-		{
-			return Meta->CanAfford(Cost);
-		}
-	}
-	return false;
-}
-
-bool ATDGameMode::IsInteractionBlocked() const
-{
-	return bPaused || bGameOver || IsVictory();
-}
-
-bool ATDGameMode::TryUpgradeTowerBeam()
-{
-	if (!Tower || bGameOver || IsVictory())
-	{
-		return false;
-	}
-
-	if (BeamUpgradeLevel >= MaxBeamUpgradeLevel)
-	{
-		ShowInsufficientFundsWarning();
-		return false;
-	}
-
-	FMetaCurrencyRewards Cost;
-	Cost.LightLanterns = BeamUpgradeLanternCost;
-	if (!TrySpendMeta(Cost))
-	{
-		if (WarningBannerWidget)
-		{
-			WarningBannerWidget->ShowWarning(TEXT("Not enough Light Lanterns for beam upgrade"));
-		}
-		return false;
-	}
-
-	if (BaseTowerAttackDamage <= 0.0f)
-	{
-		BaseTowerAttackDamage = Tower->AttackDamage;
-	}
-
-	++BeamUpgradeLevel;
-	Tower->AttackDamage = BaseTowerAttackDamage + BeamUpgradeLevel * BeamUpgradeDamageBonus;
-	RefreshMetaHUD();
-	return true;
-}
-
-int32 ATDGameMode::GetLiveMatchScore() const
-{
-	int32 SurvivingDefenders = 0;
-	if (UWorld* World = GetWorld())
-	{
-		for (TActorIterator<ADefender> It(World); It; ++It)
-		{
-			const ADefender* Defender = *It;
-			if (Defender && Defender->HealthComponent && !Defender->HealthComponent->IsDead())
-			{
-				++SurvivingDefenders;
-			}
-		}
-	}
-
-	return (MatchDefendersPlaced * 10)
-		+ (MatchHitsLanded * 30)
-		+ (MatchEnemiesKilled * 20)
-		+ (SurvivingDefenders * 5);
-}
-
-void ATDGameMode::RefreshMetaHUD() const
-{
-	if (!MatchHUDWidget)
-	{
-		return;
-	}
-
-	if (ATDPlayerController* PC = Cast<ATDPlayerController>(GetWorld()->GetFirstPlayerController()))
-	{
-		MatchHUDWidget->RefreshMetaCurrency(GetMetaWallet(), BeamUpgradeLevel, PC->IsPlacingStrongDefender());
-	}
-	else
-	{
-		MatchHUDWidget->RefreshMetaCurrency(GetMetaWallet(), BeamUpgradeLevel, false);
-	}
-}
-
-void ATDGameMode::FinalizeMatchResult(bool bVictory, int32 WavesClearedOverride)
-{
-	int32 WavesCleared = 0;
-	const int32 TotalWaves = WaveManager ? WaveManager->GetTotalWaves() : 0;
-	if (WavesClearedOverride >= 0)
-	{
-		WavesCleared = WavesClearedOverride;
-	}
-	else if (WaveManager)
-	{
-		if (bVictory)
-		{
-			WavesCleared = TotalWaves;
-		}
-		else
-		{
-			const EWaveState WaveState = WaveManager->GetWaveState();
-			const int32 CurrentWave = WaveManager->GetCurrentWave();
-			if (WaveState == EWaveState::Complete)
-			{
-				WavesCleared = CurrentWave;
-			}
-			else
-			{
-				WavesCleared = FMath::Max(0, CurrentWave - 1);
-			}
-		}
-	}
-
-	float TowerHealth = 0.0f;
-	float TowerMaxHealth = 1.0f;
-	if (Tower && Tower->HealthComponent)
-	{
-		TowerHealth = Tower->HealthComponent->GetCurrentHealth();
-		TowerMaxHealth = Tower->HealthComponent->MaxHealth;
-	}
-
-	int32 SurvivingDefenders = 0;
-	for (TActorIterator<ADefender> It(GetWorld()); It; ++It)
-	{
-		const ADefender* Defender = *It;
-		if (Defender && Defender->HealthComponent && !Defender->HealthComponent->IsDead())
-		{
-			++SurvivingDefenders;
-		}
-	}
-
-	const FMetaCurrencyRewards WalletBeforePayout = GetMetaWallet();
-
-	LastMatchResult = UTDMatchRewards::BuildMatchResult(
-		bVictory,
-		TowerHealth,
-		TowerMaxHealth,
-		WavesCleared,
-		TotalWaves,
-		MatchDefendersPlaced,
-		MatchHitsLanded,
-		MatchEnemiesKilled,
-		SurvivingDefenders);
-	LastMatchResult.Wallet = WalletBeforePayout;
-
-	// Bank only newly earned rewards so mid-match wave screens don't double-pay.
-	FMetaCurrencyRewards Delta;
-	Delta.ForestEssence = FMath::Max(0, LastMatchResult.Rewards.ForestEssence - PaidMatchRewards.ForestEssence);
-	Delta.WoodenMight = FMath::Max(0, LastMatchResult.Rewards.WoodenMight - PaidMatchRewards.WoodenMight);
-	Delta.GemStones = FMath::Max(0, LastMatchResult.Rewards.GemStones - PaidMatchRewards.GemStones);
-	Delta.LightLanterns = FMath::Max(0, LastMatchResult.Rewards.LightLanterns - PaidMatchRewards.LightLanterns);
-
-	PaidMatchRewards = LastMatchResult.Rewards;
-	LastMatchResult.Rewards = Delta;
-
-	if (UGameInstance* GI = GetGameInstance())
-	{
-		if (UTDMetaProgressionSubsystem* Meta = GI->GetSubsystem<UTDMetaProgressionSubsystem>())
-		{
-			Meta->AddRewards(Delta);
-		}
-	}
-}
-
-void ATDGameMode::ShowEndScreen(bool bVictory)
-{
-	UTDEndScreenWidget* TargetWidget = bVictory ? VictoryScreenWidget : EndScreenWidget;
-	if (!TargetWidget)
-	{
-		TargetWidget = EndScreenWidget;
-	}
-	if (!TargetWidget)
-	{
-		return;
-	}
-
-	// Do NOT call SetGamePaused here — that triggers the engine's built-in pause menu
-	// widget instead of our end screen. Gameplay is already frozen because the wave
-	// manager and spawner were stopped / held before ShowEndScreen was called.
-	bPaused = true;
-	bWaveResultsVisible = true;
-
-	// Keep GameAndUI so result buttons (Next Wave / Retry) and P still receive input.
-	// UIOnly was trapping players when focus failed on non-focusable end-screen widgets.
-	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
-	{
-		FInputModeGameAndUI InputMode;
-		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-		InputMode.SetHideCursorDuringCapture(false);
-		PC->SetInputMode(InputMode);
-		PC->bShowMouseCursor = true;
-	}
-
-	TargetWidget->PresentMatchResult(bVictory, LastMatchResult);
-}
-
-void ATDGameMode::HandleMatchVictory()
-{
-	// Results for the final wave are already shown from HandleWaveComplete.
-	if (bGameOver || bWaveResultsVisible)
-	{
-		return;
-	}
-
-	FinalizeMatchResult(true);
-	ShowEndScreen(true);
-}
-
-void ATDGameMode::NotifyTowerDestroyed()
-{
-	if (bGameOver)
-	{
-		return; // Only end the game once.
-	}
-	bGameOver = true;
-
-	// Stop spawning more enemies (halt both the wave pacing and any spawner timer).
-	if (WaveManager)
-	{
-		WaveManager->StopWaves();
-	}
-	if (Spawner)
-	{
-		Spawner->StopSpawning();
-	}
-
-	OnGameOver.Broadcast();
-	FinalizeMatchResult(false);
-	ShowEndScreen(false);
-	UE_LOG(LogTemp, Display, TEXT("TDGameMode: GAME OVER - the tower was destroyed."));
-}
+#include "TDGameMode_UI.inl"
+#include "TDGameMode_World.inl"
+#include "TDGameMode_Match.inl"

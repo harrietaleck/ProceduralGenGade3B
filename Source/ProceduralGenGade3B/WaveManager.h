@@ -135,6 +135,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Waves")
 	void ContinueToNextWave();
 
+	/** Replay the wave that just completed, including the final wave after victory. */
+	UFUNCTION(BlueprintCallable, Category = "Waves")
+	void RetryCurrentWave();
+
 	/** Mark the match won without firing another OnWaveComplete (used after the final wave results). */
 	UFUNCTION(BlueprintCallable, Category = "Waves")
 	void DeclareVictory();

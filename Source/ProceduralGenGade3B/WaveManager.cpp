@@ -103,6 +103,37 @@ void AWaveManager::ContinueToNextWave()
 	BeginNextWave();
 }
 
+void AWaveManager::RetryCurrentWave()
+{
+	if (!Spawner || !Waves.IsValidIndex(CurrentWaveIndex))
+	{
+		return;
+	}
+
+	GetWorldTimerManager().ClearTimer(CountdownTimerHandle);
+	GetWorldTimerManager().ClearTimer(SpawnTimerHandle);
+	GetWorldTimerManager().ClearTimer(BreakTimerHandle);
+
+	// Final victory calls StopWaves; explicitly reopen the manager for this replay.
+	bStopped = false;
+	EnemiesSpawnedThisWave = 0;
+	ActiveEnemyCount = 0;
+	State = EWaveState::CountingDown;
+	CountdownSecondsRemaining = CountdownSeconds;
+
+	OnEnemiesRemainingChanged.Broadcast(0);
+	OnWaveCountdownTick.Broadcast(CountdownSecondsRemaining);
+
+	if (CountdownSecondsRemaining <= 0)
+	{
+		CountdownTick();
+		return;
+	}
+
+	GetWorldTimerManager().SetTimer(
+		CountdownTimerHandle, this, &AWaveManager::CountdownTick, 1.0f, /*bLoop=*/true);
+}
+
 void AWaveManager::DeclareVictory()
 {
 	if (State == EWaveState::Victory)

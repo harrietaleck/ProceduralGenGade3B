@@ -372,7 +372,7 @@ void UTDHUDWidget::RefreshWaveCounter()
 	{
 		return;
 	}
-	WaveText->SetText(FText::FromString(FString::Printf(TEXT("Wave %d / %d"),
+	WaveText->SetText(FText::FromString(FString::Printf(TEXT("%d / %d"),
 		WaveManagerRef->GetCurrentWave(), WaveManagerRef->GetTotalWaves())));
 }
 

@@ -39,7 +39,9 @@ void ATDPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::R, IE_Pressed, this, &ATDPlayerController::OnRestartPressed);
 
 	// Bind P to pause/unpause the match.
-	InputComponent->BindKey(EKeys::P, IE_Pressed, this, &ATDPlayerController::OnPausePressed);
+	FInputKeyBinding& PauseBinding =
+		InputComponent->BindKey(EKeys::P, IE_Pressed, this, &ATDPlayerController::OnPausePressed);
+	PauseBinding.bExecuteWhenPaused = true;
 
 	// Bind N to toggle the NavMesh debug overlay.
 	InputComponent->BindKey(EKeys::N, IE_Pressed, this, &ATDPlayerController::OnToggleNavMeshDebug);

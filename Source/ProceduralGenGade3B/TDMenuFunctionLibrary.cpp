@@ -19,6 +19,7 @@ namespace
 	{
 		return Name.Contains(TEXT("StartScreen"))
 			|| Name.Contains(TEXT("SettingScreen"))
+			|| Name.Contains(TEXT("GameOverview"))
 			|| Name.Contains(TEXT("DefendersScreen"))
 			|| Name.Contains(TEXT("UpgradesScreen"))
 			|| Name.Contains(TEXT("Upgrade"))
@@ -62,9 +63,10 @@ namespace
 		Brush.Tiling = ESlateBrushTileType::NoTile;
 		Brush.ImageSize = FVector2D(1920.0f, 1080.0f);
 		Image->SetBrush(Brush);
+		Image->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 
-	static void StretchImagesRecursive(UWidget* Root)
+	static void StretchImagesRecursive(UWidget* Root, bool bForceScreenImage)
 	{
 		if (!Root)
 		{
@@ -73,7 +75,33 @@ namespace
 
 		if (UImage* Image = Cast<UImage>(Root))
 		{
-			StretchImageBrush(Image);
+			// Only resize images that already represent a screen-sized background.
+			// Stretching icons and decorative images makes them overlap the entire
+			// viewport and intercept clicks intended for menu buttons.
+			if (const UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Image->Slot))
+			{
+				const FVector2D Size = CanvasSlot->GetSize();
+				const FAnchors Anchors = CanvasSlot->GetAnchors();
+				const bool bAlreadyStretched =
+					(Anchors.Maximum.X - Anchors.Minimum.X) > 0.9f
+					&& (Anchors.Maximum.Y - Anchors.Minimum.Y) > 0.9f;
+				const bool bLargeFixedBackground = Size.X >= 800.0f && Size.Y >= 450.0f;
+				const UObject* BrushResource = Image->GetBrush().GetResourceObject();
+				const FString ResourceName = BrushResource ? BrushResource->GetName() : FString();
+				const FString WidgetName = Image->GetName();
+				const bool bKnownScreenBackground =
+					WidgetName.Contains(TEXT("Background"))
+					|| ResourceName.Contains(TEXT("StartScreen-image"))
+					|| ResourceName.Contains(TEXT("Settings-image"))
+					|| ResourceName.Contains(TEXT("gaveoverview-image"))
+					|| ResourceName.Contains(TEXT("Gameover-image"))
+					|| ResourceName.Contains(TEXT("Victory-image"));
+
+				if (bForceScreenImage || bAlreadyStretched || bLargeFixedBackground || bKnownScreenBackground)
+				{
+					StretchImageBrush(Image);
+				}
+			}
 		}
 
 		if (UPanelWidget* Panel = Cast<UPanelWidget>(Root))
@@ -81,7 +109,7 @@ namespace
 			const int32 Count = Panel->GetChildrenCount();
 			for (int32 Index = 0; Index < Count; ++Index)
 			{
-				StretchImagesRecursive(Panel->GetChildAt(Index));
+				StretchImagesRecursive(Panel->GetChildAt(Index), bForceScreenImage);
 			}
 		}
 	}
@@ -113,6 +141,9 @@ void UTDMenuFunctionLibrary::StretchWidgetToFillScreen(UUserWidget* Widget, bool
 
 	const FString ClassName = Widget->GetClass()->GetName();
 	const int32 WantedZ = PreferredMenuZOrder(ClassName);
+	const bool bForceScreenImage =
+		ClassName.Contains(TEXT("SettingScreen"))
+		|| ClassName.Contains(TEXT("GameOverview"));
 
 	// Do NOT call SetDesiredSizeInViewport — that forces point anchors and a fixed size.
 	if (UGameViewportSubsystem* ViewportSubsystem = UGameViewportSubsystem::Get())
@@ -152,17 +183,8 @@ void UTDMenuFunctionLibrary::StretchWidgetToFillScreen(UUserWidget* Widget, bool
 		RootScale->SetStretch(EStretch::ScaleToFill);
 		RootScale->SetStretchDirection(EStretchDirection::Both);
 	}
-	if (UCanvasPanel* RootCanvas = Cast<UCanvasPanel>(Root))
-	{
-		const int32 Count = RootCanvas->GetChildrenCount();
-		for (int32 Index = 0; Index < Count; ++Index)
-		{
-			StretchCanvasChild(RootCanvas->GetChildAt(Index));
-		}
-	}
-
-	// Stretch every image in the tree (Upgrades/Defenders/Settings backgrounds).
-	StretchImagesRecursive(Root);
+	// Stretch only screen-sized background images; controls retain their designer slots.
+	StretchImagesRecursive(Root, bForceScreenImage);
 
 	Widget->SetVisibility(ESlateVisibility::Visible);
 	Widget->SetIsEnabled(true);
@@ -174,7 +196,6 @@ void UTDMenuFunctionLibrary::StretchWidgetToFillScreen(UUserWidget* Widget, bool
 			PC->bShowMouseCursor = true;
 			FInputModeUIOnly InputMode;
 			InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-			InputMode.SetWidgetToFocus(Widget->TakeWidget());
 			PC->SetInputMode(InputMode);
 		}
 	}
@@ -196,7 +217,7 @@ void UTDMenuFunctionLibrary::StretchOpenMenuScreens(UObject* WorldContextObject)
 		World,
 		MenuWidgets,
 		UUserWidget::StaticClass(),
-		/*TopLevelOnly=*/false);
+		/*TopLevelOnly=*/true);
 
 	for (UUserWidget* Widget : MenuWidgets)
 	{
@@ -211,15 +232,20 @@ void UTDMenuFunctionLibrary::StretchOpenMenuScreens(UObject* WorldContextObject)
 			continue;
 		}
 
-		// If it was created but not yet in the viewport, add it fullscreen.
+		// Do not resurrect removed/hidden menu screens. The owning Blueprint decides
+		// which screen is active; this helper only corrects active screen geometry.
 		if (UGameViewportSubsystem* ViewportSubsystem = UGameViewportSubsystem::Get())
 		{
 			if (!ViewportSubsystem->IsWidgetAdded(Widget))
 			{
-				Widget->AddToViewport(PreferredMenuZOrder(Name));
+				continue;
 			}
 		}
 
+		const ESlateVisibility PreviousVisibility = Widget->GetVisibility();
+		const bool bWasEnabled = Widget->GetIsEnabled();
 		StretchWidgetToFillScreen(Widget, /*bCaptureMouseFocus=*/false);
+		Widget->SetVisibility(PreviousVisibility);
+		Widget->SetIsEnabled(bWasEnabled);
 	}
 }

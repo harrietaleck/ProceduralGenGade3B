@@ -10,10 +10,8 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
-#include "UObject/ConstructorHelpers.h"
 
 AHeroCharacter::AHeroCharacter()
 {
@@ -54,28 +52,19 @@ AHeroCharacter::AHeroCharacter()
 	FollowCamera->bUsePawnControlRotation = false;        // Boom already handles rotation.
 	FollowCamera->FieldOfView = 80.0f;                    // Slightly wider for tactical map overview.
 
-	// --- Visible placeholder body (capsule collision stays the real collider) ---
+	// Keep empty visual components for Blueprint compatibility, but the player is invisible.
+	// The Character capsule still provides movement/collision and the camera remains attached.
 	BodyMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BodyMesh"));
 	BodyMesh->SetupAttachment(RootComponent);
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> Cyl(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-	if (Cyl.Succeeded())
-	{
-		BodyMesh->SetStaticMesh(Cyl.Object);
-	}
-	BodyMesh->SetRelativeScale3D(FVector(0.7f, 0.7f, 1.75f));
-	BodyMesh->SetRelativeLocation(FVector(0.0f, 0.0f, -5.0f));
 	BodyMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	BodyMesh->SetHiddenInGame(true);
+	BodyMesh->SetVisibility(false);
 
 	HeadMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("HeadMesh"));
 	HeadMesh->SetupAttachment(RootComponent);
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> Sph(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
-	if (Sph.Succeeded())
-	{
-		HeadMesh->SetStaticMesh(Sph.Object);
-	}
-	HeadMesh->SetRelativeScale3D(FVector(0.45f));
-	HeadMesh->SetRelativeLocation(FVector(15.0f, 0.0f, 70.0f)); // Slightly forward = a "face".
 	HeadMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	HeadMesh->SetHiddenInGame(true);
+	HeadMesh->SetVisibility(false);
 }
 
 void AHeroCharacter::BeginPlay()

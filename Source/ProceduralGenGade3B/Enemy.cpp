@@ -6,6 +6,7 @@
 #include "Defender.h"
 #include "ProceduralTerrain.h"
 #include "TDGameMode.h"
+#include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"         // Complete UStaticMesh type for the mesh finder.
 #include "EngineUtils.h"               // TActorIterator, for scanning defenders.
@@ -33,6 +34,15 @@ AEnemy::AEnemy()
 	MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	MeshComponent->SetCollisionResponseToAllChannels(ECR_Overlap);
 
+	SpawnGlow = CreateDefaultSubobject<UPointLightComponent>(TEXT("SpawnPortalGlow"));
+	SpawnGlow->SetupAttachment(MeshComponent);
+	SpawnGlow->SetRelativeLocation(FVector::ZeroVector);
+	SpawnGlow->SetLightColor(SpawnGlowColor);
+	SpawnGlow->SetIntensity(SpawnGlowIntensity);
+	SpawnGlow->SetAttenuationRadius(300.0f);
+	SpawnGlow->SetSourceRadius(35.0f);
+	SpawnGlow->SetCastShadows(false);
+
 	// The shared health component. Explicit MaxHealth here (rather than relying on the
 	// component's own default) so the Basic Enemy spec's "100 HP" is self-documenting.
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
@@ -44,6 +54,20 @@ AEnemy::AEnemy()
 void AEnemy::BeginPlay()
 {
 	Super::BeginPlay();
+
+	SpawnTargetScale = MeshComponent->GetRelativeScale3D();
+	SpawnEffectElapsed = 0.0f;
+	if (SpawnEffectDuration > 0.0f)
+	{
+		MeshComponent->SetRelativeScale3D(SpawnTargetScale * 0.12f);
+		SpawnGlow->SetLightColor(SpawnGlowColor);
+		SpawnGlow->SetIntensity(SpawnGlowIntensity);
+		SpawnGlow->SetVisibility(true);
+	}
+	else
+	{
+		SpawnGlow->SetVisibility(false);
+	}
 
 	// React to our own death (reward the player and remove ourselves).
 	HealthComponent->OnDeath.AddDynamic(this, &AEnemy::HandleDeath);
@@ -63,6 +87,8 @@ void AEnemy::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 
+	UpdateSpawnEffect(DeltaSeconds);
+
 	if (HealthComponent->IsDead())
 	{
 		return;
@@ -77,6 +103,28 @@ void AEnemy::Tick(float DeltaSeconds)
 	else
 	{
 		MoveAlongPath(DeltaSeconds);
+	}
+}
+
+void AEnemy::UpdateSpawnEffect(float DeltaSeconds)
+{
+	if (SpawnEffectDuration <= 0.0f || SpawnEffectElapsed >= SpawnEffectDuration)
+	{
+		return;
+	}
+
+	SpawnEffectElapsed = FMath::Min(SpawnEffectElapsed + DeltaSeconds, SpawnEffectDuration);
+	const float Alpha = SpawnEffectElapsed / SpawnEffectDuration;
+	const float SmoothAlpha = FMath::InterpEaseOut(0.0f, 1.0f, Alpha, 3.0f);
+
+	MeshComponent->SetRelativeScale3D(
+		FMath::Lerp(SpawnTargetScale * 0.12f, SpawnTargetScale, SmoothAlpha));
+	SpawnGlow->SetIntensity(FMath::Lerp(SpawnGlowIntensity, 0.0f, SmoothAlpha));
+
+	if (Alpha >= 1.0f)
+	{
+		MeshComponent->SetRelativeScale3D(SpawnTargetScale);
+		SpawnGlow->SetVisibility(false);
 	}
 }
 
