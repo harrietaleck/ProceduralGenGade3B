@@ -2,22 +2,27 @@
 
 #include "CoreMinimal.h"
 #include "Defender.h"
-#include "PoisonLightBombDefender.generated.h"
 
-// ★★★ CHANGED: Specialised area-of-effect defender.
-// It attacks one of two designated areas and damages multiple enemies inside the radius.
+//Header matches
+#include "BombDefender.generated.h"
 
+//Specialise the defender to creat bomb areas
 UCLASS()
-class PROCEDURALGENGADE3B_API APoisonLightBombDefender : 
-public ADefender
+class PROCEDURALGENGADE3B_API APoisonLightBombDefender :
+    public ADefender
 {
     GENERATED_BODY()
 
-public:  APoisonLightBombDefender();
+public:
+    APoisonLightBombDefender();
 
-protected: virtual void BeginPlay() override;
+protected:
+    virtual void BeginPlay() override;
 
 private:
+    //Stores the sphere mesh so it can be reused during gameplay
+    UPROPERTY()
+    TObjectPtr<UStaticMesh> BombAreaMesh;
 
     //Two attack locations are selected for the bomb area
     UPROPERTY(EditAnywhere, Category = "Poison Light Bomb")
@@ -51,6 +56,6 @@ private:
     //Damage the enemies in the areas
     void DamageEnemiesInArea(const FVector& AreaLocation);
 
-    //Find which areas of the bomb areas have enemies 
+    //Find which areas of the bomb areas have enemies
     FVector GetBestAttackArea() const;
 };

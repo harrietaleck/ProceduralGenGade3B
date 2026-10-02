@@ -8,14 +8,11 @@
 #include "Defender.h"
 #include "ProceduralTerrain.h"
 #include "TDGameMode.h"
-
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
-
 #include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
 #include "Engine/World.h"
-
 #include "UObject/ConstructorHelpers.h"
 
 static constexpr float WaypointAcceptRadius = 55.0f;
@@ -26,27 +23,25 @@ AEnemy::AEnemy()
 
     // Create the enemy mesh.
     MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("EnemyMesh"));
-
     SetRootComponent(MeshComponent);
 
     // Basic enemy starts as a sphere.
-    static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
-
+    static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(
+        TEXT("/Engine/BasicShapes/Sphere.Sphere"));
     if (SphereMesh.Succeeded())
     {
         MeshComponent->SetStaticMesh(SphereMesh.Object);
     }
 
-    MeshComponent->SetRelativeScale3D(Vector(0.6f));
+    //Vector was changed to FVector so the Unreal vector type is recognised
+    MeshComponent->SetRelativeScale3D(FVector(0.6f));
 
     // We move the enemy manually.
     MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-
     MeshComponent->SetCollisionResponseToAllChannels(ECR_Overlap);
 
     // Create spawn glow.
     SpawnGlow = CreateDefaultSubobject<UPointLightComponent>(TEXT("SpawnPortalGlow"));
-
     SpawnGlow->SetupAttachment(MeshComponent);
     SpawnGlow->SetRelativeLocation(FVector::ZeroVector);
     SpawnGlow->SetLightColor(SpawnGlowColor);
@@ -57,170 +52,384 @@ AEnemy::AEnemy()
 
     // Create health.
     HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
-
     HealthComponent->MaxHealth = 100.0f;
-
     CreateDefaultSubobject<UDamageFlashComponent>(TEXT("DamageFlash"));
 }
 
-void AEnemy::SetEnemyType(EEnemyType InEnemyType)
-{
-    // Store the enemy type.
-    EnemyType = InEnemyType;
 
-    // Apply the correct stats and visual.
+//Starts the enemy's health/death system and applies its variant stats
+void AEnemy::BeginPlay()
+{
+    Super::BeginPlay();
+
+    if (HealthComponent)
+    {
+        HealthComponent->OnDeath.AddDynamic(
+            this,
+            &AEnemy::HandleDeath);
+    }
+
     ApplyEnemyType();
+
+    CurrentSpeed = 0.0f;
+    AttackTimer = 0.0f;
+    SpawnEffectElapsed = 0.0f;
+
+    SpawnTargetScale = MeshComponent
+        ? MeshComponent->GetRelativeScale3D()
+        : FVector::OneVector;
 }
 
+
+//Updates the spawn effect, attacking and movement every frame
+void AEnemy::Tick(float DeltaSeconds)
+{
+    Super::Tick(DeltaSeconds);
+
+    if (!HealthComponent || HealthComponent->IsDead())
+    {
+        return;
+    }
+
+    UpdateSpawnEffect(DeltaSeconds);
+
+    //Look for a defender first
+    AActor* Target = FindTargetInRange();
+
+    if (Target)
+    {
+        TryAttack(Target, DeltaSeconds);
+        return;
+    }
+
+    //If there is no defender to attack, continue toward the tower
+    MoveAlongPath(DeltaSeconds);
+}
+
+
+// Changes the enemy variant before BeginPlay
+void AEnemy::SetEnemyType(EEnemyType InEnemyType)
+{
+    EnemyType = InEnemyType;
+}
+
+
+//Gives this enemy the terrain path it must follow
+void AEnemy::SetPath(const TArray<FVector>& InWaypoints)
+{
+    Waypoints = InWaypoints;
+    CurrentWaypoint = 0;
+}
+
+
+//Applies different stats to Basic, Bear and Wolf
 void AEnemy::ApplyEnemyType()
 {
-    FString MeshPath;
-
     switch (EnemyType)
     {
+    case EEnemyType::Basic:
+
+        MoveSpeed = 150.0f;
+        AttackDamage = 10.0f;
+        AttackInterval = 1.0f;
+        AttackRange = 280.0f;
+
+        if (HealthComponent)
+        {
+            HealthComponent->MaxHealth = 100.0f;
+        }
+
+        break;
+
+
     case EEnemyType::Bear:
 
-        //Bear is slower but stronger.
-        MoveSpeed = 75.0f;
+        //Bear is slower but has much more health and damage
+        MoveSpeed = 90.0f;
+        AttackDamage = 20.0f;
+        AttackInterval = 1.2f;
+        AttackRange = 300.0f;
 
-        //Bear is the strongest enemy and deals the most damage.
-        AttackDamage = 30.0f;
-
-        ResourceReward = 35;
-
-        //Bear has much more health than the other enemies.
-        HealthComponent->MaxHealth = 250.0f;
-
-        MeshPath = TEXT("/Engine/BasicShapes/Cube.Cube");
-
-        MeshComponent->SetRelativeScale3D(FVector(1.0f));
-
-        ResourceType = EResourceType::ArcaneOrb;
+        if (HealthComponent)
+        {
+            HealthComponent->MaxHealth = 250.0f;
+        }
 
         break;
 
 
     case EEnemyType::Wolf:
 
-        //Wolf is faster but weaker.
-        MoveSpeed = 240.0f;
-
-        // Wolf hits harder than Basic but less than Bear.
+        //Wolf is faster but has less health than the Bear
+        MoveSpeed = 220.0f;
         AttackDamage = 15.0f;
+        AttackInterval = 0.7f;
+        AttackRange = 300.0f;
 
-        ResourceReward = 25;
-
-        HealthComponent->MaxHealth = 75.0f;
-
-        MeshPath = TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
-
-        MeshComponent->SetRelativeScale3D(FVector(0.45f));
-
-        ResourceType = EResourceType::ToxicMucus;
-
-        break;
-
-
-    default:
-
-        // Basic enemy is balanced.
-        MoveSpeed = 150.0f;
-
-        //Basic is the weakest attacker.
-        AttackDamage = 10.0f;
-
-        ResourceReward = 20;
-
-        HealthComponent->MaxHealth = 100.0f;
-
-        MeshPath = TEXT("/Engine/BasicShapes/Sphere.Sphere");
-
-        MeshComponent->SetRelativeScale3D(FVector(0.6f));
-
-        ResourceType = EResourceType::ArcaneOrb;
+        if (HealthComponent)
+        {
+            HealthComponent->MaxHealth = 140.0f;
+        }
 
         break;
     }
-
-    // Apply the selected mesh.
-    MeshComponent->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,*MeshPath));
 }
 
-void AEnemy::BeginPlay()
+
+//Handles the enemy's glowing spawn animation
+void AEnemy::UpdateSpawnEffect(float DeltaSeconds)
 {
-    Super::BeginPlay();
-
-    // Apply the enemy settings again in case the enemy was placed
-    // directly in the level instead of being created by the spawner.
-    ApplyEnemyType();
-
-    // Start the spawn effect.
-    SpawnTargetScale = MeshComponent->GetRelativeScale3D();
-
-    SpawnEffectElapsed = 0.0f;
-
-    if (SpawnEffectDuration > 0.0f)
+    if (!MeshComponent)
     {
-        MeshComponent->SetRelativeScale3D(SpawnTargetScale * 0.12f);
-
-        SpawnGlow->SetLightColor( SpawnGlowColor);
-
-        SpawnGlow->SetIntensity(SpawnGlowIntensity);
-
-        SpawnGlow->SetVisibility(true);
-    }
-    else
-    {
-        SpawnGlow->SetVisibility(false);
+        return;
     }
 
-    // Listen for death.
-    HealthComponent->OnDeath.AddDynamic(this,& AEnemy::HandleDeath);
+    SpawnEffectElapsed += DeltaSeconds;
+
+    if (SpawnEffectDuration <= 0.0f)
+    {
+        MeshComponent->SetRelativeScale3D(SpawnTargetScale);
+
+        if (SpawnGlow)
+        {
+            SpawnGlow->SetVisibility(false);
+        }
+
+        return;
+    }
+
+    const float Alpha =
+        FMath::Clamp(
+            SpawnEffectElapsed / SpawnEffectDuration,
+            0.0f,
+            1.0f);
+
+    const float ScaleMultiplier =
+        FMath::Lerp(0.15f, 1.0f, Alpha);
+
+    MeshComponent->SetRelativeScale3D(
+        SpawnTargetScale * ScaleMultiplier);
+
+    if (SpawnGlow)
+    {
+        SpawnGlow->SetIntensity(
+            SpawnGlowIntensity * (1.0f - Alpha));
+
+        if (Alpha >= 1.0f)
+        {
+            SpawnGlow->SetVisibility(false);
+        }
+    }
 }
-void AEnemy::TryAttack(AActor* Target, float DeltaSeconds)
+
+
+//Moves the enemy through its waypoint path
+void AEnemy::MoveAlongPath(float DeltaSeconds)
 {
-    //Do not attack if there isnt a target
-    if (!Target)
+    if (Waypoints.Num() == 0)
     {
         return;
     }
 
-    //Count down the attack timer
-    AttackTimer -= DeltaSeconds;
+    //If all waypoints are complete, attack the tower
+    if (CurrentWaypoint >= Waypoints.Num())
+    {
+        if (TargetTower)
+        {
+            TryAttack(TargetTower, DeltaSeconds);
+        }
 
-    //Create a wait time till the enemy can attack
-    if (AttackTimer > 0.0f)
+        return;
+    }
+
+    const FVector CurrentLocation = GetActorLocation();
+    const FVector TargetLocation = Waypoints[CurrentWaypoint];
+
+    FVector Direction =
+        TargetLocation - CurrentLocation;
+
+    Direction.Z = 0.0f;
+
+    const float Distance = Direction.Size();
+
+    if (Distance <= WaypointAcceptRadius)
+    {
+        CurrentWaypoint++;
+
+        //Attack the tower after reaching the final waypoint
+        if (CurrentWaypoint >= Waypoints.Num() && TargetTower)
+        {
+            TryAttack(TargetTower, DeltaSeconds);
+        }
+
+        return;
+    }
+
+    Direction.Normalize();
+
+    CurrentSpeed = FMath::FInterpTo(
+        CurrentSpeed,
+        MoveSpeed,
+        DeltaSeconds,
+        Acceleration);
+
+    const FVector NewLocation =
+        CurrentLocation +
+        Direction * CurrentSpeed * DeltaSeconds;
+
+    SetActorLocation(NewLocation);
+
+    if (!Direction.IsNearlyZero())
+    {
+        const FRotator TargetRotation =
+            Direction.Rotation();
+
+        const FRotator NewRotation =
+            FMath::RInterpTo(
+                GetActorRotation(),
+                TargetRotation,
+                DeltaSeconds,
+                TurnRate);
+
+        SetActorRotation(NewRotation);
+    }
+}
+
+
+//Damages the selected defender or tower
+void AEnemy::TryAttack(
+    AActor* Target,
+    float DeltaSeconds)
+{
+    if (!Target || !HealthComponent || HealthComponent->IsDead())
     {
         return;
     }
 
-    //Find the health componenet
-    UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>();
+    UHealthComponent* TargetHealth =
+        Target->FindComponentByClass<UHealthComponent>();
 
-    //Stop attacking if there isnt a healt ccomponent
-    if (!TargetHealth)
+    if (!TargetHealth || TargetHealth->IsDead())
     {
         return;
     }
 
-    //Stop attacking whatt is dead
-    if (TargetHealth->IsDead())
-    {
-        return;
-    }
+    const float Distance =
+        FVector::Dist(
+            GetActorLocation(),
+            Target->GetActorLocation());
 
-    //Caculate the distance to the target
-    const float Distance = FVector::Dist(GetActorLocation(),Target->GetActorLocation());
-
-    //Do not attack when the enemy is not in attack range
     if (Distance > AttackRange)
     {
         return;
     }
 
-    //Inflict damage to the health componenet system use on the defenders
-    TargetHealth->ApplyDamage(AttackDamage,this);
+    AttackTimer -= DeltaSeconds;
 
-    //Reset the attack time
-    AttackTimer = AttackInterval;
+    if (AttackTimer <= 0.0f)
+    {
+        //The enemy damages the defender/tower directly
+        TargetHealth->ApplyDamage(
+            AttackDamage,
+            this);
+
+        AttackTimer = AttackInterval;
+    }
+}
+
+
+//Finds a living defender within attack range
+AActor* AEnemy::FindTargetInRange() const
+{
+    UWorld* World = GetWorld();
+
+    if (!World)
+    {
+        return nullptr;
+    }
+
+    ADefender* ClosestDefender = nullptr;
+    float ClosestDistanceSquared = BIG_NUMBER;
+
+    for (TActorIterator<ADefender> It(World);
+         It;
+         ++It)
+    {
+        ADefender* Defender = *It;
+
+        if (!Defender)
+        {
+            continue;
+        }
+
+        UHealthComponent* DefenderHealth =
+            Defender->FindComponentByClass<UHealthComponent>();
+
+        if (!DefenderHealth || DefenderHealth->IsDead())
+        {
+            continue;
+        }
+
+        const float DistanceSquared =
+            FVector::DistSquared(
+                GetActorLocation(),
+                Defender->GetActorLocation());
+
+        if (DistanceSquared >
+            FMath::Square(AttackRange))
+        {
+            continue;
+        }
+
+        //Keep the nearest defender as the target
+        if (DistanceSquared < ClosestDistanceSquared)
+        {
+            if (HasLineOfSightTo(Defender))
+            {
+                ClosestDistanceSquared = DistanceSquared;
+                ClosestDefender = Defender;
+            }
+        }
+    }
+
+    return ClosestDefender;
+}
+
+
+//Checks whether the enemy can see the defender
+bool AEnemy::HasLineOfSightTo(
+    const AActor* Target) const
+{
+    if (!Target || !GetWorld())
+    {
+        return false;
+    }
+
+    FHitResult Hit;
+
+    FCollisionQueryParams QueryParams;
+    QueryParams.AddIgnoredActor(this);
+
+    const bool bHit =
+        GetWorld()->LineTraceSingleByChannel(
+            Hit,
+            GetActorLocation(),
+            Target->GetActorLocation(),
+            ECC_Visibility,
+            QueryParams);
+
+    //If nothing blocks the trace, the target can be attacked
+    if (!bHit)
+    {
+        return true;
+    }
+
+    return Hit.GetActor() == Target;
+}
+
+
+//Removes the enemy when its health reaches zero
+void AEnemy::HandleDeath(AActor* Killer)
+{
+    Destroy();
 }

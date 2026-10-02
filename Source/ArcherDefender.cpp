@@ -1,13 +1,36 @@
 #include "ArcherDefender.h"
+
 #include "Enemy.h"
 #include "HealthComponent.h"
 #include "Projectile.h"
 #include "EngineUtils.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "UObject/ConstructorHelpers.h"
 
 AArcherDefender::AArcherDefender()
 {
     //Due not use the timer that is exactly like the original defender
     bUseDefaultAttack = false;
+
+    // *** NEW: Use a cone mesh to give the Archer Defender a tall, pointed silhouette.
+    static ConstructorHelpers::FObjectFinder<UStaticMesh> ConeMesh(
+        TEXT("/Engine/BasicShapes/Cone.Cone")
+    );
+
+    // *** NEW: Replace the inherited cylinder with the archer's cone shape.
+    if (ConeMesh.Succeeded() && MeshComponent)
+    {
+        MeshComponent->SetStaticMesh(ConeMesh.Object);
+    }
+
+    // *** NEW: Make the cone taller and narrower so it looks different from the Basic Defender.
+    if (MeshComponent)
+    {
+        MeshComponent->SetRelativeScale3D(
+            FVector(0.65f, 0.65f, 1.5f)
+        );
+    }
 
     //Set the long range attack distance
     AttackRange = 1000.0f;
@@ -53,7 +76,6 @@ void AArcherDefender::FireArrow()
     }
 
     AEnemy* Target = FindNearestEnemyForArcher();
-
     if (!Target)
     {
         return;
@@ -65,9 +87,8 @@ void AArcherDefender::FireArrow()
     if (ProjectileClass)
     {
         FActorSpawnParameters SpawnParams;
-
-        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
+        SpawnParams.SpawnCollisionHandlingOverride =
+            ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
         SpawnParams.Owner = this;
 
         if (AProjectile* Arrow =
@@ -93,7 +114,16 @@ void AArcherDefender::FireArrow()
     else
     {
         //When a projectile is not being selected but will do on default
-            TargetHealth->ApplyDamage(AttackDamage,this);
+        //Create target health component before applying fallback damage
+        UHealthComponent* TargetHealth =
+            Target->FindComponentByClass<UHealthComponent>();
+
+        if (TargetHealth)
+        {
+            TargetHealth->ApplyDamage(
+                AttackDamage,
+                this
+            );
         }
     }
 }
@@ -104,7 +134,6 @@ AEnemy* AArcherDefender::FindNearestEnemyForArcher() const
     const FVector Location = GetActorLocation();
 
     AEnemy* BestEnemy = nullptr;
-
     float BestDistanceSquared = AttackRange * AttackRange;
 
     for (TActorIterator<AEnemy> It(GetWorld()); It; ++It)
@@ -116,14 +145,18 @@ AEnemy* AArcherDefender::FindNearestEnemyForArcher() const
             continue;
         }
 
-        UHealthComponent* EnemyHealth = Enemy->FindComponentByClass<UHealthComponent>();
+        UHealthComponent* EnemyHealth =
+            Enemy->FindComponentByClass<UHealthComponent>();
 
         if (!EnemyHealth || EnemyHealth->IsDead())
         {
             continue;
         }
 
-        const float DistanceSquared = FVector::DistSquared(Location, Enemy->GetActorLocation());
+        const float DistanceSquared =
+            FVector::DistSquared(
+                Location,
+                Enemy->GetActorLocation());
 
         if (DistanceSquared <= BestDistanceSquared)
         {

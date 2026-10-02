@@ -1,6 +1,6 @@
 // Defender.cpp — see Defender.h for the overview.
-
 #include "Defender.h"
+
 #include "HealthComponent.h"
 #include "DamageFlashComponent.h"
 #include "Enemy.h"
@@ -21,25 +21,28 @@ ADefender::ADefender()
     MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DefenderMesh"));
     SetRootComponent(MeshComponent);
 
-    static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
+    // *** CHANGED: Use a cylinder instead of the original cube for the Basic Defender.
+    static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(
+        TEXT("/Engine/BasicShapes/Cylinder.Cylinder")
+    );
 
-    if (CubeMesh.Succeeded())
+    // *** CHANGED: Assign the cylinder mesh when the asset is found.
+    if (CylinderMesh.Succeeded())
     {
-        MeshComponent->SetStaticMesh(CubeMesh.Object);
+        MeshComponent->SetStaticMesh(CylinderMesh.Object);
     }
 
-    MeshComponent->SetRelativeScale3D(FVector(0.8f, 0.8f, 1.2f));
+    // *** CHANGED: Scale the cylinder into a small tower-like defender shape.
+    MeshComponent->SetRelativeScale3D(FVector(0.9f, 0.9f, 1.2f));
+
     MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
     MeshComponent->SetCollisionResponseToAllChannels(ECR_Overlap);
 
     // Shared health component.
     HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
     HealthComponent->MaxHealth = 120.0f;
-
     CreateDefaultSubobject<UDamageFlashComponent>(TEXT("DamageFlash"));
-
     ProjectileClass = AProjectile::StaticClass();
-
     MetaCost.ForestEssence = 8;
     MetaCost.WoodenMight = 5;
     MetaCost.GemStones = 0;
@@ -75,7 +78,6 @@ void ADefender::FireAtNearestEnemy()
     }
 
     AEnemy* Target = FindNearestEnemyInRange();
-
     if (!Target)
     {
         return;
@@ -89,7 +91,6 @@ void ADefender::FireAtNearestEnemy()
         FActorSpawnParameters SpawnParams;
         SpawnParams.SpawnCollisionHandlingOverride =
             ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
         SpawnParams.Owner = this;
 
         if (AProjectile* Shot =
@@ -117,9 +118,7 @@ void ADefender::FireAtNearestEnemy()
 AEnemy* ADefender::FindNearestEnemyInRange() const
 {
     const FVector Location = GetActorLocation();
-
     AEnemy* Best = nullptr;
-
     float BestDistSq = AttackRange * AttackRange;
 
     for (TActorIterator<AEnemy> It(GetWorld()); It; ++It)
@@ -154,9 +153,7 @@ void ADefender::HandleDeath(AActor* Killer)
 {
     // Stop firing and remove the actor. Freeing its build slot happens in EndPlay, which fires
     // for every destruction path (not just this one), so occupancy can never go stale.
-
     GetWorldTimerManager().ClearTimer(FireTimerHandle);
-
     Destroy();
 }
 
@@ -164,7 +161,6 @@ void ADefender::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
     // Free the build slot this defender occupied, however it's being destroyed (death, level
     // teardown, etc.), so the terrain's persisted occupancy state never goes stale.
-
     if (bHasOccupiedSlot)
     {
         if (ATDGameMode* GameMode =

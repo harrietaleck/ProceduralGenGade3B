@@ -4,7 +4,6 @@
 // that the player controller checks before placing one.
 
 #pragma once
-
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "TDMatchRewards.h"
@@ -19,7 +18,6 @@ UCLASS()
 class PROCEDURALGENGADE3B_API ADefender : public AActor
 {
     GENERATED_BODY()
-
 public:
     ADefender();
 
@@ -97,7 +95,8 @@ protected:
     void HandleDeath(AActor* Killer);
 
     /**Simple cube visual + root */
-    UPROPERTY(VisibleAnywhere, Category = "Defender", meta = (AllowPrivateAccess = "true"))
+    // *** CHANGED: MeshComponent is protected so ArcherDefender and BombDefender can change their shapes.
+    UPROPERTY(VisibleAnywhere, Category = "Defender")
     TObjectPtr<UStaticMeshComponent> MeshComponent;
 
 private:
