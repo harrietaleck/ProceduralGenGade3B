@@ -96,11 +96,11 @@ void UTDHUDWidget::InitializeHUD(ATDGameMode* InGameMode)
                 TEXT("0 Remaining")));
     }
 
-        //No defender is selected when the HUD first appears
+    //Basic is selected when the HUD first appears
     if (BasicDefenderButton)
     {
         BasicDefenderButton->SetBackgroundColor(
-            FLinearColor(0.75f, 0.60f, 0.03f));
+            FLinearColor(1.0f, 0.85f, 0.05f));
     }
 
     //Archer starts darker green.
