@@ -28,41 +28,6 @@ enum class EEnemyType : uint8
     Bear UMETA(DisplayName = "Bear"),
     Wolf UMETA(DisplayName = "Wolf")
 };
-USTRUCT(BlueprintType)
-struct FEnemyStats
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
-    float MoveSpeed = 150.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
-    float Acceleration = 68.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
-    float TurnRate = 2.6f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
-    float AttackDamage = 10.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
-    float AttackInterval = 1.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
-    float AttackRange = 280.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
-    float DetectionRadius = 450.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
-    int32 ResourceReward = 20;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
-    float MaxHealth = 100.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
-    float MeshScale = 0.6f;
-};
 
 UCLASS()
 class PROCEDURALGENGADE3B_API AEnemy : public AActor
@@ -127,7 +92,8 @@ public:
 
     // Spawn glow colour.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Spawn Effect")
-    FLinearColor SpawnGlowColor = FLinearColor(0.15f, 0.9f, 1.0f);
+    FLinearColor SpawnGlowColor =
+        FLinearColor(0.15f, 0.9f, 1.0f);
 
     // Health component.
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy")
@@ -137,12 +103,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Enemy")
     void SetEnemyType(EEnemyType InEnemyType);
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy")
-	FEnemyStats EnemyStats;
-
     // Give the enemy its path.
     UFUNCTION(BlueprintCallable, Category = "Enemy")
-    void SetPath(const TArray<FVector>& InWaypoints);
+    void SetPath(
+        const TArray<FVector>& InWaypoints);
 
     // Give the enemy its tower target.
     UFUNCTION(BlueprintCallable, Category = "Enemy")
@@ -154,7 +118,6 @@ public:
 protected:
 
     virtual void BeginPlay() override;
-
     virtual void Tick(float DeltaSeconds) override;
 
     // Called when health reaches zero.
@@ -204,11 +167,14 @@ private:
     void MoveAlongPath(float DeltaSeconds);
 
     // Attack.
-    void TryAttack(AActor* Target, float DeltaSeconds);
+    void TryAttack(
+        AActor* Target,
+        float DeltaSeconds);
 
     // Find a valid target.
     AActor* FindTargetInRange() const;
 
     // Check line of sight.
-    bool HasLineOfSightTo(const AActor* Target) const;
+    bool HasLineOfSightTo(
+        const AActor* Target) const;
 };

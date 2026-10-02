@@ -17,7 +17,6 @@ class PROCEDURALGENGADE3B_API AEnemySpawner : public AActor
     GENERATED_BODY()
 
 public:
-
     AEnemySpawner();
 
     // Enemy class to spawn.

@@ -64,8 +64,7 @@ AEnemy* AEnemySpawner::SpawnSingleEnemy()
     const TArray<FEnemyPath>& Paths =
         Terrain->GetEnemyPaths();
 
-    if (Paths.Num() == 0 ||
-        !EnemyClass)
+    if (Paths.Num() == 0 || !EnemyClass)
     {
         return nullptr;
     }
@@ -77,7 +76,7 @@ AEnemy* AEnemySpawner::SpawnSingleEnemy()
         return nullptr;
     }
 
-    // Choose path.
+    // Choose the next path.
     const int32 PathIndex =
         NextPathIndex % Paths.Num();
 
@@ -87,29 +86,16 @@ AEnemy* AEnemySpawner::SpawnSingleEnemy()
     const FEnemyPath& Path =
         Paths[PathIndex];
 
-    // Decide which enemy type to create.
-    EEnemyType EnemyType;
+    // Choose Basic, Bear or Wolf.
+    EEnemyType EnemyType =
+        static_cast<EEnemyType>(
+            SpawnedEnemyTypeIndex);
 
-    switch (SpawnedEnemyTypeIndex % 3)
-    {
-    case 0:
-        EnemyType = EEnemyType::Basic;
-        break;
-
-    case 1:
-        EnemyType = EEnemyType::Bear;
-        break;
-
-    default:
-        EnemyType = EEnemyType::Wolf;
-        break;
-    }
-
-    // Move to the next enemy type for the next spawn.
+    // Move to the next enemy type.
     SpawnedEnemyTypeIndex =
         (SpawnedEnemyTypeIndex + 1) % 3;
 
-    // Use the default enemy's clearance for initial placement.
+    // Create the spawn location.
     const FVector SpawnLocation =
         Path.SpawnPoint +
         FVector(
@@ -117,20 +103,18 @@ AEnemy* AEnemySpawner::SpawnSingleEnemy()
             0.0f,
             EnemyClass.GetDefaultObject()->GroundClearance);
 
-    FActorSpawnParameters SpawnParams;
+    const FTransform SpawnTransform(
+        FRotator::ZeroRotator,
+        SpawnLocation);
 
-    SpawnParams.SpawnCollisionHandlingOverride =
-        ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-    // IMPORTANT:
-    // Deferred spawning lets us select Basic/Bear/Wolf
-    // BEFORE BeginPlay executes.
+    // Create the enemy without starting BeginPlay yet.
     AEnemy* Enemy =
         GetWorld()->SpawnActorDeferred<AEnemy>(
             EnemyClass,
-            FTransform(
-                FRotator::ZeroRotator,
-                SpawnLocation));
+            SpawnTransform,
+            this,
+            nullptr,
+            ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 
     if (!Enemy)
     {
@@ -140,17 +124,14 @@ AEnemy* AEnemySpawner::SpawnSingleEnemy()
     // Set the enemy type before BeginPlay.
     Enemy->SetEnemyType(EnemyType);
 
-    // Finish the spawn.
-    Enemy->FinishSpawning(
-        FTransform(
-            FRotator::ZeroRotator,
-            SpawnLocation));
-
     // Give the enemy its path.
     Enemy->SetPath(Path.Waypoints);
 
     // Give the enemy its tower target.
     Enemy->SetTargetTower(Tower);
+
+    // Finish spawning and start BeginPlay.
+    Enemy->FinishSpawning(SpawnTransform);
 
     return Enemy;
 }
