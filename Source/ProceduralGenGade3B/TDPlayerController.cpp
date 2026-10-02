@@ -17,6 +17,7 @@
 #include "TDGameMode.h"
 
 #include "TDHUDWidget.h"
+#include "TDHUD.h"
 
 #include "DrawDebugHelpers.h"
 
@@ -131,6 +132,19 @@ void ATDPlayerController::SetupInputComponent()
         this,
         &ATDPlayerController::SelectStrongDefender
     );
+
+    //Press G to show the wave director graph (works on the paused results screen too)
+    FInputKeyBinding& GraphBinding =
+        InputComponent->BindKey(EKeys::G, IE_Pressed, this, &ATDPlayerController::OnToggleDirectorGraph);
+    GraphBinding.bExecuteWhenPaused = true;
+}
+
+void ATDPlayerController::OnToggleDirectorGraph()
+{
+    if (ATDHUD* TDHUD = Cast<ATDHUD>(GetHUD()))
+    {
+        TDHUD->ToggleDirectorGraph();
+    }
 }
 
 void ATDPlayerController::OnToggleNavMeshDebug()

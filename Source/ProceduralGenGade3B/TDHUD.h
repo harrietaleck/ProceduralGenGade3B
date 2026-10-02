@@ -10,9 +10,11 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
+#include "WaveDirector.h"
 #include "TDHUD.generated.h"
 
 class ATDGameMode;
+class AWaveManager;
 
 UCLASS()
 class PROCEDURALGENGADE3B_API ATDHUD : public AHUD
@@ -23,7 +25,22 @@ public:
 	/** Called every frame by the engine to paint the HUD. */
 	virtual void DrawHUD() override;
 
+	/** Show or hide the wave director graph (G). It also appears automatically when the match ends. */
+	void ToggleDirectorGraph() { bShowDirectorGraph = !bShowDirectorGraph; }
+
 private:
+	bool bShowDirectorGraph = false;
+
+	/** Lane forecast, refreshed on real time so it keeps updating while the game is paused. */
+	TArray<FLaneForecast> CachedForecast;
+	double LastForecastRefresh = -1.0;
+
+	/** Between waves: next wave summary plus a marker over every lane's spawn point. */
+	void DrawWaveForecast(ATDGameMode* GameMode, AWaveManager* WaveManager);
+
+	/** Difficulty rating and wave score per wave, with the 65% target band. */
+	void DrawDirectorGraph(const UWaveDirector* Director);
+
 	/** Draw pause overlay and the readable info panel (defenders, cost, seed, controls). */
 	void DrawInfoPanel(ATDGameMode* GameMode);
 
