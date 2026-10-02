@@ -7,6 +7,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Enemy.h"
 #include "EnemySpawner.generated.h"
 
 class AProceduralTerrain;
@@ -23,6 +24,14 @@ public:
 	/** Which enemy class to spawn (defaults to the C++ AEnemy; can be a Blueprint child). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawner")
 	TSubclassOf<AEnemy> EnemyClass;
+
+	//Enemy generator to decide on the enemy to spawn using an array
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawner")
+	bool bUseEnemyTypes = true;
+
+	//Set the enemy spawn list to be controled in an order sequence based on the types
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawner")
+	TArray<EEnemyType> EnemyTypes;
 
 	/** Seconds between spawns. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawner", meta = (ClampMin = "0.1"))
@@ -61,17 +70,24 @@ protected:
 	void SpawnEnemy();
 
 private:
-	UPROPERTY()
-	TObjectPtr<AProceduralTerrain> Terrain;
 
-	UPROPERTY()
-	TObjectPtr<AActor> Tower;
+    //Create the procedural generation that wull provde the enemies paths
+    UPROPERTY()
+    TObjectPtr<AProceduralTerrain> Terrain;
 
-	/** Which path to use for the next spawn (cycles 0..NumPaths-1). */
-	int32 NextPathIndex = 0;
+    //Create a destination enemies target
+    UPROPERTY()
+    TObjectPtr<AActor> Tower;
 
-	FTimerHandle SpawnTimerHandle;
+    //Keep track of which path the enemy will spawn next
+    int32 NextPathIndex = 0;
 
-	/** Count currently-alive enemies (used only when MaxEnemiesAlive > 0). */
-	int32 CountAliveEnemies() const;
+	//Create a tracker to keep track of the order of enemy types
+    int32 SpawnedEnemyTypeIndex = 0;
+
+    //Timer that is used from the automatic spawning systems
+    FTimerHandle SpawnTimerHandle;
+
+    //Check how many enemies are alive in the world
+    int32 CountAliveEnemies() const;
 };

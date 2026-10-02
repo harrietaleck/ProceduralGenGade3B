@@ -43,6 +43,10 @@ class PROCEDURALGENGADE3B_API AEnemy : public AActor
 public:
 	AEnemy();
 
+	/**Set all the enemy types prior the enemy starts the gameplay*/
+	UFUNCTION(BlueprintCallable, Category = "Enemy")
+	void SetEnemyType(EEnemyType InEnemyType);
+
 	/** Movement speed along the path, in Unreal units per second. Tuned for the 200uu cell
 	 *  grid so a full border-to-tower walk takes ~25–35s — deliberate but not crawling. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy", meta = (ClampMin = "0.0"))
@@ -102,8 +106,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy")
 	TObjectPtr<UHealthComponent> HealthComponent;
     
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
-    EEnemyType EnemyType = EEnemyType::Basic;
+	/**Create a functionality that decdides which enemy the actor represents*/
+	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Enemy",
+	meta = (ExposeOnSpawn = "true"))EnemyType EnemyType = EEnemyType::Basic;
 
 	/** Give this enemy the ordered world-space waypoints to walk (spawn -> tower). */
 	UFUNCTION(BlueprintCallable, Category = "Enemy")

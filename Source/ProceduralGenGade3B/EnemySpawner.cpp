@@ -7,11 +7,16 @@
 
 AEnemySpawner::AEnemySpawner()
 {
-	// Spawning is timer-driven, so no per-frame tick.
-	PrimaryActorTick.bCanEverTick = false;
+   	//Create the spawner setup to which runs when the enemy timer begins
+    PrimaryActorTick.bCanEverTick = false;
 
-	// Default to the plain C++ enemy unless a designer overrides it.
-	EnemyClass = AEnemy::StaticClass();
+    //Create a default enemy class when an enemy isnt assigned 
+    EnemyClass = AEnemy::StaticClass();
+
+    //Create default enemy types
+    EnemyTypes.Add(EEnemyType::Basic);
+    EnemyTypes.Add(EEnemyType::Bear);
+    EnemyTypes.Add(EEnemyType::Wolf);
 }
 
 void AEnemySpawner::Initialize(AProceduralTerrain* InTerrain, AActor* InTower)
@@ -74,7 +79,21 @@ AEnemy* AEnemySpawner::SpawnSingleEnemy()
 	AEnemy* Enemy = GetWorld()->SpawnActor<AEnemy>(EnemyClass, SpawnLocation, FRotator::ZeroRotator, SpawnParams);
 	if (Enemy)
 	{
+		//Create an ability to choose an enemy type in the array 
+		if (bUseEnemyTypes && EnemyTypes.Num() > 0)
+		{
+			//Use the index that is current to select the enemy type
+			const int32 TypeIndex =	SpawnedEnemyTypeIndex % EnemyTypes.Num();
+
+			//Illustrate what enemy type the spawn enemy is
+			Enemy->EnemyType = EnemyTypes[TypeIndex];
+
+			//Increment onto the next spawn
+			SpawnedEnemyTypeIndex =	(SpawnedEnemyTypeIndex + 1) % EnemyTypes.Num();
+		}
+		//Give the enemy its path to tread on
 		Enemy->SetPath(Path.Waypoints);
+		//Designate the enemy the tower that needs to be attacked
 		Enemy->SetTargetTower(Tower);
 	}
 	return Enemy;

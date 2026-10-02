@@ -50,6 +50,11 @@ AEnemy::AEnemy()
 
 	CreateDefaultSubobject<UDamageFlashComponent>(TEXT("DamageFlash"));
 }
+void AEnemy::SetEnemyType(EEnemyType InEnemyType)
+{
+    //Store the enemy type selected by the spawner
+    EnemyType = InEnemyType;
+}
 
 void AEnemy::BeginPlay()
 {
@@ -186,6 +191,8 @@ void AEnemy::BeginPlay()
 
 void AEnemy::SetPath(const TArray<FVector>& InWaypoints)
 {
+	//Store the enemy type
+	EnemyType = InEnemyType;
 	Waypoints = InWaypoints;
 	CurrentWaypoint = 0;
 	CurrentSpeed = 0.0f;
