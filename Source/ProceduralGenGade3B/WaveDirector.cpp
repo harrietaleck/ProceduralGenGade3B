@@ -172,11 +172,17 @@ void UWaveDirector::EvaluateWave(UWorld* World)
 	Result.BankedLoot = GameMode ? GameMode->GetResources() : 0;
 	const float EconomyScore = FMath::Clamp(Result.BankedLoot / 300.0f, 0.0f, 1.0f);
 
+	Result.TowerScore = TowerScore;
+	Result.KillScore = KillScore;
+	Result.DefenderScore = DefenderScore;
+	Result.EconomyScore = EconomyScore;
 	Result.Score = 0.4f * TowerScore + 0.3f * KillScore + 0.2f * DefenderScore + 0.1f * EconomyScore;
 
 	// Rubber band towards the target: above target -> harder, below -> easier.
 	const float PreviousDifficulty = Difficulty;
 	Difficulty = FMath::Clamp(Difficulty + (Result.Score - TargetPerformance) * AdaptRate, MinDifficulty, MaxDifficulty);
+	Result.DifficultyBefore = PreviousDifficulty;
+	Result.DifficultyAfter = Difficulty;
 	LastPerformance = Result;
 
 	UE_LOG(LogTemp, Display,

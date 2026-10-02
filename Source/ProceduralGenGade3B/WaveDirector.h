@@ -121,9 +121,28 @@ struct FWavePerformance
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	int32 BankedLoot = 0;
 
+	/** 0..1 parts of the score, weighted 40 / 30 / 20 / 10. */
+	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
+	float TowerScore = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
+	float KillScore = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
+	float DefenderScore = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
+	float EconomyScore = 0.0f;
+
 	/** Weighted 0..1 score; the director tries to keep this near TargetPerformance. */
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	float Score = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
+	float DifficultyBefore = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
+	float DifficultyAfter = 1.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	bool bValid = false;
