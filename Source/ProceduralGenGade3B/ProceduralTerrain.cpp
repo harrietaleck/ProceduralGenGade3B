@@ -219,7 +219,7 @@ void AProceduralTerrain::GenerateTerrain()
 
 		if (Attempt < MaxAttempts)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("ProceduralTerrain: generated world failed validation on attempt %d/%d (seed %d) — regenerating with a new seed."),
+			UE_LOG(LogTemp, Warning, TEXT("ProceduralTerrain: generated world failed validation on attempt %d/%d (seed %d) - regenerating with a new seed."),
 				Attempt, MaxAttempts, Seed);
 		}
 		Seed = FMath::RandRange(1, MAX_int32 - 1);
@@ -227,7 +227,7 @@ void AProceduralTerrain::GenerateTerrain()
 
 	if (!bValid)
 	{
-		UE_LOG(LogTemp, Error, TEXT("ProceduralTerrain: failed to generate a valid world after %d attempts — using the last attempt anyway."), MaxAttempts);
+		UE_LOG(LogTemp, Error, TEXT("ProceduralTerrain: failed to generate a valid world after %d attempts - using the last attempt anyway."), MaxAttempts);
 		RebuildNavigation(); // Keep the NavMesh matching whatever terrain we ended up with.
 	}
 
@@ -327,7 +327,7 @@ bool AProceduralTerrain::ValidatePathfinding() const
 	}
 	if (ConnectedPathCount < EnemyPaths.Num())
 	{
-		UE_LOG(LogTemp, Verbose, TEXT("ProceduralTerrain: %d/%d enemy paths resolved a complete NavMesh route to the tower (non-blocking — enemies move via fixed waypoints, not NavMesh)."),
+		UE_LOG(LogTemp, Verbose, TEXT("ProceduralTerrain: %d/%d enemy paths resolved a complete NavMesh route to the tower (non-blocking - enemies move via fixed waypoints, not NavMesh)."),
 			ConnectedPathCount, EnemyPaths.Num());
 	}
 
@@ -342,7 +342,7 @@ bool AProceduralTerrain::ValidatePathfinding() const
 	}
 	if (ConnectedSlotCount < DefenderSlots.Num())
 	{
-		UE_LOG(LogTemp, Verbose, TEXT("ProceduralTerrain: %d/%d build slots resolved a complete NavMesh route to the tower (non-blocking — defender placement doesn't use NavMesh)."),
+		UE_LOG(LogTemp, Verbose, TEXT("ProceduralTerrain: %d/%d build slots resolved a complete NavMesh route to the tower (non-blocking - defender placement doesn't use NavMesh)."),
 			ConnectedSlotCount, DefenderSlots.Num());
 	}
 
@@ -409,7 +409,7 @@ void AProceduralTerrain::RebuildNavigation()
 	}
 	if (!bAnyVolumeCoversTerrain)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ProceduralTerrain: no NavMeshBoundsVolume in the level fully covers the current terrain footprint — enlarge NavMeshBoundsVolume_0 in the level to cover at least +/-%.0f uu horizontally and %.0f uu vertically."),
+		UE_LOG(LogTemp, Warning, TEXT("ProceduralTerrain: no NavMeshBoundsVolume in the level fully covers the current terrain footprint - enlarge NavMeshBoundsVolume_0 in the level to cover at least +/-%.0f uu horizontally and %.0f uu vertically."),
 			Half, HeightScale);
 	}
 
@@ -841,7 +841,7 @@ int32 AProceduralTerrain::ExpandWorldAfterWave()
 	DecoratedCellKeys.Reset();
 	ScatterDecorations();
 
-	UE_LOG(LogTemp, Display, TEXT("ProceduralTerrain: post-wave expansion — grid=%d, lanes=%d, branches added=%d."),
+	UE_LOG(LogTemp, Display, TEXT("ProceduralTerrain: post-wave expansion - grid=%d, lanes=%d, branches added=%d."),
 		GridSize, PathCellLines.Num(), BranchesAdded);
 	return Changes;
 }
