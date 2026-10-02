@@ -167,7 +167,7 @@ void ATDHUD::DrawDirectorGraph(const UWaveDirector* Director)
 	const float Width = 560.0f;
 	const float Height = 320.0f;
 	const float X = Canvas->SizeX - Width - 20.0f;
-	const float Y = Canvas->SizeY - Height - 40.0f;
+	const float Y = Canvas->SizeY - Height - 110.0f;
 	const float Left = X + 60.0f;
 	const float Right = X + Width - 60.0f;
 	const float Top = Y + 50.0f;
