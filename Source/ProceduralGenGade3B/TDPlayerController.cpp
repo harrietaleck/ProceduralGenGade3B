@@ -24,8 +24,8 @@ ATDPlayerController::ATDPlayerController()
 
 {
 
-    //No defender selected
-    DefenderClass = nullptr;
+    //Start with the Basic defender selected so clicking a pad works straight away
+    DefenderClass = ADefender::StaticClass();
 
     StrongDefenderClass = AStrongDefender::StaticClass();
 
@@ -70,6 +70,11 @@ void ATDPlayerController::SetupInputComponent()
         this,
         &ATDPlayerController::OnRestartPressed
     );
+
+    // Bind P to pause/unpause the match.
+    FInputKeyBinding& PauseBinding =
+        InputComponent->BindKey(EKeys::P, IE_Pressed, this, &ATDPlayerController::OnPausePressed);
+    PauseBinding.bExecuteWhenPaused = true;
 
     // Bind N to toggle the NavMesh debug overlay.
     InputComponent->BindKey(
@@ -118,6 +123,14 @@ void ATDPlayerController::SetupInputComponent()
         this,
         &ATDPlayerController::SelectPoisonLightBombDefender
     );
+
+    //Press 4 to select the Strong defender
+    InputComponent->BindKey(
+        EKeys::Four,
+        IE_Pressed,
+        this,
+        &ATDPlayerController::SelectStrongDefender
+    );
 }
 
 void ATDPlayerController::OnToggleNavMeshDebug()
@@ -161,6 +174,14 @@ void ATDPlayerController::OnRestartPressed()
 
     }
 
+}
+
+void ATDPlayerController::OnUpgradeBeamPressed()
+{
+    if (ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>())
+    {
+        GameMode->TryUpgradeTowerBeam();
+    }
 }
 
 void ATDPlayerController::OnToggleDefenderMode()
@@ -239,6 +260,25 @@ void ATDPlayerController::SelectPoisonLightBombDefender()
 
     SelectDefenderClass(APoisonLightBombDefender::StaticClass());
 
+}
+
+void ATDPlayerController::SelectStrongDefender()
+{
+    if (!StrongDefenderClass)
+    {
+        return;
+    }
+
+    if (ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>())
+    {
+        if (GameMode->IsGameOver() || GameMode->IsVictory() || GameMode->IsInteractionBlocked())
+        {
+            return;
+        }
+
+        bPlacingStrongDefender = true;
+        GameMode->RefreshMetaHUD();
+    }
 }
 
 //Change the defeder class using the placement system that exists

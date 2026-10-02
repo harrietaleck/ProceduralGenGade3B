@@ -46,9 +46,16 @@ public:
     UFUNCTION(BlueprintCallable, Category = "TowerDefense|Defenders")
     void SelectPoisonLightBombDefender();
 
+    //Select the gem-priced Strong defender (key 4, or toggle with Tab)
+    UFUNCTION(BlueprintCallable, Category = "TowerDefense|Defenders")
+    void SelectStrongDefender();
+
     //Change the defender that is active without chnaging the existing placement system
     UFUNCTION(BlueprintCallable, Category = "TowerDefense|Defenders")
     void SelectDefenderClass(TSubclassOf<ADefender> NewDefenderClass);
+
+    //The defender class a click would place right now (null if nothing is selected)
+    TSubclassOf<ADefender> GetActiveDefenderClass() const;
 
 protected:
 
@@ -79,8 +86,6 @@ protected:
 private:
 
     bool bPlacingStrongDefender = false;
-
-    TSubclassOf<ADefender> GetActiveDefenderClass() const;
 
     bool CanAffordDefender(
         const ADefender* Defaults,

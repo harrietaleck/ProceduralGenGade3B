@@ -81,15 +81,17 @@ void ATDHUD::DrawInfoPanel(ATDGameMode* GameMode)
 		? FString::Printf(TEXT("Defenders: %d (%d / %d HP)"), AliveCount, FMath::RoundToInt(TotalCurrent), FMath::RoundToInt(TotalMax))
 		: TEXT("Defenders: 0");
 
-	int32 DefenderCost = 50;
+	FString SelectedText = TEXT("Selected: none - press 1-4");
 	int32 DefenderUpkeep = 8;
 	int32 LivingDefenders = 0;
 	if (ATDPlayerController* PC = Cast<ATDPlayerController>(GetOwningPlayerController()))
 	{
-		if (PC->DefenderClass)
+		if (const TSubclassOf<ADefender> ActiveClass = PC->GetActiveDefenderClass())
 		{
-			DefenderCost = PC->DefenderClass.GetDefaultObject()->Cost;
-			DefenderUpkeep = PC->DefenderClass.GetDefaultObject()->UpkeepPerWave;
+			const ADefender* Defaults = ActiveClass.GetDefaultObject();
+			DefenderUpkeep = Defaults->UpkeepPerWave;
+			SelectedText = FString::Printf(TEXT("Selected: %s  |  Cost: %d  |  Upkeep: %d / wave"),
+				*Defaults->DefenderName, Defaults->Cost, DefenderUpkeep);
 		}
 	}
 	for (TActorIterator<ADefender> It(GetWorld()); It; ++It)
@@ -101,23 +103,63 @@ void ATDHUD::DrawInfoPanel(ATDGameMode* GameMode)
 		}
 	}
 
-	const FString CostText = FString::Printf(TEXT("Defender Cost: %d  |  Upkeep: %d / wave each"), DefenderCost, DefenderUpkeep);
-	const FString UpkeepText = FString::Printf(TEXT("Fielded upkeep this wave: %d"), LivingDefenders * DefenderUpkeep);
-	const FString SeedText = GameMode->GetTerrain()
-		? FString::Printf(TEXT("Map Seed: %d  |  Grid: %d  |  Lanes: %d"),
-			GameMode->GetTerrain()->Seed,
-			GameMode->GetTerrain()->GridSize,
-			GameMode->GetTerrain()->GetTotalLaneCount())
-		: FString();
-	const FString HintText = TEXT("P: Pause  |  R: Restart  |  Click pad: Place defender");
+	TArray<FString> Lines;
+	TArray<float> Scales;
+	TArray<FLinearColor> Colors;
+	auto AddLine = [&](const FString& Text, float Scale, const FLinearColor& Color)
+	{
+		Lines.Add(Text);
+		Scales.Add(Scale);
+		Colors.Add(Color);
+	};
 
-	const TArray<FString> Lines = SeedText.IsEmpty()
-		? TArray<FString>{ DefenderText, CostText, UpkeepText, HintText }
-		: TArray<FString>{ DefenderText, CostText, UpkeepText, SeedText, HintText };
+	AddLine(DefenderText, InfoPrimaryScale, FLinearColor(0.82f, 0.62f, 1.0f));
+	AddLine(SelectedText, InfoSecondaryScale, FLinearColor::White);
+	AddLine(FString::Printf(TEXT("Fielded upkeep this wave: %d"), LivingDefenders * DefenderUpkeep),
+		InfoSecondaryScale, FLinearColor(0.95f, 0.8f, 0.55f));
 
-	const TArray<float> Scales = SeedText.IsEmpty()
-		? TArray<float>{ InfoPrimaryScale, InfoSecondaryScale, InfoSecondaryScale, InfoSecondaryScale }
-		: TArray<float>{ InfoPrimaryScale, InfoSecondaryScale, InfoSecondaryScale, InfoSecondaryScale, InfoSecondaryScale };
+	if (const AProceduralTerrain* Terrain = GameMode->GetTerrain())
+	{
+		AddLine(FString::Printf(TEXT("Map Seed: %d  |  Grid: %d  |  Lanes: %d"),
+			Terrain->Seed, Terrain->GridSize, Terrain->GetTotalLaneCount()),
+			InfoSecondaryScale, FLinearColor(0.92f, 0.92f, 0.92f));
+	}
+
+	// Wave director read-out: shows the adaptation happening live.
+	const AWaveManager* WaveManager = GameMode->GetWaveManager();
+	const UWaveDirector* Director = WaveManager && WaveManager->bUseAdaptiveDirector ? WaveManager->Director.Get() : nullptr;
+	if (Director)
+	{
+		const FWavePerformance& Last = Director->GetLastPerformance();
+		const FString ScoreText = Last.bValid
+			? FString::Printf(TEXT("  |  Last wave: %d%%"), FMath::RoundToInt(Last.Score * 100.0f))
+			: FString();
+		AddLine(FString::Printf(TEXT("Director: difficulty x%.2f (%s)%s"),
+			Director->GetDifficulty(), *Director->GetSkillLabel(), *ScoreText),
+			InfoSecondaryScale, FLinearColor(0.55f, 0.9f, 1.0f));
+
+		const FPlayerProfile& Profile = Director->GetProfile();
+		AddLine(FString::Printf(TEXT("Play style: %s  (%.1f defenders / lane)"),
+			*Profile.StyleLabel, Profile.DefendersPerLane),
+			InfoSecondaryScale, FLinearColor(0.55f, 0.9f, 1.0f));
+
+		const FWavePlan& Plan = Director->GetCurrentPlan();
+		if (Plan.WaveNumber > 0)
+		{
+			AddLine(FString::Printf(TEXT("Wave %d: %d Basic, %d Wolf, %d Bear  (threat %.0f)"),
+				Plan.WaveNumber, Plan.BasicCount, Plan.WolfCount, Plan.BearCount, Plan.ThreatBudget),
+				InfoSecondaryScale, FLinearColor(0.55f, 0.9f, 1.0f));
+		}
+
+		const float EventAge = GetWorld()->GetTimeSeconds() - WaveManager->GetLastDirectorEventTime();
+		if (EventAge < 6.0f && !WaveManager->GetLastDirectorEvent().IsEmpty())
+		{
+			AddLine(WaveManager->GetLastDirectorEvent(), InfoSecondaryScale, FLinearColor(1.0f, 0.55f, 0.3f));
+		}
+	}
+
+	AddLine(TEXT("1 Basic  2 Archer  3 Bomb  4 Strong  |  P: Pause  |  R: Restart"),
+		InfoSecondaryScale, FLinearColor(1.0f, 0.95f, 0.55f));
 
 	float PanelWidth = 0.0f;
 	float PanelHeight = InfoPanelPadding * 2.0f;
@@ -139,23 +181,11 @@ void ATDHUD::DrawInfoPanel(ATDGameMode* GameMode)
 
 	float TextY = InfoPanelY + InfoPanelPadding;
 	const float TextX = InfoPanelX + InfoPanelPadding;
-
-	DrawPanelText(DefenderText, FLinearColor(0.82f, 0.62f, 1.0f), TextX, TextY, Font, InfoPrimaryScale);
-	TextY += InfoLineSpacing;
-
-	DrawPanelText(CostText, FLinearColor::White, TextX, TextY, Font, InfoSecondaryScale);
-	TextY += InfoLineSpacing;
-
-	DrawPanelText(UpkeepText, FLinearColor(0.95f, 0.8f, 0.55f), TextX, TextY, Font, InfoSecondaryScale);
-	TextY += InfoLineSpacing;
-
-	if (!SeedText.IsEmpty())
+	for (int32 I = 0; I < Lines.Num(); ++I)
 	{
-		DrawPanelText(SeedText, FLinearColor(0.92f, 0.92f, 0.92f), TextX, TextY, Font, InfoSecondaryScale);
+		DrawPanelText(Lines[I], Colors[I], TextX, TextY, Font, Scales[I]);
 		TextY += InfoLineSpacing;
 	}
-
-	DrawPanelText(HintText, FLinearColor(1.0f, 0.95f, 0.55f), TextX, TextY, Font, InfoSecondaryScale);
 
 	// Skip canvas PAUSED banner while SettingScreen is open.
 	if (GameMode->IsPaused() && !GameMode->IsGameOver() && !GameMode->IsVictory() && !GameMode->IsSettingsVisible())
