@@ -1,17 +1,19 @@
 // WaveManager.h
-// The single authority for wave progression. It owns the wave table (data-driven, no
-// hardcoded gameplay values), the pre-wave countdown, spawning cadence, live enemy tracking,
-// difficulty scaling, and the win/lose hooks the rest of the game reacts to.
+// The single authority for wave progression: pre-wave countdown, spawning cadence, live enemy
+// tracking and the win/lose hooks the rest of the game reacts to.
+//
+// What each wave contains is decided by the UWaveDirector it owns (procedural, adaptive waves).
+// The fixed Waves table is kept as a fallback when bUseAdaptiveDirector is turned off.
 //
 // Spawning itself still goes through AEnemySpawner (it alone knows how to place an enemy on
-// a generated path) — but WaveManager decides *if/when* that happens and applies this wave's
-// stat multipliers afterward, so AEnemySpawner and AEnemy stay untouched, generic, and
-// reusable for any future wave shape.
+// a generated path) — WaveManager decides if/when/what/where and applies the wave's stat
+// multipliers afterward.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "WaveDirector.h"
 #include "WaveManager.generated.h"
 
 class AEnemySpawner;
@@ -29,9 +31,7 @@ enum class EWaveState : uint8
 };
 
 /**
- * One wave's full configuration. Every gameplay number a wave needs lives here — nothing
- * about wave shape or difficulty is hardcoded in WaveManager's logic, so designers can add,
- * remove, or retune waves (or add new enemy types later) without touching C++.
+ * One wave's configuration for the fixed (non-adaptive) fallback table.
  */
 USTRUCT(BlueprintType)
 struct FWaveData
@@ -42,7 +42,7 @@ struct FWaveData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave", meta = (ClampMin = "1"))
 	int32 EnemyCount = 5;
 
-	/** Which enemy class this wave spawns (Part 1: always the Basic Enemy; future parts can vary this per wave). */
+	/** Which enemy class this wave spawns. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave")
 	TSubclassOf<AEnemy> EnemyType;
 
@@ -88,7 +88,19 @@ class PROCEDURALGENGADE3B_API AWaveManager : public AActor
 public:
 	AWaveManager();
 
-	/** The wave table. Defaults to the 5-wave Part 1 progression; fully editable per-instance. */
+	/** Plan every wave with the adaptive director (true) or use the fixed Waves table (false). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Waves")
+	bool bUseAdaptiveDirector = true;
+
+	/** Number of waves to survive for victory when the director is planning waves. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Waves", meta = (ClampMin = "1"))
+	int32 TotalWaves = 5;
+
+	/** Decides the contents of each wave and where enemies enter. */
+	UPROPERTY(VisibleAnywhere, Instanced, BlueprintReadOnly, Category = "Waves")
+	TObjectPtr<UWaveDirector> Director;
+
+	/** Fixed wave table (fallback when bUseAdaptiveDirector is false). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Waves")
 	TArray<FWaveData> Waves;
 
@@ -99,6 +111,14 @@ public:
 	/** How long the "WAVE COMPLETE" breather lasts before the next wave's countdown begins. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Waves", meta = (ClampMin = "0.0"))
 	float BreakDuration = 5.0f;
+
+	/** Spawn delays are multiplied by this once mid-wave relief kicks in. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Waves|Adaptive", meta = (ClampMin = "1.0"))
+	float ReliefDelayScale = 1.5f;
+
+	/** If the board is empty and the next spawn is further away than this, send it now. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Waves|Adaptive", meta = (ClampMin = "0.0"))
+	float PressureEarlySpawnThreshold = 0.75f;
 
 	UPROPERTY(BlueprintAssignable, Category = "Waves")
 	FOnWaveCountdownTick OnWaveCountdownTick;
@@ -147,9 +167,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Waves")
 	int32 GetCurrentWave() const { return CurrentWaveIndex + 1; }
 
-	/** Total number of configured waves (Part 1: 5). */
+	/** Total number of waves to survive. */
 	UFUNCTION(BlueprintPure, Category = "Waves")
-	int32 GetTotalWaves() const { return Waves.Num(); }
+	int32 GetTotalWaves() const { return bUseAdaptiveDirector ? TotalWaves : Waves.Num(); }
 
 	/** How many of the current wave's enemies are still alive. */
 	UFUNCTION(BlueprintPure, Category = "Waves")
@@ -167,13 +187,40 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Waves")
 	bool IsVictory() const { return State == EWaveState::Victory; }
 
+	/** Latest mid-wave adaptation message (relief / pressure) for the HUD. */
+	UFUNCTION(BlueprintPure, Category = "Waves|Adaptive")
+	FString GetLastDirectorEvent() const { return LastDirectorEvent; }
+
+	/** World time the last director event happened (HUD fades it out after a few seconds). */
+	UFUNCTION(BlueprintPure, Category = "Waves|Adaptive")
+	float GetLastDirectorEventTime() const { return LastDirectorEventTime; }
+
 private:
+	/** One spawned enemy whose outcome the director still needs to hear about. */
+	struct FTrackedEnemy
+	{
+		TWeakObjectPtr<AEnemy> Enemy;
+		float SpawnTime = 0.0f;
+		float ExpectedTravelTime = 30.0f;
+		bool bLeaked = false;
+		bool bResolved = false;
+	};
+
 	/** The spawner that actually creates enemies on our command. */
 	UPROPERTY()
 	TObjectPtr<AEnemySpawner> Spawner;
 
-	/** 0-based index into Waves for the wave in progress. */
+	/** 0-based wave index for the wave in progress. */
 	int32 CurrentWaveIndex = -1;
+
+	/** Settings for the wave in progress (from the director's plan or the fixed table). */
+	FWaveData ActiveWave;
+
+	/** Ordered spawns planned by the director for the wave in progress. */
+	TArray<FPlannedSpawn> SpawnQueue;
+
+	/** Lane used by the current wolf pack so followers stay with their leader. */
+	int32 PackLane = INDEX_NONE;
 
 	/** How many of this wave's enemies have been spawned so far. */
 	int32 EnemiesSpawnedThisWave = 0;
@@ -189,14 +236,29 @@ private:
 	/** Set once StopWaves() has run, so any in-flight timers/callbacks become no-ops. */
 	bool bStopped = false;
 
+	/** Mid-wave relief is active for the rest of this wave. */
+	bool bReliefActive = false;
+
+	TArray<FTrackedEnemy> TrackedEnemies;
+
+	FString LastDirectorEvent;
+	float LastDirectorEventTime = -100.0f;
+
 	FTimerHandle CountdownTimerHandle;
 	FTimerHandle SpawnTimerHandle;
 	FTimerHandle BreakTimerHandle;
+	FTimerHandle MonitorTimerHandle;
 
-	/** Populate Waves with the Part 1 progression (3 waves) if nothing was configured. */
+	/** Populate the fixed fallback table if nothing was configured. */
 	void EnsureDefaultWaveTable();
 
-	/** Advance to the next configured wave, or trigger Victory if none remain. */
+	/** Fill ActiveWave / SpawnQueue for CurrentWaveIndex. */
+	void PrepareCurrentWave();
+
+	/** Reset counters and start the countdown for the prepared wave. */
+	void StartCountdown();
+
+	/** Advance to the next wave, or trigger Victory if none remain. */
 	void BeginNextWave();
 
 	/** Timer callback: ticks the pre-wave "3, 2, 1" countdown down to zero. */
@@ -204,6 +266,17 @@ private:
 
 	/** Timer callback: spawns one enemy for the active wave, scaled by its multipliers. */
 	void SpawnTick();
+
+	/** Spawn the next enemy for the wave; returns the delay before the following spawn. */
+	float SpawnNextEnemy();
+
+	/** Timer callback during an active wave: resolves enemy outcomes and adapts mid-wave. */
+	void MonitorWave();
+
+	/** Tell the director how every finished enemy did. */
+	void ResolveTrackedEnemies();
+
+	void SetDirectorEvent(const FString& Message);
 
 	/** Bound to each tracked enemy's death: updates the live count and checks for completion. */
 	UFUNCTION()

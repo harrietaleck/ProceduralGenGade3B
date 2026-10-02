@@ -216,6 +216,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Rules|Meta")
 	bool TryUpgradeTowerBeam();
 
+	/** Defenders placed so far this match (wave director uses it to count losses per wave). */
+	UFUNCTION(BlueprintPure, Category = "Rules")
+	int32 GetMatchDefendersPlaced() const { return MatchDefendersPlaced; }
+
 	/** How many beam upgrades have been purchased this match. */
 	UFUNCTION(BlueprintPure, Category = "Rules|Meta")
 	int32 GetBeamUpgradeLevel() const { return BeamUpgradeLevel; }

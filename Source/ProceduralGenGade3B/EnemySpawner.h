@@ -51,9 +51,17 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Spawner")
     void StopSpawning();
 
-    // Spawn one enemy.
+    // Spawn one enemy (cycles Basic, Bear, Wolf and the lanes in order).
     UFUNCTION(BlueprintCallable, Category = "Spawner")
     AEnemy* SpawnSingleEnemy();
+
+    // Spawn a specific enemy type on a specific lane (used by the wave director).
+    UFUNCTION(BlueprintCallable, Category = "Spawner")
+    AEnemy* SpawnEnemyOfType(EEnemyType Type, int32 PathIndex);
+
+    // Walking distance of a lane from its spawn point to the tower.
+    UFUNCTION(BlueprintPure, Category = "Spawner")
+    float GetPathLength(int32 PathIndex) const;
 
 protected:
 
