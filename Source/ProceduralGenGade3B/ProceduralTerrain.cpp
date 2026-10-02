@@ -17,6 +17,7 @@
 #include "DrawDebugHelpers.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "Algo/Reverse.h"
 
 // Everything flat (paths, tower pad, buildable pads) sits on this Z plane in local space.
 static constexpr float PathPlaneHeight = 0.0f;
@@ -1649,4 +1650,174 @@ void AProceduralTerrain::DrawDebugVisualization() const
 	{
 		DrawDebugPoint(World, Slot.Location + FVector(0, 0, 30.0f), 12.0f, Slot.bOccupied ? FColor::Red : FColor::Green, false, DebugDrawDuration, 0);
 	}
+}
+
+// --------------------------------------------------------------------------------------
+// Threat-aware routing
+// --------------------------------------------------------------------------------------
+
+bool AProceduralTerrain::FindLowestCostRoute(const FVector& From, TFunctionRef<float(const FVector&)> CellCost,
+	TArray<FVector>& OutWaypoints, float& OutCost) const
+{
+	OutWaypoints.Reset();
+	OutCost = 0.0f;
+
+	const int32 NumCells = GridSize * GridSize;
+	if (NumCells <= 0 || Cells.Num() != NumCells)
+	{
+		return false;
+	}
+
+	auto IsWalkable = [this](int32 X, int32 Y)
+	{
+		if (!InBounds(X, Y))
+		{
+			return false;
+		}
+		const ECellType Type = Cells[CellIndex(X, Y)];
+		return Type == ECellType::Path || Type == ECellType::Tower;
+	};
+
+	// Start from the walkable cell under (or closest to) the enemy.
+	const FVector Local = ActorToWorld().InverseTransformPosition(From);
+	const float Half = GridSize * CellSize * 0.5f;
+	const int32 SX = FMath::FloorToInt((Local.X + Half) / CellSize);
+	const int32 SY = FMath::FloorToInt((Local.Y + Half) / CellSize);
+
+	FIntPoint Start(INDEX_NONE, INDEX_NONE);
+	for (int32 Radius = 0; Radius <= 3 && Start.X == INDEX_NONE; ++Radius)
+	{
+		float BestDistSq = TNumericLimits<float>::Max();
+		for (int32 DY = -Radius; DY <= Radius; ++DY)
+		{
+			for (int32 DX = -Radius; DX <= Radius; ++DX)
+			{
+				if (FMath::Max(FMath::Abs(DX), FMath::Abs(DY)) != Radius || !IsWalkable(SX + DX, SY + DY))
+				{
+					continue;
+				}
+				const float DistSq = static_cast<float>(DX * DX + DY * DY);
+				if (DistSq < BestDistSq)
+				{
+					BestDistSq = DistSq;
+					Start = FIntPoint(SX + DX, SY + DY);
+				}
+			}
+		}
+	}
+	if (Start.X == INDEX_NONE)
+	{
+		return false;
+	}
+
+	const FIntPoint Goal(GridSize / 2, GridSize / 2);
+	const int32 StartIndex = CellIndex(Start.X, Start.Y);
+	const int32 GoalIndex = CellIndex(Goal.X, Goal.Y);
+
+	TArray<float> CostSoFar;
+	CostSoFar.Init(TNumericLimits<float>::Max(), NumCells);
+	TArray<int32> CameFrom;
+	CameFrom.Init(INDEX_NONE, NumCells);
+	TArray<float> CachedCellCost;
+	CachedCellCost.Init(-1.0f, NumCells);
+
+	auto GetCellCost = [&](int32 X, int32 Y)
+	{
+		float& Cached = CachedCellCost[CellIndex(X, Y)];
+		if (Cached < 0.0f)
+		{
+			const FVector Centre = ActorToWorld().TransformPosition(CellCenterLocal(X, Y, PathPlaneHeight));
+			Cached = FMath::Max(1.0f, CellCost(Centre));
+		}
+		return Cached;
+	};
+
+	// Octile distance: admissible because every cell costs at least 1.
+	auto Heuristic = [&Goal](int32 X, int32 Y)
+	{
+		const int32 DX = FMath::Abs(X - Goal.X);
+		const int32 DY = FMath::Abs(Y - Goal.Y);
+		return static_cast<float>(FMath::Max(DX, DY)) + (UE_SQRT_2 - 1.0f) * FMath::Min(DX, DY);
+	};
+
+	struct FOpenNode
+	{
+		float Priority;
+		int32 Index;
+	};
+	auto OpenOrder = [](const FOpenNode& A, const FOpenNode& B) { return A.Priority < B.Priority; };
+
+	TArray<FOpenNode> Open;
+	CostSoFar[StartIndex] = 0.0f;
+	Open.HeapPush({ Heuristic(Start.X, Start.Y), StartIndex }, OpenOrder);
+
+	static const int32 OffsetX[8] = { 1, -1, 0, 0, 1, 1, -1, -1 };
+	static const int32 OffsetY[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
+
+	while (Open.Num() > 0)
+	{
+		FOpenNode Node;
+		Open.HeapPop(Node, OpenOrder, EAllowShrinking::No);
+		if (Node.Index == GoalIndex)
+		{
+			break;
+		}
+
+		const int32 X = Node.Index % GridSize;
+		const int32 Y = Node.Index / GridSize;
+		if (Node.Priority > CostSoFar[Node.Index] + Heuristic(X, Y) + KINDA_SMALL_NUMBER)
+		{
+			continue; // Stale entry.
+		}
+
+		for (int32 Dir = 0; Dir < 8; ++Dir)
+		{
+			const int32 NX = X + OffsetX[Dir];
+			const int32 NY = Y + OffsetY[Dir];
+			if (!IsWalkable(NX, NY))
+			{
+				continue;
+			}
+
+			const bool bDiagonal = Dir >= 4;
+			// No corner cutting: a diagonal step needs both side cells to be walkable too.
+			if (bDiagonal && (!IsWalkable(NX, Y) || !IsWalkable(X, NY)))
+			{
+				continue;
+			}
+
+			const int32 NIndex = CellIndex(NX, NY);
+			const float NewCost = CostSoFar[Node.Index] + GetCellCost(NX, NY) * (bDiagonal ? UE_SQRT_2 : 1.0f);
+			if (NewCost < CostSoFar[NIndex])
+			{
+				CostSoFar[NIndex] = NewCost;
+				CameFrom[NIndex] = Node.Index;
+				Open.HeapPush({ NewCost + Heuristic(NX, NY), NIndex }, OpenOrder);
+			}
+		}
+	}
+
+	if (CameFrom[GoalIndex] == INDEX_NONE && GoalIndex != StartIndex)
+	{
+		return false;
+	}
+
+	TArray<FVector> Route;
+	for (int32 Index = GoalIndex; Index != INDEX_NONE; Index = CameFrom[Index])
+	{
+		Route.Add(ActorToWorld().TransformPosition(CellCenterLocal(Index % GridSize, Index / GridSize, PathPlaneHeight)));
+		if (Index == StartIndex)
+		{
+			break;
+		}
+	}
+	Algo::Reverse(Route);
+
+	if (PathSmoothingIterations > 0)
+	{
+		Route = ChaikinSmooth(Route, PathSmoothingIterations);
+	}
+	OutWaypoints = ThinWaypoints(Route, CellSize * 0.65f);
+	OutCost = CostSoFar[GoalIndex];
+	return true;
 }
