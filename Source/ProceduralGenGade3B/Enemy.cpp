@@ -53,24 +53,135 @@ AEnemy::AEnemy()
 
 void AEnemy::BeginPlay()
 {
-	Super::BeginPlay();
+    Super::BeginPlay();
 
-	SpawnTargetScale = MeshComponent->GetRelativeScale3D();
-	SpawnEffectElapsed = 0.0f;
-	if (SpawnEffectDuration > 0.0f)
-	{
-		MeshComponent->SetRelativeScale3D(SpawnTargetScale * 0.12f);
-		SpawnGlow->SetLightColor(SpawnGlowColor);
-		SpawnGlow->SetIntensity(SpawnGlowIntensity);
-		SpawnGlow->SetVisibility(true);
-	}
-	else
-	{
-		SpawnGlow->SetVisibility(false);
-	}
+    //Set enemy type to distinguish the different stats
+    switch (EnemyType)
+    {
+    case EEnemyType::Bear:
 
-	// React to our own death (reward the player and remove ourselves).
-	HealthComponent->OnDeath.AddDynamic(this, &AEnemy::HandleDeath);
+        //Create the stats for bear
+
+        MoveSpeed = 75.0f;
+		//Set the movement to be slow
+        Acceleration = 40.0f;
+        TurnRate = 2.0f;
+
+        // The Bear has more damage than the Basic enemy.
+        AttackDamage = 30.0f;
+
+        // The Bear attacks slightly less frequently.
+        AttackInterval = 1.5f;
+
+        AttackRange = 280.0f;
+        DetectionRadius = 450.0f;
+
+        //Create awards based on defeating the enemy
+        ResourceReward = 35;
+
+        GroundClearance = 50.0f;
+
+        break;
+
+
+    case EEnemyType::Wolf:
+
+        //Create the stats for wolf
+        MoveSpeed = 240.0f;
+		//Set the movement to be fast
+        Acceleration = 120.0f;
+        TurnRate = 3.5f;
+
+		// add attack dmage ranged between bear and basic enemy
+        AttackDamage = 15.0f;
+        AttackInterval = 1.0f;
+
+        AttackRange = 280.0f;
+        DetectionRadius = 450.0f;
+        
+		// add reward system
+        ResourceReward = 25;
+
+        GroundClearance = 50.0f;
+
+        break;
+
+
+    case EEnemyType::Basic:
+
+    default:
+
+        //Create the stats for basic human enemy
+        MoveSpeed = 150.0f;
+        Acceleration = 68.0f;
+        TurnRate = 2.6f;
+
+		//Create a low damage point system
+        AttackDamage = 10.0f;
+        AttackInterval = 1.0f;
+
+        AttackRange = 280.0f;
+        DetectionRadius = 450.0f;
+
+        ResourceReward = 20;
+
+        GroundClearance = 50.0f;
+
+        break;
+    }
+	//Create a difference in enemies to display visual difference
+
+    switch (EnemyType)
+    {
+    case EEnemyType::Bear:
+
+        // Bear is larger.
+        MeshComponent->SetRelativeScale3D(FVector(1.0f));
+
+        break;
+
+
+    case EEnemyType::Wolf:
+
+        // Wolf is smaller.
+        MeshComponent->SetRelativeScale3D(FVector(0.45f));
+
+        break;
+
+
+    case EEnemyType::Basic:
+
+    default:
+
+        // Basic enemy keeps the original size.
+        MeshComponent->SetRelativeScale3D(FVector(0.6f));
+
+        break;
+    }
+	//Control spawn glow for enemy spawns
+    SpawnTargetScale = MeshComponent->GetRelativeScale3D();
+
+    SpawnEffectElapsed = 0.0f;
+
+    if (SpawnEffectDuration > 0.0f)
+    {
+        MeshComponent->SetRelativeScale3D(
+            SpawnTargetScale * 0.12f
+        );
+
+        SpawnGlow->SetLightColor(SpawnGlowColor);
+
+        SpawnGlow->SetIntensity(SpawnGlowIntensity);
+
+        SpawnGlow->SetVisibility(true);
+    }
+    else
+    {
+        SpawnGlow->SetVisibility(false);
+    }
+
+    //When enemy dies the player is rewarded
+    HealthComponent->OnDeath.AddDynamic(this,&AEnemy::HandleDeath);
 }
 
 void AEnemy::SetPath(const TArray<FVector>& InWaypoints)

@@ -27,6 +27,13 @@ enum class EResourceType : uint8
 	ArcaneOrb   UMETA(DisplayName = "Arcane Orb"),
 	ToxicMucus  UMETA(DisplayName = "Toxic Mucus")
 };
+UENUM(BlueprintType)
+enum class EEnemyType : uint8
+{
+    Basic,
+    Bear,
+    Wolf
+};
 
 UCLASS()
 class PROCEDURALGENGADE3B_API AEnemy : public AActor
@@ -94,6 +101,9 @@ public:
 	/** The reusable health/damage/death component. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy")
 	TObjectPtr<UHealthComponent> HealthComponent;
+    
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
+    EEnemyType EnemyType = EEnemyType::Basic;
 
 	/** Give this enemy the ordered world-space waypoints to walk (spawn -> tower). */
 	UFUNCTION(BlueprintCallable, Category = "Enemy")
