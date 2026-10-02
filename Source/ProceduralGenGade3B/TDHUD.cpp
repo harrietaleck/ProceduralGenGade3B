@@ -138,6 +138,20 @@ void ATDHUD::DrawInfoPanel(ATDGameMode* GameMode)
 			Director->GetDifficulty(), *Director->GetSkillLabel(), *ScoreText),
 			InfoSecondaryScale, FLinearColor(0.55f, 0.9f, 1.0f));
 
+		if (Last.bValid)
+		{
+			const FLinearColor TrendColor = Last.DifficultyAfter > Last.DifficultyBefore + KINDA_SMALL_NUMBER
+				? FLinearColor(1.0f, 0.5f, 0.4f)
+				: (Last.DifficultyAfter < Last.DifficultyBefore - KINDA_SMALL_NUMBER
+					? FLinearColor(0.5f, 1.0f, 0.55f)
+					: FLinearColor(0.55f, 0.9f, 1.0f));
+			AddLine(FString::Printf(TEXT("Score: tower %d  kills %d  defenders %d  loot %d  ->  x%.2f to x%.2f"),
+				FMath::RoundToInt(Last.TowerScore * 100.0f), FMath::RoundToInt(Last.KillScore * 100.0f),
+				FMath::RoundToInt(Last.DefenderScore * 100.0f), FMath::RoundToInt(Last.EconomyScore * 100.0f),
+				Last.DifficultyBefore, Last.DifficultyAfter),
+				InfoSecondaryScale, TrendColor);
+		}
+
 		const FPlayerProfile& Profile = Director->GetProfile();
 		AddLine(FString::Printf(TEXT("Play style: %s  (%.1f defenders / lane)"),
 			*Profile.StyleLabel, Profile.DefendersPerLane),
