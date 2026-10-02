@@ -674,14 +674,28 @@ void AEnemy::TryReroute()
     CurrentWaypoint = 0;
     ++RerouteCount;
 
-    //Show the new route so the player can see the enemy dodging their defence
-    const FVector Lift(0.0f, 0.0f, 30.0f);
+    //Show the new route as a trail of small dots so the player can see the enemy dodging their defence
+    const FVector Lift(0.0f, 0.0f, 25.0f);
+    const float DotSpacing = 70.0f;
     FVector Previous = GetActorLocation();
+    if (Waypoints.Num() > 0)
+    {
+        Previous.Z = Waypoints[0].Z;
+    }
+
+    float NextDot = 0.0f;
     for (const FVector& Point : Waypoints)
     {
-        DrawDebugLine(GetWorld(), Previous + Lift, FVector(Point.X, Point.Y, Previous.Z) + Lift,
-            FColor(255, 150, 40), false, 2.5f, 0, 6.0f);
-        Previous = FVector(Point.X, Point.Y, Previous.Z);
+        const FVector Segment = Point - Previous;
+        const float Length = Segment.Size();
+        while (Length > KINDA_SMALL_NUMBER && NextDot <= Length)
+        {
+            const FVector Dot = Previous + Segment * (NextDot / Length) + Lift;
+            DrawDebugSphere(GetWorld(), Dot, 8.0f, 8, FColor(255, 150, 40), false, 2.5f, 0, 5.0f);
+            NextDot += DotSpacing;
+        }
+        NextDot -= Length;
+        Previous = Point;
     }
     ShowCombatText(TEXT("REROUTE"), FColor(255, 150, 40));
 
