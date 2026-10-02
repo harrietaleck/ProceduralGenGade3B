@@ -120,7 +120,7 @@ void ATDGameMode::HandleWaveComplete(int32 WaveNumber)
 		WaveManager->DeclareVictory();
 	}
 
-	UE_LOG(LogTemp, Display, TEXT("TDGameMode: wave %d/%d complete â€” showing results."), WaveNumber, TotalWaves);
+	UE_LOG(LogTemp, Display, TEXT("TDGameMode: wave %d/%d complete - showing results."), WaveNumber, TotalWaves);
 }
 
 void ATDGameMode::ContinueToNextWave()

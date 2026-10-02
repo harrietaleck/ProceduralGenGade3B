@@ -66,11 +66,11 @@ void UTDEndScreenWidget::ApplyTheme(bool bVictory, EBeamHealthTier /*Tier*/, boo
 	}
 	if (ScoreHeaderText)
 	{
-		ScoreHeaderText->SetText(FText::FromString(TEXT("â€” SCORE â€”")));
+		ScoreHeaderText->SetText(FText::FromString(TEXT("- SCORE -")));
 	}
 	if (RewardsHeaderText)
 	{
-		RewardsHeaderText->SetText(FText::FromString(TEXT("â€” REWARDS â€”")));
+		RewardsHeaderText->SetText(FText::FromString(TEXT("- REWARDS -")));
 	}
 	if (PanelBorder)
 	{
