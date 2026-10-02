@@ -78,8 +78,8 @@ private:
     //Show the blast light and area marker
     void SpawnBlastVisuals(const FVector& AreaLocation);
 
-    //Damage the enemies in the area, returns how many were hit
-    int32 DamageEnemiesInArea(const FVector& AreaLocation, float Damage);
+    //Damage the enemies in the area, returns how many were hit (poison ticks also mark them poisoned)
+    int32 DamageEnemiesInArea(const FVector& AreaLocation, float Damage, bool bPoison = false);
 
     //Apply one poison tick to every active cloud
     void TickPoisonClouds();

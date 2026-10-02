@@ -183,7 +183,9 @@ void UWaveDirector::EvaluateWave(UWorld* World)
 	Difficulty = FMath::Clamp(Difficulty + (Result.Score - TargetPerformance) * AdaptRate, MinDifficulty, MaxDifficulty);
 	Result.DifficultyBefore = PreviousDifficulty;
 	Result.DifficultyAfter = Difficulty;
+	Result.WaveNumber = CurrentPlan.WaveNumber;
 	LastPerformance = Result;
+	History.Add(Result);
 
 	UE_LOG(LogTemp, Display,
 		TEXT("WaveDirector: wave %d score %.2f (tower %.2f, kills %.2f, defenders %.2f, economy %.2f) -> difficulty %.2f -> %.2f [%s]"),
@@ -333,6 +335,57 @@ FWavePlan UWaveDirector::PlanWave(UWorld* World, int32 WaveNumber)
 		Plan.Spawns.Append(Block);
 	}
 
+	const float Norm = NormalisedDifficulty();
+
+	// Elites: from the unlock wave, some enemies get a modifier, mostly the one that counters
+	// how the player is defending. Better players see more of them.
+	if (WaveNumber >= EliteUnlockWave)
+	{
+		Plan.CounterElite = ChooseCounterElite();
+
+		float Chance = FMath::Min(EliteMaxChance, EliteBaseChance + EliteChancePerWave * (WaveNumber - EliteUnlockWave));
+		Chance *= FMath::Lerp(0.5f, 1.5f, Norm);
+		if (Difficulty < 0.9f)
+		{
+			Chance *= 0.5f;
+		}
+
+		auto PickModifier = [this, &Plan]()
+		{
+			if (Random.FRand() < CounterEliteShare)
+			{
+				return Plan.CounterElite;
+			}
+			TArray<EEliteModifier> Others = { EEliteModifier::Shielded, EEliteModifier::Regenerating,
+				EEliteModifier::Swift, EEliteModifier::Splitting };
+			Others.Remove(Plan.CounterElite);
+			return Others[Random.RandRange(0, Others.Num() - 1)];
+		};
+
+		int32 LastLeader = INDEX_NONE;
+		bool bAnyElite = false;
+		// Index 0 stays a plain Basic so the wave still opens readably.
+		for (int32 i = 1; i < Plan.Spawns.Num(); ++i)
+		{
+			if (Plan.Spawns[i].bPackFollower)
+			{
+				continue;
+			}
+			LastLeader = i;
+			if (Random.FRand() < Chance)
+			{
+				Plan.Spawns[i].Elite = PickModifier();
+				bAnyElite = true;
+			}
+		}
+
+		// The unlock wave always introduces one elite so the player meets the mechanic.
+		if (!bAnyElite && WaveNumber == EliteUnlockWave && LastLeader != INDEX_NONE)
+		{
+			Plan.Spawns[LastLeader].Elite = Plan.CounterElite;
+		}
+	}
+
 	for (const FPlannedSpawn& Spawn : Plan.Spawns)
 	{
 		switch (Spawn.Type)
@@ -341,10 +394,13 @@ FWavePlan UWaveDirector::PlanWave(UWorld* World, int32 WaveNumber)
 		case EEnemyType::Bear: ++Plan.BearCount; break;
 		default:               ++Plan.BasicCount; break;
 		}
+		if (Spawn.Elite != EEliteModifier::None)
+		{
+			++Plan.EliteCount;
+		}
 	}
 
 	// Stat scaling: steady growth per wave, nudged by how well the player is doing.
-	const float Norm = NormalisedDifficulty();
 	Plan.HealthMultiplier = (1.0f + 0.08f * (WaveNumber - 1)) * FMath::Lerp(0.85f, 1.15f, Norm);
 	Plan.DamageMultiplier = (1.0f + 0.06f * (WaveNumber - 1)) * FMath::Lerp(0.9f, 1.1f, Norm);
 	Plan.SpeedMultiplier = Difficulty > 1.2f ? 1.1f : 1.0f;
@@ -355,8 +411,9 @@ FWavePlan UWaveDirector::PlanWave(UWorld* World, int32 WaveNumber)
 	RoundRobinLane = 0;
 
 	UE_LOG(LogTemp, Display,
-		TEXT("WaveDirector: wave %d plan - budget %.1f, %d Basic / %d Wolf / %d Bear, HP x%.2f, delay %.2fs | player %s, style %s (%d defenders)"),
+		TEXT("WaveDirector: wave %d plan - budget %.1f, %d Basic / %d Wolf / %d Bear, %d elite (counter %s), HP x%.2f, delay %.2fs | player %s, style %s (%d defenders)"),
 		WaveNumber, Plan.ThreatBudget, Plan.BasicCount, Plan.WolfCount, Plan.BearCount,
+		Plan.EliteCount, *AEnemy::GetEliteName(Plan.CounterElite),
 		Plan.HealthMultiplier, StandardDelay, *GetSkillLabel(), *Profile.StyleLabel, Profile.DefenderCount);
 
 	return Plan;
@@ -393,6 +450,11 @@ float UWaveDirector::LaneCoverage(UWorld* World, const FEnemyPath& Path) const
 
 int32 UWaveDirector::ChooseLane(UWorld* World, EEnemyType Type)
 {
+	return ChooseLaneWith(World, Type, Random, RoundRobinLane);
+}
+
+int32 UWaveDirector::ChooseLaneWith(UWorld* World, EEnemyType Type, FRandomStream& Stream, int32& RoundRobin) const
+{
 	const ATDGameMode* GameMode = GetTDGameMode(World);
 	const AProceduralTerrain* Terrain = GameMode ? GameMode->GetTerrain() : nullptr;
 	if (!Terrain || Terrain->GetEnemyPaths().Num() == 0)
@@ -406,7 +468,7 @@ int32 UWaveDirector::ChooseLane(UWorld* World, EEnemyType Type)
 	const bool bEvenSpread = Difficulty < 0.9f || (Type == EEnemyType::Basic && Difficulty <= 1.1f);
 	if (bEvenSpread)
 	{
-		return RoundRobinLane++ % Paths.Num();
+		return RoundRobin++ % Paths.Num();
 	}
 
 	TArray<float> Weights;
@@ -423,7 +485,7 @@ int32 UWaveDirector::ChooseLane(UWorld* World, EEnemyType Type)
 		Total += Weight;
 	}
 
-	float Roll = Random.FRand() * Total;
+	float Roll = Stream.FRand() * Total;
 	for (int32 i = 0; i < Weights.Num(); ++i)
 	{
 		Roll -= Weights[i];
@@ -433,4 +495,89 @@ int32 UWaveDirector::ChooseLane(UWorld* World, EEnemyType Type)
 		}
 	}
 	return Weights.Num() - 1;
+}
+
+TArray<FLaneForecast> UWaveDirector::ForecastLanes(UWorld* World) const
+{
+	TArray<FLaneForecast> Result;
+
+	const ATDGameMode* GameMode = GetTDGameMode(World);
+	const AProceduralTerrain* Terrain = GameMode ? GameMode->GetTerrain() : nullptr;
+	const int32 LaneCount = Terrain ? Terrain->GetEnemyPaths().Num() : 0;
+	if (LaneCount == 0)
+	{
+		return Result;
+	}
+
+	Result.SetNum(LaneCount);
+	for (int32 i = 0; i < LaneCount; ++i)
+	{
+		Result[i].Lane = i;
+	}
+
+	// Dry run on copies so the real wave's random sequence is untouched.
+	FRandomStream Stream = Random;
+	int32 RoundRobin = RoundRobinLane;
+	int32 PackLane = INDEX_NONE;
+
+	for (const FPlannedSpawn& Spawn : CurrentPlan.Spawns)
+	{
+		const int32 Lane = (Spawn.bPackFollower && PackLane != INDEX_NONE)
+			? PackLane
+			: ChooseLaneWith(World, Spawn.Type, Stream, RoundRobin);
+		PackLane = Lane;
+
+		FLaneForecast& Forecast = Result[FMath::Clamp(Lane, 0, LaneCount - 1)];
+		switch (Spawn.Type)
+		{
+		case EEnemyType::Wolf: ++Forecast.WolfCount; break;
+		case EEnemyType::Bear: ++Forecast.BearCount; break;
+		default:               ++Forecast.BasicCount; break;
+		}
+		if (Spawn.Elite != EEliteModifier::None)
+		{
+			++Forecast.EliteCount;
+		}
+	}
+
+	return Result;
+}
+
+bool UWaveDirector::ShouldEnemyReroute(EEnemyType Type, EEliteModifier Elite) const
+{
+	// Wolves want defenders, so they never avoid them.
+	if (Type == EEnemyType::Wolf)
+	{
+		return false;
+	}
+	return Type == EEnemyType::Bear || Elite != EEliteModifier::None || Difficulty > SmartBasicDifficulty;
+}
+
+EEliteModifier UWaveDirector::ChooseCounterElite() const
+{
+	// Light or no defence cannot out-damage healing.
+	if (Profile.DefenderCount == 0)
+	{
+		return EEliteModifier::Regenerating;
+	}
+	// Fast elites run through bomb clouds before they finish ticking.
+	if (Profile.AreaShare >= 0.4f)
+	{
+		return EEliteModifier::Swift;
+	}
+	// Shields soak the many small hits archers rely on.
+	if (Profile.ArcherShare >= 0.4f)
+	{
+		return EEliteModifier::Shielded;
+	}
+	// Heavy single-target defences get swarmed when an elite splits.
+	if (Profile.DefendersPerLane >= 2.0f)
+	{
+		return EEliteModifier::Splitting;
+	}
+	if (Profile.DefendersPerLane < 1.0f)
+	{
+		return EEliteModifier::Regenerating;
+	}
+	return EEliteModifier::Splitting;
 }

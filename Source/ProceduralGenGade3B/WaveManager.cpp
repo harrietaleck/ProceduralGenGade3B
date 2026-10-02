@@ -110,7 +110,7 @@ void AWaveManager::RetryCurrentWave()
 	bStopped = false;
 	OnEnemiesRemainingChanged.Broadcast(0);
 
-	PrepareCurrentWave();
+	PrepareWave(CurrentWaveIndex);
 	StartCountdown();
 }
 
@@ -140,17 +140,22 @@ void AWaveManager::BeginNextWave()
 		return;
 	}
 
-	PrepareCurrentWave();
+	// The plan is normally made as soon as the previous wave ends, so the forecast can show it.
+	if (PreparedWaveIndex != CurrentWaveIndex)
+	{
+		PrepareWave(CurrentWaveIndex);
+	}
 	StartCountdown();
 }
 
-void AWaveManager::PrepareCurrentWave()
+void AWaveManager::PrepareWave(int32 WaveIndex)
 {
 	SpawnQueue.Reset();
+	PreparedWaveIndex = WaveIndex;
 
 	if (bUseAdaptiveDirector && Director)
 	{
-		const FWavePlan Plan = Director->PlanWave(GetWorld(), GetCurrentWave());
+		const FWavePlan Plan = Director->PlanWave(GetWorld(), WaveIndex + 1);
 		SpawnQueue = Plan.Spawns;
 
 		ActiveWave = FWaveData();
@@ -162,9 +167,9 @@ void AWaveManager::PrepareCurrentWave()
 		return;
 	}
 
-	if (Waves.IsValidIndex(CurrentWaveIndex))
+	if (Waves.IsValidIndex(WaveIndex))
 	{
-		ActiveWave = Waves[CurrentWaveIndex];
+		ActiveWave = Waves[WaveIndex];
 	}
 }
 
@@ -248,6 +253,7 @@ float AWaveManager::SpawnNextEnemy()
 	AEnemy* NewEnemy = nullptr;
 	float Delay = ActiveWave.SpawnDelay;
 	int32 Lane = INDEX_NONE;
+	EEliteModifier Elite = EEliteModifier::None;
 
 	if (bUseAdaptiveDirector && Director && SpawnQueue.IsValidIndex(EnemiesSpawnedThisWave))
 	{
@@ -258,7 +264,12 @@ float AWaveManager::SpawnNextEnemy()
 			: Director->ChooseLane(GetWorld(), Planned.Type);
 		PackLane = Lane;
 		Delay = Planned.DelayAfter;
+		Elite = Planned.Elite;
 		NewEnemy = Spawner->SpawnEnemyOfType(Planned.Type, Lane);
+		if (NewEnemy)
+		{
+			NewEnemy->bCanReroute = Director->ShouldEnemyReroute(Planned.Type, Elite);
+		}
 	}
 	else
 	{
@@ -276,29 +287,67 @@ float AWaveManager::SpawnNextEnemy()
 		{
 			Health->MaxHealth *= ActiveWave.HealthMultiplier;
 			Health->Heal(Health->MaxHealth); // Top current health up to the new (scaled) max.
-			Health->OnDeath.AddDynamic(this, &AWaveManager::HandleTrackedEnemyDeath);
 		}
 		NewEnemy->AttackDamage *= ActiveWave.DamageMultiplier;
 		NewEnemy->MoveSpeed *= ActiveWave.SpeedMultiplier;
 		NewEnemy->ResourceReward = FMath::RoundToInt(NewEnemy->ResourceReward * ActiveWave.RewardMultiplier);
 
-		FTrackedEnemy Tracked;
-		Tracked.Enemy = NewEnemy;
-		Tracked.SpawnTime = GetWorld()->GetTimeSeconds();
+		// Elite modifiers stack on top of the wave scaling.
+		NewEnemy->MakeElite(Elite);
+
+		float ExpectedTravelTime = 30.0f;
 		const float PathLength = Lane != INDEX_NONE ? Spawner->GetPathLength(Lane) : 0.0f;
 		if (PathLength > 0.0f && NewEnemy->MoveSpeed > 0.0f)
 		{
-			Tracked.ExpectedTravelTime = PathLength / NewEnemy->MoveSpeed;
+			ExpectedTravelTime = PathLength / NewEnemy->MoveSpeed;
 		}
-		TrackedEnemies.Add(Tracked);
-
-		++ActiveEnemyCount;
-		OnEnemiesRemainingChanged.Broadcast(ActiveEnemyCount);
+		TrackEnemy(NewEnemy, GetWorld()->GetTimeSeconds(), ExpectedTravelTime);
 	}
 
 	++EnemiesSpawnedThisWave;
 
 	return bReliefActive ? Delay * ReliefDelayScale : Delay;
+}
+
+void AWaveManager::TrackEnemy(AEnemy* Enemy, float SpawnTime, float ExpectedTravelTime)
+{
+	if (UHealthComponent* Health = Enemy->HealthComponent)
+	{
+		Health->OnDeath.AddDynamic(this, &AWaveManager::HandleTrackedEnemyDeath);
+	}
+	Enemy->OnSplit.AddDynamic(this, &AWaveManager::HandleEnemySplit);
+
+	FTrackedEnemy Tracked;
+	Tracked.Enemy = Enemy;
+	Tracked.SpawnTime = SpawnTime;
+	Tracked.ExpectedTravelTime = ExpectedTravelTime;
+	TrackedEnemies.Add(Tracked);
+
+	++ActiveEnemyCount;
+	OnEnemiesRemainingChanged.Broadcast(ActiveEnemyCount);
+}
+
+void AWaveManager::HandleEnemySplit(AEnemy* Parent, AEnemy* Child)
+{
+	if (bStopped || !Child)
+	{
+		return;
+	}
+
+	// Children inherit the parent's clock, so how far the split got still counts for the score.
+	float SpawnTime = GetWorld()->GetTimeSeconds();
+	float ExpectedTravelTime = 30.0f;
+	for (const FTrackedEnemy& Tracked : TrackedEnemies)
+	{
+		if (Tracked.Enemy.Get() == Parent)
+		{
+			SpawnTime = Tracked.SpawnTime;
+			ExpectedTravelTime = Tracked.ExpectedTravelTime;
+			break;
+		}
+	}
+
+	TrackEnemy(Child, SpawnTime, ExpectedTravelTime);
 }
 
 void AWaveManager::MonitorWave()
@@ -387,7 +436,8 @@ void AWaveManager::HandleTrackedEnemyDeath(AActor* Killer)
 	ActiveEnemyCount = FMath::Max(0, ActiveEnemyCount - 1);
 	OnEnemiesRemainingChanged.Broadcast(ActiveEnemyCount);
 
-	CheckWaveCompletion();
+	// Next tick, so a Splitting elite's children are counted before the wave can end.
+	GetWorldTimerManager().SetTimerForNextTick(this, &AWaveManager::CheckWaveCompletion);
 }
 
 void AWaveManager::CheckWaveCompletion()
@@ -413,6 +463,14 @@ void AWaveManager::CheckWaveCompletion()
 
 	State = EWaveState::Complete;
 	OnWaveComplete.Broadcast(GetCurrentWave());
+
+	// Plan the next wave now (after the game mode has grown the map) so the forecast can show
+	// it during the break. Lanes are still chosen live at spawn time.
+	if (bUseAdaptiveDirector && Director && !bStopped && State == EWaveState::Complete
+		&& CurrentWaveIndex + 1 < GetTotalWaves())
+	{
+		PrepareWave(CurrentWaveIndex + 1);
+	}
 
 	// Do not auto-start the next wave — GameMode shows the results screen and calls
 	// ContinueToNextWave() when the player is ready.

@@ -220,6 +220,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	int32 GetMatchDefendersPlaced() const { return MatchDefendersPlaced; }
 
+	/** Defender status combos (Shatter, Venom spread) triggered this match. */
+	UFUNCTION(BlueprintPure, Category = "Rules")
+	int32 GetMatchCombos() const { return MatchCombos; }
+
+	/** Count one defender status combo. */
+	void NotifyCombo() { ++MatchCombos; }
+
 	/** How many beam upgrades have been purchased this match. */
 	UFUNCTION(BlueprintPure, Category = "Rules|Meta")
 	int32 GetBeamUpgradeLevel() const { return BeamUpgradeLevel; }
@@ -335,6 +342,7 @@ private:
 	int32 MatchDefendersPlaced = 0;
 	int32 MatchHitsLanded = 0;
 	int32 MatchEnemiesKilled = 0;
+	int32 MatchCombos = 0;
 
 	void EnsureStartingMetaWallet();
 

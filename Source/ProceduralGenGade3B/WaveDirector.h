@@ -10,6 +10,8 @@
 //   3. Plan the wave     - spend a threat budget (grows each wave, scaled by difficulty) on
 //                          enemy types weighted to counter the player's play style.
 //   4. Choose lanes      - per spawn, pick a lane from how well each lane is defended.
+// From wave 3 it also stamps elite modifiers that counter the player's style, and it can
+// forecast the upcoming wave lane by lane for the HUD.
 
 #pragma once
 
@@ -36,6 +38,34 @@ struct FPlannedSpawn
 	/** Wolf pack members after the leader reuse the leader's lane. */
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	bool bPackFollower = false;
+
+	/** Elite modifier stamped on this enemy (None for a normal enemy). */
+	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
+	EEliteModifier Elite = EEliteModifier::None;
+};
+
+/** Predicted arrivals on one lane for the upcoming wave (next-wave forecast). */
+USTRUCT(BlueprintType)
+struct FLaneForecast
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
+	int32 Lane = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
+	int32 BasicCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
+	int32 WolfCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
+	int32 BearCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
+	int32 EliteCount = 0;
+
+	int32 Total() const { return BasicCount + WolfCount + BearCount; }
 };
 
 /** The full plan for one wave. */
@@ -73,6 +103,13 @@ struct FWavePlan
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	int32 BearCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
+	int32 EliteCount = 0;
+
+	/** The modifier chosen to counter the player's style this wave (None before elites unlock). */
+	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
+	EEliteModifier CounterElite = EEliteModifier::None;
 };
 
 /** How the player is building their defence. */
@@ -104,6 +141,9 @@ USTRUCT(BlueprintType)
 struct FWavePerformance
 {
 	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
+	int32 WaveNumber = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	float TowerDamageFraction = 0.0f;
@@ -205,6 +245,31 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Enemies")
 	int32 BearUnlockWave = 3;
 
+	// ---- Elites ----
+
+	/** First wave that can contain elites (one is guaranteed that wave). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Elites")
+	int32 EliteUnlockWave = 3;
+
+	/** Chance for each spawn to be elite in the unlock wave, before difficulty scaling. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Elites")
+	float EliteBaseChance = 0.12f;
+
+	/** Extra elite chance per wave after the unlock wave. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Elites")
+	float EliteChancePerWave = 0.04f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Elites")
+	float EliteMaxChance = 0.4f;
+
+	/** Share of elites that get the modifier countering the player's style (rest are random). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Elites", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float CounterEliteShare = 0.65f;
+
+	/** Basic enemies may reroute around defences once the rating is above this. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Routing")
+	float SmartBasicDifficulty = 1.1f;
+
 	// ---- Pacing ----
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Pacing")
@@ -237,6 +302,18 @@ public:
 	/** True when the tower has lost enough health this wave that spawning should ease off. */
 	bool ShouldGrantRelief(UWorld* World) const;
 
+	/**
+	 * Predict which lane each planned enemy will use, from the current defences. Runs the same
+	 * lane choice on a copy of the random stream, so it matches the real wave if nothing changes.
+	 */
+	TArray<FLaneForecast> ForecastLanes(UWorld* World) const;
+
+	/** Whether an enemy of this type/elite should look for less defended routes. */
+	bool ShouldEnemyReroute(EEnemyType Type, EEliteModifier Elite) const;
+
+	/** The modifier that best counters the player's current defence. */
+	EEliteModifier ChooseCounterElite() const;
+
 	// ---- Read-outs (HUD, logs) ----
 
 	UFUNCTION(BlueprintPure, Category = "Wave Director")
@@ -254,7 +331,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wave Director")
 	const FWavePlan& GetCurrentPlan() const { return CurrentPlan; }
 
+	/** Every evaluated wave this match, in order (end-of-match graph). */
+	UFUNCTION(BlueprintPure, Category = "Wave Director")
+	const TArray<FWavePerformance>& GetHistory() const { return History; }
+
 private:
+	TArray<FWavePerformance> History;
+
+	/** Shared lane choice used by both the live spawns and the forecast. */
+	int32 ChooseLaneWith(UWorld* World, EEnemyType Type, FRandomStream& Stream, int32& RoundRobin) const;
+
 	float Difficulty = 1.0f;
 
 	FPlayerProfile Profile;

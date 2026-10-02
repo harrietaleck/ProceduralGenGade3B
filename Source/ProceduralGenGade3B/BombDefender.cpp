@@ -117,7 +117,7 @@ void APoisonLightBombDefender::TickPoisonClouds()
     for (int32 i = ActiveClouds.Num() - 1; i >= 0; --i)
     {
         FPoisonCloud& Cloud = ActiveClouds[i];
-        DamageEnemiesInArea(Cloud.Location, PoisonDamagePerTick);
+        DamageEnemiesInArea(Cloud.Location, PoisonDamagePerTick, true);
 
         DrawDebugCircle(GetWorld(), Cloud.Location + FVector(0.0f, 0.0f, 10.0f), BombRadius, 32,
             FColor(80, 255, 110), false, PoisonTickInterval, 0, 4.0f, FVector(1, 0, 0), FVector(0, 1, 0), false);
@@ -184,7 +184,7 @@ void APoisonLightBombDefender::SpawnBlastVisuals(const FVector& AreaLocation)
     }
 }
 
-int32 APoisonLightBombDefender::DamageEnemiesInArea(const FVector& AreaLocation, float Damage)
+int32 APoisonLightBombDefender::DamageEnemiesInArea(const FVector& AreaLocation, float Damage, bool bPoison)
 {
     if (!GetWorld())
     {
@@ -193,6 +193,7 @@ int32 APoisonLightBombDefender::DamageEnemiesInArea(const FVector& AreaLocation,
 
     //Collect first so enemies destroyed by the damage don't disturb the iteration
     TArray<UHealthComponent*> Victims;
+    TArray<AEnemy*> PoisonTargets;
     for (TActorIterator<AEnemy> It(GetWorld()); It; ++It)
     {
         AEnemy* Enemy = *It;
@@ -205,6 +206,16 @@ int32 APoisonLightBombDefender::DamageEnemiesInArea(const FVector& AreaLocation,
         if (FVector::Dist2D(AreaLocation, Enemy->GetActorLocation()) <= BombRadius)
         {
             Victims.Add(EnemyHealth);
+            PoisonTargets.Add(Enemy);
+        }
+    }
+
+    //Mark enemies standing in the cloud as poisoned so Archer arrows can spread it
+    if (bPoison)
+    {
+        for (AEnemy* Enemy : PoisonTargets)
+        {
+            Enemy->ApplyPoison(0.0f, PoisonTickInterval * 2.0f, this);
         }
     }
 
