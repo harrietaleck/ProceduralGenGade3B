@@ -271,6 +271,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Terrain")
 	bool IsSlotOccupied(const FVector& Location) const;
 
+	/**
+	 * A* over the walkable path network (path + tower cells) from From to the tower.
+	 * CellCost gets each cell's world centre and returns its traversal cost (>= 1), so callers
+	 * can make defended cells expensive. Outputs smoothed world waypoints and the route's cost.
+	 */
+	bool FindLowestCostRoute(const FVector& From, TFunctionRef<float(const FVector&)> CellCost,
+		TArray<FVector>& OutWaypoints, float& OutCost) const;
+
 	/** Runs synchronous NavMesh pathfinding queries from every path's spawn point to the tower,
 	 *  and from the tower to every build slot, failing if any query is unreachable or only
 	 *  partially successful. Requires the NavMesh to already be rebuilt (RebuildNavigation)
