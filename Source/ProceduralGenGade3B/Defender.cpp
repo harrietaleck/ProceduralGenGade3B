@@ -9,6 +9,7 @@
 #include "TDGameMode.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "EngineUtils.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -49,9 +50,26 @@ ADefender::ADefender()
     MetaCost.LightLanterns = 0;
 }
 
+float ADefender::GetThreatRating() const
+{
+    return FireInterval > 0.0f ? AttackDamage / FireInterval : AttackDamage;
+}
+
 void ADefender::BeginPlay()
 {
     Super::BeginPlay();
+
+    if (MeshComponent)
+    {
+        if (UMaterialInterface* BaseMaterial = MeshComponent->GetMaterial(0))
+        {
+            if (UMaterialInstanceDynamic* BodyMaterial = UMaterialInstanceDynamic::Create(BaseMaterial, this))
+            {
+                BodyMaterial->SetVectorParameterValue(TEXT("Color"), BodyColor);
+                MeshComponent->SetMaterial(0, BodyMaterial);
+            }
+        }
+    }
 
     // Remove ourselves when destroyed by enemies.
     HealthComponent->OnDeath.AddDynamic(this, &ADefender::HandleDeath);

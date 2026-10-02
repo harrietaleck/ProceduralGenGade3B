@@ -12,8 +12,9 @@
 
 APoisonLightBombDefender::APoisonLightBombDefender()
 {
-    //Disable the settings of the orginial firing system
+    //Disable the settings of the original firing system
     bUseDefaultAttack = false;
+    DefenderName = TEXT("Bomb");
 
     //Use a sphere for the Poison Light Bomb Defender body
     static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(
@@ -32,15 +33,13 @@ APoisonLightBombDefender::APoisonLightBombDefender()
     //Make the bomb defender a compact orb shape
     if (MeshComponent)
     {
-        MeshComponent->SetRelativeScale3D(
-            FVector(0.8f, 0.8f, 0.8f)
-        );
+        MeshComponent->SetRelativeScale3D(FVector(0.8f, 0.8f, 0.8f));
     }
 
     //Make sure the defender doesnt rely on projectile
     ProjectileClass = nullptr;
 
-    //Make the defender have an large effective area to attack
+    //Bombs are lobbed over a wide area
     AttackRange = 1200.0f;
 
     //Set the health of the bomb defender
@@ -49,8 +48,14 @@ APoisonLightBombDefender::APoisonLightBombDefender()
     //Set a cost that can be adjusted for stronger attacks
     Cost = 75;
 
-    //The meta cost identifies the bomb deferder as stronger in attacks
-    bStrongDefender = true;
+    BodyColor = FLinearColor(0.2f, 0.85f, 0.3f);
+}
+
+float APoisonLightBombDefender::GetThreatRating() const
+{
+    //Impact plus the full poison cloud, assuming a couple of enemies per blast
+    const float PerBomb = BombDamage + PoisonDamagePerTick * PoisonTicks;
+    return PerBomb * 2.0f / BombCooldown;
 }
 
 void APoisonLightBombDefender::BeginPlay()
@@ -65,6 +70,14 @@ void APoisonLightBombDefender::BeginPlay()
         BombCooldown,
         true
     );
+
+    GetWorldTimerManager().SetTimer(
+        PoisonTimerHandle,
+        this,
+        &APoisonLightBombDefender::TickPoisonClouds,
+        PoisonTickInterval,
+        true
+    );
 }
 
 void APoisonLightBombDefender::DetonateBomb()
@@ -74,215 +87,191 @@ void APoisonLightBombDefender::DetonateBomb()
         return;
     }
 
-    //Select 1 - 2 bomb areas
-    const FVector SelectedArea = GetBestAttackArea();
+    //Hold the bomb until there is something to hit
+    FVector ClusterCentre;
+    if (!FindBestClusterCentre(ClusterCentre))
+    {
+        return;
+    }
 
-    //Draw areas where the bombs will hit to be visisble t the player
-    DrawDebugSphere(
-        GetWorld(),
-        SelectedArea,
-        BombRadius,
-        32,
-        FColor::Green,
-        false,
-        LightDuration,
-        0,
-        5.0f
-    );
+    SpawnBlastVisuals(ClusterCentre);
+    DamageEnemiesInArea(ClusterCentre, BombDamage);
 
-    //creat light effects the areas selected
-    UPointLightComponent* BombLight =
-        NewObject<UPointLightComponent>(this);
+    if (PoisonTicks > 0)
+    {
+        FPoisonCloud Cloud;
+        Cloud.Location = ClusterCentre;
+        Cloud.TicksRemaining = PoisonTicks;
+        ActiveClouds.Add(Cloud);
+    }
+}
 
-    if (BombLight)
+void APoisonLightBombDefender::TickPoisonClouds()
+{
+    if (!HealthComponent || HealthComponent->IsDead())
+    {
+        ActiveClouds.Reset();
+        return;
+    }
+
+    for (int32 i = ActiveClouds.Num() - 1; i >= 0; --i)
+    {
+        FPoisonCloud& Cloud = ActiveClouds[i];
+        DamageEnemiesInArea(Cloud.Location, PoisonDamagePerTick);
+
+        DrawDebugCircle(GetWorld(), Cloud.Location + FVector(0.0f, 0.0f, 10.0f), BombRadius, 32,
+            FColor(80, 255, 110), false, PoisonTickInterval, 0, 4.0f, FVector(1, 0, 0), FVector(0, 1, 0), false);
+
+        if (--Cloud.TicksRemaining <= 0)
+        {
+            ActiveClouds.RemoveAtSwap(i);
+        }
+    }
+}
+
+void APoisonLightBombDefender::SpawnBlastVisuals(const FVector& AreaLocation)
+{
+    //Create a light effect over the blast area
+    if (UPointLightComponent* BombLight = NewObject<UPointLightComponent>(this))
     {
         BombLight->RegisterComponent();
-
-        BombLight->SetWorldLocation(
-            SelectedArea + FVector(0.0f, 0.0f, 50.0f)
-        );
-
-        BombLight->SetLightColor(
-            FLinearColor(0.2f, 1.0f, 0.4f)
-        );
-
+        BombLight->SetWorldLocation(AreaLocation + FVector(0.0f, 0.0f, 50.0f));
+        BombLight->SetLightColor(FLinearColor(0.2f, 1.0f, 0.4f));
         BombLight->SetIntensity(5000.0f);
         BombLight->SetAttenuationRadius(BombRadius);
         BombLight->SetCastShadows(false);
         BombLight->SetVisibility(true);
 
-        //Automaticall remove the lighted area after duration
+        //Automatically remove the lighted area after the duration
         FTimerHandle LightTimerHandle;
-
-        GetWorldTimerManager().SetTimer(
-            LightTimerHandle,
-            [BombLight]()
+        TWeakObjectPtr<UPointLightComponent> WeakLight(BombLight);
+        GetWorldTimerManager().SetTimer(LightTimerHandle, [WeakLight]()
+        {
+            if (WeakLight.IsValid())
             {
-                if (BombLight)
-                {
-                    BombLight->DestroyComponent();
-                }
-            },
-            LightDuration,
-            false
-        );
+                WeakLight->DestroyComponent();
+            }
+        }, LightDuration, false);
     }
 
-    //Create a temporary sphere show the highlighted area
-    UStaticMeshComponent* BombAreaVisual =
-        NewObject<UStaticMeshComponent>(this);
-
-    if (BombAreaVisual)
+    //Create a temporary flattened sphere to show the blast area
+    if (UStaticMeshComponent* BombAreaVisual = NewObject<UStaticMeshComponent>(this))
     {
-        // *** CHANGED: Reuse the sphere loaded in the constructor.
-        // *** ConstructorHelpers cannot be used here because this function runs during gameplay.
+        //Reuse the sphere loaded in the constructor (ConstructorHelpers can't run during gameplay)
         if (BombAreaMesh)
         {
             BombAreaVisual->SetStaticMesh(BombAreaMesh);
         }
 
         BombAreaVisual->RegisterComponent();
+        BombAreaVisual->SetWorldLocation(AreaLocation);
 
-        BombAreaVisual->SetWorldLocation(
-            SelectedArea
-        );
-
-        const float VisualScale =
-            BombRadius / 50.0f;
-
-        BombAreaVisual->SetWorldScale3D(
-            FVector(
-                VisualScale,
-                VisualScale,
-                0.08f
-            )
-        );
-
-        BombAreaVisual->SetCollisionEnabled(
-            ECollisionEnabled::NoCollision
-        );
-
+        const float VisualScale = BombRadius / 50.0f;
+        BombAreaVisual->SetWorldScale3D(FVector(VisualScale, VisualScale, 0.08f));
+        BombAreaVisual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
         BombAreaVisual->SetVisibility(true);
 
-        //Remove highlighted area after the duration
+        //Remove the highlighted area after the duration
         FTimerHandle VisualTimerHandle;
-
-        GetWorldTimerManager().SetTimer(
-            VisualTimerHandle,
-            [BombAreaVisual]()
+        TWeakObjectPtr<UStaticMeshComponent> WeakVisual(BombAreaVisual);
+        GetWorldTimerManager().SetTimer(VisualTimerHandle, [WeakVisual]()
+        {
+            if (WeakVisual.IsValid())
             {
-                if (BombAreaVisual)
-                {
-                    BombAreaVisual->DestroyComponent();
-                }
-            },
-            LightDuration,
-            false
-        );
+                WeakVisual->DestroyComponent();
+            }
+        }, LightDuration, false);
     }
-
-    //Apply damagae to enemies in that area
-    DamageEnemiesInArea(SelectedArea);
 }
 
-void APoisonLightBombDefender::DamageEnemiesInArea(
-    const FVector& AreaLocation)
+int32 APoisonLightBombDefender::DamageEnemiesInArea(const FVector& AreaLocation, float Damage)
 {
     if (!GetWorld())
     {
-        return;
+        return 0;
     }
 
+    //Collect first so enemies destroyed by the damage don't disturb the iteration
+    TArray<UHealthComponent*> Victims;
     for (TActorIterator<AEnemy> It(GetWorld()); It; ++It)
     {
         AEnemy* Enemy = *It;
-
-        if (!Enemy)
-        {
-            continue;
-        }
-
-        UHealthComponent* EnemyHealth =
-            Enemy->FindComponentByClass<UHealthComponent>();
-
+        UHealthComponent* EnemyHealth = Enemy ? Enemy->HealthComponent.Get() : nullptr;
         if (!EnemyHealth || EnemyHealth->IsDead())
         {
             continue;
         }
 
-        const float Distance =
-            FVector::Dist(
-                AreaLocation,
-                Enemy->GetActorLocation()
-            );
-
-        //Make all the enemies in that area damaged
-        if (Distance <= BombRadius)
+        if (FVector::Dist2D(AreaLocation, Enemy->GetActorLocation()) <= BombRadius)
         {
-            EnemyHealth->ApplyDamage(
-                BombDamage,
-                this
-            );
+            Victims.Add(EnemyHealth);
         }
     }
+
+    for (UHealthComponent* Victim : Victims)
+    {
+        if (IsValid(Victim) && !Victim->IsDead())
+        {
+            Victim->ApplyDamage(Damage, this);
+        }
+    }
+
+    return Victims.Num();
 }
 
-FVector APoisonLightBombDefender::GetBestAttackArea() const
+bool APoisonLightBombDefender::FindBestClusterCentre(FVector& OutCentre) const
 {
-    const FVector WorldAreaOne =
-        GetActorTransform().TransformPosition(AttackAreaOne);
-
-    const FVector WorldAreaTwo =
-        GetActorTransform().TransformPosition(AttackAreaTwo);
-
-    int32 EnemiesInAreaOne = 0;
-    int32 EnemiesInAreaTwo = 0;
+    //Living enemies inside the throwing range
+    TArray<FVector> Positions;
+    const FVector Location = GetActorLocation();
+    const float RangeSq = AttackRange * AttackRange;
 
     for (TActorIterator<AEnemy> It(GetWorld()); It; ++It)
     {
-        AEnemy* Enemy = *It;
-
-        if (!Enemy)
-        {
-            continue;
-        }
-
-        UHealthComponent* EnemyHealth =
-            Enemy->FindComponentByClass<UHealthComponent>();
-
+        const AEnemy* Enemy = *It;
+        const UHealthComponent* EnemyHealth = Enemy ? Enemy->HealthComponent.Get() : nullptr;
         if (!EnemyHealth || EnemyHealth->IsDead())
         {
             continue;
         }
 
-        const float DistanceOne =
-            FVector::Dist(
-                WorldAreaOne,
-                Enemy->GetActorLocation()
-            );
-
-        const float DistanceTwo =
-            FVector::Dist(
-                WorldAreaTwo,
-                Enemy->GetActorLocation()
-            );
-
-        if (DistanceOne <= BombRadius)
+        if (FVector::DistSquared2D(Location, Enemy->GetActorLocation()) <= RangeSq)
         {
-            ++EnemiesInAreaOne;
-        }
-
-        if (DistanceTwo <= BombRadius)
-        {
-            ++EnemiesInAreaTwo;
+            Positions.Add(Enemy->GetActorLocation());
         }
     }
 
-    //Select areas with more enemies
-    if (EnemiesInAreaTwo > EnemiesInAreaOne)
+    if (Positions.Num() == 0)
     {
-        return WorldAreaTwo;
+        return false;
     }
 
-    return WorldAreaOne;
+    //Score each enemy by how many others stand within one blast radius of it,
+    //then aim at the average position of the best group so the blast is centred on it
+    const float RadiusSq = BombRadius * BombRadius;
+    int32 BestCount = 0;
+    FVector BestCentre = Positions[0];
+
+    for (const FVector& Candidate : Positions)
+    {
+        int32 Count = 0;
+        FVector Sum = FVector::ZeroVector;
+        for (const FVector& Other : Positions)
+        {
+            if (FVector::DistSquared2D(Candidate, Other) <= RadiusSq)
+            {
+                ++Count;
+                Sum += Other;
+            }
+        }
+
+        if (Count > BestCount)
+        {
+            BestCount = Count;
+            BestCentre = Sum / Count;
+        }
+    }
+
+    OutCentre = BestCentre;
+    return true;
 }
