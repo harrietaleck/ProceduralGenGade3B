@@ -3,6 +3,8 @@
 #include "Enemy.h"
 #include "HealthComponent.h"
 #include "Projectile.h"
+#include "Tower.h"
+#include "TDGameMode.h"
 #include "EngineUtils.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -10,26 +12,23 @@
 
 AArcherDefender::AArcherDefender()
 {
-    //Due not use the timer that is exactly like the original defender
+    //Do not use the timer that is exactly like the original defender
     bUseDefaultAttack = false;
+    DefenderName = TEXT("Archer");
 
-    // *** NEW: Use a cone mesh to give the Archer Defender a tall, pointed silhouette.
+    //Use a cone mesh to give the Archer Defender a tall, pointed silhouette
     static ConstructorHelpers::FObjectFinder<UStaticMesh> ConeMesh(
         TEXT("/Engine/BasicShapes/Cone.Cone")
     );
-
-    // *** NEW: Replace the inherited cylinder with the archer's cone shape.
     if (ConeMesh.Succeeded() && MeshComponent)
     {
         MeshComponent->SetStaticMesh(ConeMesh.Object);
     }
 
-    // *** NEW: Make the cone taller and narrower so it looks different from the Basic Defender.
+    //Make the cone taller and narrower so it looks different from the Basic Defender
     if (MeshComponent)
     {
-        MeshComponent->SetRelativeScale3D(
-            FVector(0.65f, 0.65f, 1.5f)
-        );
+        MeshComponent->SetRelativeScale3D(FVector(0.65f, 0.65f, 1.5f));
     }
 
     //Set the long range attack distance
@@ -38,20 +37,27 @@ AArcherDefender::AArcherDefender()
     //Set the archer damage
     AttackDamage = 8.0f;
 
-    //Set the arrow speed to slow due to a long distance to seem realistic
+    //Arrows are slow to draw over a long distance
     FireInterval = 1.0f;
 
-    //Set the defender projectile shape to smaller than the original
+    //Arrows are smaller than the original projectile
     DefenderBallScale = 0.18f;
 
-    //Use a colour to distiguish the projectiles
+    //Use colours to distinguish the archer and its arrows
     DefenderBallColor = FLinearColor(0.2f, 0.8f, 1.0f);
+    BodyColor = FLinearColor(0.15f, 0.6f, 0.95f);
 
-    //Place defender higher than normal defenders so it is realistic
+    //Shots leave from the tip of the cone
     MuzzleOffset = FVector(0.0f, 0.0f, 100.0f);
 
-    //Make the defender have 100% health
     HealthComponent->MaxHealth = 100.0f;
+}
+
+float AArcherDefender::GetThreatRating() const
+{
+    //Average damage per second including the volley shots
+    const float ArrowsPerCycle = (VolleyEveryNShots - 1) + VolleyArrowCount;
+    return Super::GetThreatRating() * ArrowsPerCycle / FMath::Max(1, VolleyEveryNShots);
 }
 
 void AArcherDefender::BeginPlay()
@@ -75,95 +81,79 @@ void AArcherDefender::FireArrow()
         return;
     }
 
-    AEnemy* Target = FindNearestEnemyForArcher();
-    if (!Target)
+    TArray<AEnemy*> Targets;
+    GatherTargetsByThreat(Targets);
+    if (Targets.Num() == 0)
     {
         return;
     }
 
-    //Create the projectile from the archers muzzle
-    const FVector MuzzleLocation = GetActorLocation() + MuzzleOffset;
+    ++ShotCounter;
+    const bool bVolley = VolleyEveryNShots > 0 && ShotCounter % VolleyEveryNShots == 0;
+    const int32 ArrowCount = bVolley ? FMath::Min(VolleyArrowCount, Targets.Num()) : 1;
+
+    for (int32 i = 0; i < ArrowCount; ++i)
+    {
+        ShootAt(Targets[i]);
+    }
+}
+
+void AArcherDefender::ShootAt(AEnemy* Target)
+{
+    const float Damage = Target->EnemyType == EEnemyType::Wolf
+        ? AttackDamage * WolfDamageMultiplier
+        : AttackDamage;
 
     if (ProjectileClass)
     {
         FActorSpawnParameters SpawnParams;
-        SpawnParams.SpawnCollisionHandlingOverride =
-            ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
         SpawnParams.Owner = this;
 
-        if (AProjectile* Arrow =
-            GetWorld()->SpawnActor<AProjectile>(
-                ProjectileClass,
-                MuzzleLocation,
-                GetActorRotation(),
-                SpawnParams))
+        if (AProjectile* Arrow = GetWorld()->SpawnActor<AProjectile>(
+                ProjectileClass, GetActorLocation() + MuzzleOffset, GetActorRotation(), SpawnParams))
         {
-            //The rpojectile system remains the same to attack all enemies
-            Arrow->InitProjectile(
-                Target,
-                AttackDamage,
-                this
-            );
-
-            Arrow->ConfigureVisuals(
-                DefenderBallScale,
-                DefenderBallColor
-            );
+            Arrow->InitProjectile(Target, Damage, this);
+            Arrow->ConfigureVisuals(DefenderBallScale, DefenderBallColor);
         }
+        return;
     }
-    else
-    {
-        //When a projectile is not being selected but will do on default
-        //Create target health component before applying fallback damage
-        UHealthComponent* TargetHealth =
-            Target->FindComponentByClass<UHealthComponent>();
 
-        if (TargetHealth)
-        {
-            TargetHealth->ApplyDamage(
-                AttackDamage,
-                this
-            );
-        }
+    //Fallback when no projectile class is set
+    if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
+    {
+        TargetHealth->ApplyDamage(Damage, this);
     }
 }
 
-AEnemy* AArcherDefender::FindNearestEnemyForArcher() const
+void AArcherDefender::GatherTargetsByThreat(TArray<AEnemy*>& OutTargets) const
 {
-    //Archer searches using its own long-range distance
     const FVector Location = GetActorLocation();
-
-    AEnemy* BestEnemy = nullptr;
-    float BestDistanceSquared = AttackRange * AttackRange;
+    const float RangeSq = AttackRange * AttackRange;
 
     for (TActorIterator<AEnemy> It(GetWorld()); It; ++It)
     {
         AEnemy* Enemy = *It;
-
-        if (!Enemy)
-        {
-            continue;
-        }
-
-        UHealthComponent* EnemyHealth =
-            Enemy->FindComponentByClass<UHealthComponent>();
-
+        UHealthComponent* EnemyHealth = Enemy ? Enemy->HealthComponent.Get() : nullptr;
         if (!EnemyHealth || EnemyHealth->IsDead())
         {
             continue;
         }
 
-        const float DistanceSquared =
-            FVector::DistSquared(
-                Location,
-                Enemy->GetActorLocation());
-
-        if (DistanceSquared <= BestDistanceSquared)
+        if (FVector::DistSquared(Location, Enemy->GetActorLocation()) <= RangeSq)
         {
-            BestDistanceSquared = DistanceSquared;
-            BestEnemy = Enemy;
+            OutTargets.Add(Enemy);
         }
     }
 
-    return BestEnemy;
+    //Closest to the tower first, so the archer always deals with the most urgent threat
+    const ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>();
+    const AActor* Tower = GameMode ? GameMode->GetTower() : nullptr;
+    const FVector TowerLocation = Tower ? Tower->GetActorLocation() : Location;
+
+    OutTargets.Sort([&TowerLocation](const AEnemy& A, const AEnemy& B)
+    {
+        return FVector::DistSquared2D(A.GetActorLocation(), TowerLocation)
+             < FVector::DistSquared2D(B.GetActorLocation(), TowerLocation);
+    });
 }

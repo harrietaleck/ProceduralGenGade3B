@@ -64,6 +64,20 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender")
     FVector MuzzleOffset = FVector(0.0f, 0.0f, 80.0f);
 
+    /**Body colour so every defender type is visually distinct.*/
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender|Visual")
+    FLinearColor BodyColor = FLinearColor(0.95f, 0.55f, 0.12f);
+
+    /**Name shown on the HUD and used by the wave director's play-style read.*/
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender")
+    FString DefenderName = TEXT("Basic");
+
+    /**Rough damage-per-second this defender adds to the lanes it covers (wave director input).*/
+    virtual float GetThreatRating() const;
+
+    /**True for defenders whose attack hits an area rather than a single enemy.*/
+    virtual bool IsAreaAttacker() const { return false; }
+
     /**Shared health/damage/death component.*/
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Defender")
     TObjectPtr<UHealthComponent> HealthComponent;

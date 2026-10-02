@@ -6,7 +6,15 @@
 //Header matches
 #include "BombDefender.generated.h"
 
-//Specialise the defender to creat bomb areas
+//A lingering poison cloud left behind by a bomb
+struct FPoisonCloud
+{
+    FVector Location = FVector::ZeroVector;
+    int32 TicksRemaining = 0;
+};
+
+//Specialise the defender to throw area bombs at the densest group of enemies in range.
+//Each bomb deals impact damage and leaves a poison cloud that keeps damaging enemies inside it.
 UCLASS()
 class PROCEDURALGENGADE3B_API APoisonLightBombDefender :
     public ADefender
@@ -16,6 +24,9 @@ class PROCEDURALGENGADE3B_API APoisonLightBombDefender :
 public:
     APoisonLightBombDefender();
 
+    virtual float GetThreatRating() const override;
+    virtual bool IsAreaAttacker() const override { return true; }
+
 protected:
     virtual void BeginPlay() override;
 
@@ -24,18 +35,11 @@ private:
     UPROPERTY()
     TObjectPtr<UStaticMesh> BombAreaMesh;
 
-    //Two attack locations are selected for the bomb area
-    UPROPERTY(EditAnywhere, Category = "Poison Light Bomb")
-    FVector AttackAreaOne = FVector(500.0f, 0.0f, 0.0f);
-
-    UPROPERTY(EditAnywhere, Category = "Poison Light Bomb")
-    FVector AttackAreaTwo = FVector(1000.0f, 0.0f, 0.0f);
-
-    //Create radium to effect the area
+    //Create radius to effect the area
     UPROPERTY(EditAnywhere, Category = "Poison Light Bomb", meta = (ClampMin = "50.0"))
     float BombRadius = 300.0f;
 
-    //Create a damage for alal enemies in the radius
+    //Impact damage for all enemies in the radius
     UPROPERTY(EditAnywhere, Category = "Poison Light Bomb", meta = (ClampMin = "0.0"))
     float BombDamage = 12.0f;
 
@@ -47,15 +51,39 @@ private:
     UPROPERTY(EditAnywhere, Category = "Poison Light Bomb", meta = (ClampMin = "0.1"))
     float LightDuration = 0.8f;
 
+    //Poison damage dealt to each enemy in the cloud per tick
+    UPROPERTY(EditAnywhere, Category = "Poison Light Bomb", meta = (ClampMin = "0.0"))
+    float PoisonDamagePerTick = 3.0f;
+
+    //How many poison ticks a cloud lasts
+    UPROPERTY(EditAnywhere, Category = "Poison Light Bomb", meta = (ClampMin = "0"))
+    int32 PoisonTicks = 4;
+
+    //Seconds between poison ticks
+    UPROPERTY(EditAnywhere, Category = "Poison Light Bomb", meta = (ClampMin = "0.1"))
+    float PoisonTickInterval = 0.5f;
+
     //Set a timer for the bomb attacks
     FTimerHandle BombTimerHandle;
 
-    //Activate the bombs in the areas
+    //Timer that ticks every active poison cloud
+    FTimerHandle PoisonTimerHandle;
+
+    //Clouds still poisoning the ground
+    TArray<FPoisonCloud> ActiveClouds;
+
+    //Throw a bomb at the best cluster, if any enemy is in range
     void DetonateBomb();
 
-    //Damage the enemies in the areas
-    void DamageEnemiesInArea(const FVector& AreaLocation);
+    //Show the blast light and area marker
+    void SpawnBlastVisuals(const FVector& AreaLocation);
 
-    //Find which areas of the bomb areas have enemies
-    FVector GetBestAttackArea() const;
+    //Damage the enemies in the area, returns how many were hit
+    int32 DamageEnemiesInArea(const FVector& AreaLocation, float Damage);
+
+    //Apply one poison tick to every active cloud
+    void TickPoisonClouds();
+
+    //Find the enemy whose surroundings contain the most enemies (the densest cluster)
+    bool FindBestClusterCentre(FVector& OutCentre) const;
 };
