@@ -11,64 +11,81 @@
 
 // Fired whenever health changes (damage or healing). Params: current and max health.
 // Dynamic multicast so both C++ and Blueprint/UI widgets can bind to it.
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHealthChanged, float, CurrentHealth, float, MaxHealth);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
+    FOnHealthChanged,
+    float,
+    CurrentHealth,
+    float,
+    MaxHealth);
 
 // Fired once when health reaches zero. Param: the actor that dealt the killing blow (may be null).
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDeath, AActor*, Killer);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+    FOnDeath,
+    AActor*,
+    Killer);
 
 UCLASS(ClassGroup = (TowerDefense), meta = (BlueprintSpawnableComponent))
 class PROCEDURALGENGADE3B_API UHealthComponent : public UActorComponent
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
 public:
-	UHealthComponent();
 
-	/** Starting and maximum hit points. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health", meta = (ClampMin = "1.0"))
-	float MaxHealth = 100.0f;
+    UHealthComponent();
 
-	/** Broadcast on any health change — UI health bars bind to this. */
-	UPROPERTY(BlueprintAssignable, Category = "Health")
-	FOnHealthChanged OnHealthChanged;
+    /** Starting and maximum hit points. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health", meta = (ClampMin = "1.0"))
+    float MaxHealth = 100.0f;
 
-	/** Broadcast exactly once when this actor dies. */
-	UPROPERTY(BlueprintAssignable, Category = "Health")
-	FOnDeath OnDeath;
+    /** Broadcast on any health change — UI health bars bind to it. */
+    UPROPERTY(BlueprintAssignable, Category = "Health")
+    FOnHealthChanged OnHealthChanged;
 
-	/**
-	 * Apply damage to this actor. Clamps health to zero, broadcasts OnHealthChanged, and
-	 * broadcasts OnDeath the first time health hits zero. Ignored if already dead or amount <= 0.
-	 * @param Amount    How many hit points to remove.
-	 * @param Killer     The actor responsible (used for scoring / resource rewards). May be null.
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Health")
-	void ApplyDamage(float Amount, AActor* Killer = nullptr);
+    /** Broadcast exactly once when this actor dies. */
+    UPROPERTY(BlueprintAssignable, Category = "Health")
+    FOnDeath OnDeath;
 
-	/** Restore hit points, clamped to MaxHealth. Ignored if dead. */
-	UFUNCTION(BlueprintCallable, Category = "Health")
-	void Heal(float Amount);
+    //Apply damage to the actor
+    UFUNCTION(BlueprintCallable, Category = "Health")
+    void ApplyDamage(float Amount, AActor* Killer = nullptr);
 
-	/** Current hit points. */
-	UFUNCTION(BlueprintPure, Category = "Health")
-	float GetCurrentHealth() const { return CurrentHealth; }
+    /** Restore hit points, clamped to MaxHealth. Ignored if dead. */
+    UFUNCTION(BlueprintCallable, Category = "Health")
+    void Heal(float Amount);
 
-	/** Health as a 0..1 fraction — handy for progress bars. */
-	UFUNCTION(BlueprintPure, Category = "Health")
-	float GetHealthPercent() const { return MaxHealth > 0.0f ? CurrentHealth / MaxHealth : 0.0f; }
+    /** Current hit points. */
+    UFUNCTION(BlueprintPure, Category = "Health")
+    float GetCurrentHealth() const
+    {
+        return CurrentHealth;
+    }
 
-	/** True once this actor has died. */
-	UFUNCTION(BlueprintPure, Category = "Health")
-	bool IsDead() const { return bIsDead; }
+    /** Health as a 0..1 fraction — handy for progress bars. */
+    UFUNCTION(BlueprintPure, Category = "Health")
+    float GetHealthPercent() const
+    {
+        return MaxHealth > 0.0f
+            ? CurrentHealth / MaxHealth
+            : 0.0f;
+    }
+
+    /** True once this actor has died. */
+    UFUNCTION(BlueprintPure, Category = "Health")
+    bool IsDead() const
+    {
+        return bIsDead;
+    }
 
 protected:
-	virtual void BeginPlay() override;
+
+    virtual void BeginPlay() override;
 
 private:
-	/** Live hit points. Initialised to MaxHealth in BeginPlay. */
-	UPROPERTY(VisibleAnywhere, Category = "Health", meta = (AllowPrivateAccess = "true"))
-	float CurrentHealth = 0.0f;
 
-	/** Guards against broadcasting death more than once. */
-	bool bIsDead = false;
+    /** Live hit points. Initialised to MaxHealth in BeginPlay. */
+    UPROPERTY(VisibleAnywhere, Category = "Health", meta = (AllowPrivateAccess = "true"))
+    float CurrentHealth = 0.0f;
+
+    /** Guards against broadcasting death more than once. */
+    bool bIsDead = false;
 };
