@@ -1,5 +1,5 @@
 // EnemySpawner.cpp
-// Handles automatic spawning of Basic, Bear and Wolf enemies.
+// Spawns Basic, Bear and Wolf enemies on a timer.
 
 #include "EnemySpawner.h"
 
@@ -105,7 +105,7 @@ AEnemy* AEnemySpawner::SpawnEnemyOfType(EEnemyType EnemyType, int32 PathIndex)
         return nullptr;
     }
 
-    // Respect enemy limit.
+    // Stop if we are already at the enemy limit.
     if (MaxEnemiesAlive > 0 &&
         CountAliveEnemies() >= MaxEnemiesAlive)
     {

@@ -1,4 +1,4 @@
-// BuildPadMarker.cpp — see BuildPadMarker.h for the overview.
+// BuildPadMarker.cpp - the overview is in BuildPadMarker.h.
 
 #include "BuildPadMarker.h"
 #include "Blueprint/WidgetTree.h"
@@ -44,7 +44,7 @@ void UBuildPadPortalWidget::SetPortalTexture(UTexture2D* Texture)
 
 ABuildPadMarker::ABuildPadMarker()
 {
-	PrimaryActorTick.bCanEverTick = false; // Purely decorative; no per-frame logic of its own.
+	PrimaryActorTick.bCanEverTick = false; // Only for looks, so it doesn't need to tick.
 
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	SetRootComponent(SceneRoot);
@@ -57,7 +57,7 @@ ABuildPadMarker::ABuildPadMarker()
 		PlatformMesh->SetStaticMesh(CylinderMesh.Object);
 	}
 
-	// Purely visual: never blocks clicks, movement, or the build-slot raycast.
+	// Only visual, so it should never block clicks, movement or the build slot trace.
 	PlatformMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	PortalWidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("DefendersPortal"));
@@ -78,7 +78,7 @@ void ABuildPadMarker::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
 
-	// The basic cylinder is ~100uu across by default; keep it as a missing-art fallback.
+	// The engine cylinder is about 100 units wide. We keep it as a backup if the art is missing.
 	PlatformMesh->SetRelativeScale3D(
 		FVector(Radius / 50.0f, Radius / 50.0f, Thickness / 100.0f));
 

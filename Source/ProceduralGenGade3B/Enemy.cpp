@@ -95,7 +95,7 @@ void AEnemy::MakeElite(EEliteModifier Modifier)
     HealthComponent->Heal(HealthComponent->MaxHealth);
     ResourceReward = FMath::RoundToInt(ResourceReward * 1.6f);
 
-    //Elites are a size up so they stand out in a crowd
+    //Elites are a bit bigger so they stand out in a crowd
     SpawnTargetScale *= 1.25f;
     if (SpawnEffectElapsed >= SpawnEffectDuration)
     {
@@ -156,7 +156,7 @@ float AEnemy::ModifyIncomingDamage(float Amount, AActor* Source)
 
     ATDGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ATDGameMode>() : nullptr;
 
-    //Shatter: area damage hits a stunned enemy much harder (Strong + Bomb)
+    //Shatter: area attacks hit a stunned enemy much harder. This is the Strong and Bomb combo
     if (IsStunned() && Defender->IsAreaAttacker())
     {
         Amount *= ShatterMultiplier;
@@ -167,7 +167,7 @@ float AEnemy::ModifyIncomingDamage(float Amount, AActor* Source)
         }
     }
 
-    //Venom spread: an arrow bursts the poison onto every enemy nearby (Bomb + Archer)
+    //Venom spread: an arrow spreads the poison to every enemy nearby. This is the Bomb and Archer combo
     if (IsPoisoned() && Defender->IsA<AArcherDefender>())
     {
         SpreadVenom(const_cast<ADefender*>(Defender));
@@ -228,7 +228,7 @@ void AEnemy::ApplyEnemyType()
     switch (EnemyType)
     {
     case EEnemyType::Bear:
-        //Bear is a slow armoured juggernaut that marches on the tower
+        //Bear is slow and tough and walks straight at the tower
         MoveSpeed = 80.0f;
         Acceleration = 40.0f;
         TurnRate = 2.0f;
@@ -306,8 +306,8 @@ void AEnemy::ApplyBodyColor()
 
 void AEnemy::BeginPlay()
 {
-    //Apply type stats before the components start so health begins at the type's maximum
-    //(also covers enemies placed directly in the level instead of by the spawner)
+    //Set the type stats before the components start so health begins at the right maximum
+    //This also covers enemies placed in the level by hand instead of by the spawner
     ApplyEnemyType();
 
     Super::BeginPlay();
@@ -457,7 +457,7 @@ void AEnemy::TickWolf(float DeltaSeconds)
     MoveAlongPath(DeltaSeconds);
 }
 
-//Bear: never stop for defenders, slam them while marching, enrage when hurt
+//Bear: never stops for defenders, slams them on the way and gets angry when hurt
 void AEnemy::TickBear(float DeltaSeconds)
 {
     if (!bEnraged && HealthComponent->GetHealthPercent() <= EnrageHealthFraction)
@@ -505,7 +505,7 @@ void AEnemy::PerformGroundSlam()
         }
     }
 
-    //Shockwave ring so the slam reads clearly
+    //Draw a ring so the player can see the slam
     const FColor RingColor = bEnraged ? FColor(255, 70, 20) : FColor(160, 100, 40);
     DrawDebugCircle(World, Origin - FVector(0.0f, 0.0f, GroundClearance - 5.0f), SlamRadius, 40,
         RingColor, false, 0.4f, 0, 8.0f, FVector(1, 0, 0), FVector(0, 1, 0), false);
@@ -615,7 +615,7 @@ void AEnemy::TryReroute()
         return;
     }
 
-    //Snapshot every living defender's coverage once for this evaluation
+    //Grab the range and threat of every living defender once for this check
     struct FThreatSource
     {
         FVector Location;
@@ -827,7 +827,7 @@ void AEnemy::RejoinPath()
         return;
     }
 
-    //Continue from the closest waypoint that is not far behind the wolf's progress
+    //Carry on from the closest waypoint that is not too far behind where the wolf got to
     const FVector Location = GetActorLocation();
     int32 BestIndex = FMath::Clamp(CurrentWaypoint, 0, Waypoints.Num() - 1);
     float BestDistSq = TNumericLimits<float>::Max();
@@ -847,7 +847,7 @@ void AEnemy::RejoinPath()
 
 void AEnemy::TryAttack(AActor* Target, float DeltaSeconds)
 {
-    //Do not attack if there isnt a target or the attack is cooling down
+    //Do not attack if there is no target or the attack is still cooling down
     if (!Target || AttackTimer > 0.0f)
     {
         return;
@@ -917,10 +917,10 @@ AActor* AEnemy::FindTargetInRange() const
     return nullptr;
 }
 
-//Handles enemy death while preserving the existing loot system
+//Handles enemy death and keeps the normal loot drop working
 void AEnemy::HandleDeath(AActor* Killer)
 {
-    //Award the enemy's loot and score before destroying it
+    //Give out the loot and score before the enemy is destroyed
     if (ATDGameMode* GameMode = Cast<ATDGameMode>(GetWorld()->GetAuthGameMode()))
     {
         GameMode->NotifyEnemyKilled(this);

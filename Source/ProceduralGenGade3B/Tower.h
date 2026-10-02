@@ -1,6 +1,6 @@
 // Tower.h
-// The player's central tower. It automatically fires at the nearest enemy in range on a
-// timer, and ends the game (via the game mode) when its health is depleted.
+// The player's main tower. It shoots the closest enemy in range on a timer.
+// When its health runs out, the game mode ends the game.
 
 #pragma once
 
@@ -21,23 +21,23 @@ class PROCEDURALGENGADE3B_API ATower : public AActor
 public:
 	ATower();
 
-	/** How far the tower can hit enemies (uu). */
+	/** How far away the tower can hit enemies, in Unreal units. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower", meta = (ClampMin = "0.0"))
 	float AttackRange = 1000.0f;
 
-	/** Damage dealt to an enemy per shot. */
+	/** How much damage each shot does to an enemy. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower", meta = (ClampMin = "0.0"))
 	float AttackDamage = 10.0f;
 
-	/** Seconds between shots (0.5 = two shots per second). */
+	/** Seconds between shots. 0.5 means two shots per second. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower", meta = (ClampMin = "0.05"))
 	float FireInterval = 0.5f;
 
-	/** Projectile fired at enemies. Defaults to ball projectiles in the constructor. */
+	/** The projectile the tower shoots. The constructor sets it to the ball projectile. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower")
 	TSubclassOf<AProjectile> ProjectileClass;
 
-	/** Scale and colour for tower shot balls. */
+	/** Size and colour of the balls the tower shoots. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower", meta = (ClampMin = "0.05"))
 	float TowerBallScale = 0.42f;
 
@@ -48,39 +48,39 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower|Destruction", meta = (ClampMin = "1"))
 	int32 DebrisPieceCount = 18;
 
-	/** How many dust motes spawn in the collapse cloud. */
+	/** How many dust bits spawn in the cloud when the tower falls. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower|Destruction", meta = (ClampMin = "0"))
 	int32 DustMoteCount = 28;
 
-	/** Local-space offset from the tower origin where shots originate (the muzzle). */
+	/** Where shots start from, as an offset from the tower's origin. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tower")
 	FVector MuzzleOffset = FVector(0.0f, 0.0f, 300.0f);
 
-	/** Shared health/damage/death component. Game over fires when this dies. */
+	/** Handles health, damage and death. The game ends when this dies. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower")
 	TObjectPtr<UHealthComponent> HealthComponent;
 
 protected:
 	virtual void BeginPlay() override;
 
-	/** Timer callback: pick the nearest in-range enemy and shoot it. */
+	/** Runs on the timer. Finds the closest enemy in range and shoots it. */
 	void FireAtNearestEnemy();
 
-	/** Called when the tower's health reaches zero -> triggers game over. */
+	/** Called when the tower's health hits zero. This starts the game over. */
 	UFUNCTION()
 	void HandleDeath(AActor* Killer);
 
 private:
-	/** Simple cylinder visual + root. */
+	/** A simple cylinder mesh. It is also the root component. */
 	UPROPERTY(VisibleAnywhere, Category = "Tower", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> MeshComponent;
 
 	/** Handle for the repeating fire timer. */
 	FTimerHandle FireTimerHandle;
 
-	/** Returns the closest living enemy within AttackRange, or null if none. */
+	/** Gives back the closest living enemy inside AttackRange, or null if there is none. */
 	AEnemy* FindNearestEnemyInRange() const;
 
-	/** Crumbling stones + dust when the tower falls. */
+	/** Spawns falling stones and dust when the tower is destroyed. */
 	void PlayDestructionEffect();
 };

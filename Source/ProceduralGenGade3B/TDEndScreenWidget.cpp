@@ -1,4 +1,6 @@
-// TDEndScreenWidget.cpp — construct / show / clicks, plus included layout / theme units.
+// TDEndScreenWidget.cpp
+// Sets up, shows and hides the end screen and handles the button clicks.
+// The layout and theme code is pulled in from the .inl files at the bottom.
 
 #include "TDEndScreenWidget.h"
 #include "TDEndScreenWidget_Private.h"

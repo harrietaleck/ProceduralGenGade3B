@@ -1,8 +1,6 @@
 // ProceduralTerrain.cpp
-// Implementation of the runtime tower-defence terrain generator. See ProceduralTerrain.h
-// for the high-level description. Generation runs as an ordered pipeline:
-//   InitialiseGrid -> CarvePaths -> BuildHeightmap -> MarkBuildableSlots -> BuildMesh
-// followed by publishing the tower location, enemy paths and defender slots.
+// Builds the tower defence terrain. The steps run in this order: InitialiseGrid, CarvePaths,
+// BuildHeightmap, MarkBuildableSlots, BuildMesh. Then the tower, paths and build slots are saved.
 
 #include "ProceduralTerrain.h"
 #include "ProceduralMeshComponent.h"
@@ -19,12 +17,12 @@
 #include "Engine/World.h"
 #include "Algo/Reverse.h"
 
-// Everything flat (paths, tower pad, buildable pads) sits on this Z plane in local space.
+// All the flat parts (paths, tower pad, build pads) sit at this local Z height.
 static constexpr float PathPlaneHeight = 0.0f;
 
-// Chaikin corner-cutting: replaces each segment with two points 1/4 and 3/4 along it, which
-// rounds a blocky polyline into a smooth curve over successive iterations. The first and last
-// points are re-anchored exactly after each pass so the spawn and tower ends never drift.
+// Chaikin smoothing: each segment is replaced by two points at 1/4 and 3/4, which rounds off
+// the blocky path a bit more every pass. The first and last points are put back after each
+// pass so the spawn and tower ends don't move.
 static TArray<FVector> ChaikinSmooth(const TArray<FVector>& Points, int32 Iterations)
 {
 	TArray<FVector> Current = Points;
@@ -44,8 +42,8 @@ static TArray<FVector> ChaikinSmooth(const TArray<FVector>& Points, int32 Iterat
 	return Current;
 }
 
-// Drop waypoints that sit too close together so enemies follow gentle arcs instead of
-// micro-correcting every few units (reads much more natural at walking pace).
+// Removes waypoints that are too close together. Otherwise enemies keep turning every few
+// units, and smooth curves look more natural at walking speed.
 static TArray<FVector> ThinWaypoints(const TArray<FVector>& Points, float MinSpacing)
 {
 	if (Points.Num() <= 2)
@@ -74,25 +72,24 @@ static TArray<FVector> ThinWaypoints(const TArray<FVector>& Points, float MinSpa
 
 AProceduralTerrain::AProceduralTerrain()
 {
-	// Terrain is static once generated, so we never need per-frame ticking.
+	// The terrain doesn't change after it is built, so it doesn't need to tick.
 	PrimaryActorTick.bCanEverTick = false;
 
-	// The procedural mesh both renders the terrain and provides its collision.
+	// The procedural mesh draws the terrain and also gives it collision.
 	MeshComponent = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("TerrainMesh"));
 	SetRootComponent(MeshComponent);
-	// Synchronous collision cooking: generation immediately rebuilds navigation and validates
-	// AI pathfinding against this same collision (RebuildNavigation/ValidatePathfinding), all
-	// within the same frame. With async cooking, that validation could run before the collision
-	// job finishes, leaving Recast with no walkable geometry to voxelize.
+	// Cook collision straight away instead of in the background. Right after generation we
+	// rebuild the NavMesh in the same frame, and if the collision wasn't ready yet the NavMesh
+	// would have nothing to walk on.
 	MeshComponent->bUseAsyncCooking = false;
 
-	// Block all channels so the terrain is a solid surface for cursor traces (defender placement)
-	// and any collision queries. Query-only is enough since nothing physically simulates on it.
+	// Block everything so mouse traces for placing defenders hit the ground.
+	// Query only is enough because nothing does physics on the terrain.
 	MeshComponent->SetCollisionProfileName(TEXT("BlockAll"));
 	MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 
-	// Default to the engine's vertex-colour material so our per-cell colours (path/build/tower)
-	// are visible without any manual material setup.
+	// Use the engine's vertex colour material by default so the cell colours show up
+	// without having to set up a material.
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> VertexColorMat(
 		TEXT("/Engine/EngineDebugMaterials/VertexColorMaterial.VertexColorMaterial"));
 	if (VertexColorMat.Succeeded())
@@ -105,8 +102,8 @@ void AProceduralTerrain::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
 
-	// Generate a deterministic preview in the editor using the current Seed so the
-	// designer can see and tweak the map without pressing Play.
+	// Build a preview in the editor from the current Seed so we can see and tweak the map
+	// without pressing Play.
 	GenerateTerrain();
 }
 
@@ -114,11 +111,8 @@ void AProceduralTerrain::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Deliberately does NOT generate here. Unreal does not guarantee this actor's BeginPlay
-	// runs before the GameMode's — relying on that would be a latent ordering bug, since the
-	// GameMode spawns the Tower and build-pad markers from this terrain's data. Generation is
-	// instead triggered explicitly and synchronously by the GameMode via PrepareForNewGame(),
-	// so there is never any ambiguity about whether fresh data is ready before it's read.
+	// We don't generate here because the GameMode's BeginPlay might run first and spawn the
+	// tower and build pads from old terrain data. The GameMode calls PrepareForNewGame instead.
 }
 
 void AProceduralTerrain::RandomizeAndRegenerate()
@@ -129,8 +123,8 @@ void AProceduralTerrain::RandomizeAndRegenerate()
 
 void AProceduralTerrain::PrepareForNewGame()
 {
-	// The brief requires the terrain to differ every new game: pick a fresh random seed
-	// (unless the designer pinned a fixed seed for testing) and generate synchronously.
+	// The brief says the map must be different every game, so pick a new seed.
+	// You can turn this off to keep a fixed seed for testing.
 	if (bRandomizeSeedOnBeginPlay)
 	{
 		Seed = FMath::RandRange(1, MAX_int32 - 1);
@@ -153,11 +147,11 @@ void AProceduralTerrain::RunStressTest(int32 NumIterations)
 		Seed = FMath::RandRange(1, MAX_int32 - 1);
 
 		const double StartTime = FPlatformTime::Seconds();
-		GenerateTerrain(); // Includes its own validate-and-regenerate-on-failure loop.
+		GenerateTerrain(); // This already retries with a new seed if the map fails its checks.
 		const double ElapsedSeconds = FPlatformTime::Seconds() - StartTime;
 		TotalSeconds += ElapsedSeconds;
 
-		ValidatePathfinding(); // Logs NavMesh coverage as a diagnostic; doesn't affect pass/fail.
+		ValidatePathfinding(); // Only logs NavMesh info. It doesn't change pass or fail.
 		const bool bPass = ValidateGeneratedWorld();
 		PassCount += bPass ? 1 : 0;
 
@@ -168,31 +162,29 @@ void AProceduralTerrain::RunStressTest(int32 NumIterations)
 	UE_LOG(LogTemp, Display, TEXT("ProceduralTerrain [STRESS TEST] complete: %d/%d passed (%.1f%%), average time %.2fms."),
 		PassCount, NumIterations, 100.0 * PassCount / NumIterations, 1000.0 * TotalSeconds / NumIterations);
 
-	// Leave the terrain on a fresh, valid generation rather than the caller's original seed,
-	// so the level is left in a normal playable state after the test runs.
+	// Put the old seed back and generate once more so the level is playable again after the test.
 	Seed = OriginalSeed;
 	GenerateTerrain();
 }
 
 void AProceduralTerrain::GenerateTerrain()
 {
-	// Guard against invalid parameters that would break indexing or the brief's rules.
+	// Stop bad settings from breaking the array indexing or the brief's rules.
 	GridSize = FMath::Max(8, GridSize);
-	NumPaths = FMath::Max(3, NumPaths); // The brief mandates at least three paths.
+	NumPaths = FMath::Max(3, NumPaths); // The brief says at least three paths.
 
-	// The generation pipeline is deterministic-by-construction and should always produce a
-	// valid world, but we verify it anyway and regenerate with a new seed on the rare chance
-	// something is wrong — gameplay must never begin on an unvalidated map. Bounded attempts
-	// so a genuine bug can't hang the game; if every attempt fails we log loudly and use the
-	// last (still fully-formed, just not ideal) result rather than leaving no terrain at all.
+	// The map should always come out valid, but we check it anyway and try a new seed if
+	// something is wrong, so the game never starts on a broken map. The number of tries is
+	// capped so a bug can't freeze the game. If they all fail we log an error and keep the
+	// last attempt, which is better than having no terrain.
 	const int32 MaxAttempts = 5;
 	bool bValid = false;
 	for (int32 Attempt = 1; Attempt <= MaxAttempts; ++Attempt)
 	{
-		// Seed the random stream so the entire map is reproducible from Seed alone.
+		// Seed the random stream so the same Seed always gives the same map.
 		Rng.Initialize(Seed);
 
-		// Clear previously published data.
+		// Clear out the data from the last map.
 		EnemyPaths.Reset();
 		DefenderSlots.Reset();
 		PathCellLines.Reset();
@@ -200,14 +192,14 @@ void AProceduralTerrain::GenerateTerrain()
 		ClearDecorations();
 		DecoratedCellKeys.Reset();
 
-		// Run the generation pipeline in order (each stage depends on the previous one).
+		// Run the steps in order. Each one needs the result of the one before.
 		InitialiseGrid();
 		CarvePaths();
 		BuildHeightmap();
 		MarkBuildableSlots();
 		BuildMesh();
 
-		// ---- Publish the tower location (world space) at the centre cell ----
+		// ---- Save the tower location in world space, at the centre cell ----
 		const int32 CX = GridSize / 2;
 		const int32 CY = GridSize / 2;
 		TowerLocation = ActorToWorld().TransformPosition(CellCenterLocal(CX, CY, PathPlaneHeight));
@@ -236,7 +228,7 @@ void AProceduralTerrain::GenerateTerrain()
 	if (!bValid)
 	{
 		UE_LOG(LogTemp, Error, TEXT("ProceduralTerrain: failed to generate a valid world after %d attempts — using the last attempt anyway."), MaxAttempts);
-		RebuildNavigation(); // Make sure nav still matches whatever geometry we ended up keeping.
+		RebuildNavigation(); // Keep the NavMesh matching whatever terrain we ended up with.
 	}
 
 	if (bDebugMode)
@@ -247,14 +239,13 @@ void AProceduralTerrain::GenerateTerrain()
 
 bool AProceduralTerrain::ValidateGeneratedWorld() const
 {
-	// The grid/heightmap data must be fully and correctly sized — a corrupt or partial
-	// generation would index out of bounds later.
+	// The grid and height arrays must be the right size, or we would read out of bounds later.
 	if (Cells.Num() != GridSize * GridSize || VertexHeights.Num() != (GridSize + 1) * (GridSize + 1))
 	{
 		return false;
 	}
 
-	// Mandatory: at least three enemy paths.
+	// We need at least three enemy paths.
 	if (EnemyPaths.Num() < 3)
 	{
 		return false;
@@ -262,22 +253,21 @@ bool AProceduralTerrain::ValidateGeneratedWorld() const
 
 	for (const FEnemyPath& Path : EnemyPaths)
 	{
-		// A path needs at least a spawn point and a destination to mean anything.
+		// A path needs at least a start and an end point.
 		if (Path.Waypoints.Num() < 2)
 		{
 			return false;
 		}
 
-		// Every path must actually terminate at (or immediately next to) the tower — checked
-		// on the XY plane with a generous one-cell tolerance for floating point/edge cases.
+		// Every path has to end at the tower or right next to it. We only check X and Y,
+		// and allow about a cell and a half of slack for rounding.
 		if (FVector::DistSquared2D(Path.Waypoints.Last(), TowerLocation) > FMath::Square(CellSize * 1.5f))
 		{
 			return false;
 		}
 
-		// No broken/disconnected paths: consecutive waypoints must never be further apart than
-		// a couple of cells. Smoothing only ever subdivides segments (shrinks the gap), so this
-		// bound catches a genuinely broken chain without being tripped by smoothing itself.
+		// Check for broken paths. Two waypoints in a row should never be more than two cells apart.
+		// Smoothing only makes the gaps smaller, so it won't set this off by mistake.
 		for (int32 I = 0; I + 1 < Path.Waypoints.Num(); ++I)
 		{
 			if (FVector::DistSquared2D(Path.Waypoints[I], Path.Waypoints[I + 1]) > FMath::Square(CellSize * 2.0f))
@@ -287,15 +277,14 @@ bool AProceduralTerrain::ValidateGeneratedWorld() const
 		}
 	}
 
-	// At least one buildable location must exist, or the game is unplayable.
+	// There has to be at least one build slot, or the player can't do anything.
 	if (DefenderSlots.Num() == 0)
 	{
 		return false;
 	}
 
-	// No two build slots may overlap or sit closer than a single cell apart — each candidate
-	// comes from a distinct grid cell, but this catches any future regression explicitly rather
-	// than relying only on that construction guarantee.
+	// No two build slots should be less than a cell apart. Each one comes from its own cell
+	// so this shouldn't happen, but the check will catch it if a later change breaks that.
 	for (int32 I = 0; I < DefenderSlots.Num(); ++I)
 	{
 		for (int32 J = I + 1; J < DefenderSlots.Num(); ++J)
@@ -318,16 +307,11 @@ bool AProceduralTerrain::ValidatePathfinding() const
 		return false;
 	}
 
-	// Diagnostic only — logs coverage, never blocks gameplay. Enemies in this game move along
-	// the fixed Waypoints array carved by CarvePaths() (see AEnemy::SetPath/Tick), not via UE's
-	// NavMesh/AIController MoveTo system, so NavMesh reachability has no bearing on whether a
-	// map is actually playable; the geometric checks in ValidateGeneratedWorld() (every path's
-	// cells are contiguous and its last waypoint reaches the tower) are what real movement
-	// depends on, and those already gate GenerateTerrain()'s retry loop. NavMesh queries here can
-	// legitimately fail even on a perfectly playable map — e.g. the moment the Tower actor's own
-	// BlockAll collision exists, Recast correctly carves a hole around it, which can make the
-	// exact ground-level TowerLocation point unreachable as a query target despite every path
-	// visually and physically leading right up to it.
+	// This only logs info and never stops the game. Our enemies follow the Waypoints from
+	// CarvePaths (see AEnemy::SetPath and Tick), not the NavMesh, so the checks that really
+	// matter are in ValidateGeneratedWorld. These NavMesh queries can fail on a perfectly fine
+	// map. For example, the tower's collision cuts a hole in the NavMesh, so the exact
+	// TowerLocation point can look unreachable even though every path leads right up to it.
 	int32 ConnectedPathCount = 0;
 	for (const FEnemyPath& Path : EnemyPaths)
 	{
@@ -408,14 +392,10 @@ void AProceduralTerrain::RebuildNavigation()
 		return;
 	}
 
-	// Warn loudly (once per generation) if no placed NavMeshBoundsVolume actually covers the
-	// terrain's current footprint, rather than silently producing an unwalkable map. Runtime
-	// resizing of a placed volume's brush geometry proved unreliable (its cached bounds didn't
-	// consistently follow actor-transform changes at PIE runtime), so instead of fighting that,
-	// this requires the level to already contain a volume generously sized for the configured
-	// GridSize/CellSize/HeightScale — exactly how the volume was set up in the level (see
-	// TowerDefense.umap's NavMeshBoundsVolume_0). ValidatePathfinding() below is the real,
-	// authoritative check that navigation is actually usable.
+	// Log a warning if no NavMeshBoundsVolume in the level covers the whole terrain, instead of
+	// quietly making a map with no nav. Resizing the volume at runtime didn't work well because
+	// its bounds didn't always update in PIE. So the level needs a volume that is already big
+	// enough, like NavMeshBoundsVolume_0 in TowerDefense.umap.
 	const float Half = GridSize * CellSize * 0.5f;
 	const FBox RequiredBounds(GetActorLocation() + FVector(-Half, -Half, -50.0f), GetActorLocation() + FVector(Half, Half, HeightScale + 50.0f));
 	bool bAnyVolumeCoversTerrain = false;
@@ -433,11 +413,9 @@ void AProceduralTerrain::RebuildNavigation()
 			Half, HeightScale);
 	}
 
-	// FNavigationSystem::Build() only *schedules* tile generation under RuntimeGeneration=Dynamic
-	// (the mode required for any runtime/PIE rebuild to do anything at all — see above) — it does
-	// not block until tiles finish. Without waiting here, ValidatePathfinding() immediately after
-	// would query a still-empty or partially-built NavMesh. EnsureBuildCompletion() forces every
-	// pending tile task to finish synchronously before this function returns.
+	// With dynamic runtime generation, FNavigationSystem::Build only queues the tile builds and
+	// doesn't wait for them. If we didn't wait here, ValidatePathfinding would test a half built
+	// NavMesh. EnsureBuildCompletion makes every tile finish before we return.
 	FNavigationSystem::Build(*World);
 	for (TActorIterator<ARecastNavMesh> NavIt(World); NavIt; ++NavIt)
 	{
@@ -449,7 +427,7 @@ void AProceduralTerrain::RebuildNavigation()
 }
 
 // --------------------------------------------------------------------------------------
-// Stage 1: start with an all-Terrain grid and mark the central tower cell.
+// Step 1: fill the grid with Terrain cells and mark the tower cell in the middle.
 // --------------------------------------------------------------------------------------
 void AProceduralTerrain::InitialiseGrid()
 {
@@ -461,10 +439,9 @@ void AProceduralTerrain::InitialiseGrid()
 }
 
 // --------------------------------------------------------------------------------------
-// Stage 2: carve NumPaths corridors from evenly-spaced points on the border to the centre.
-// Each corridor is produced by a random walk that always makes net progress toward the
-// centre (so it always terminates) but occasionally wiggles sideways for an organic curve.
-// The ordered centre-line cells become the waypoints the enemies will follow.
+// Step 2: carve NumPaths paths from evenly spaced points on the edge to the centre.
+// Each path is a random walk that keeps moving toward the centre, so it always gets there,
+// but sometimes steps sideways so it bends a bit. The middle cells become the enemy waypoints.
 // --------------------------------------------------------------------------------------
 void AProceduralTerrain::PaintPathCell(int32 X, int32 Y, int32 HalfWidthOverride)
 {
@@ -513,20 +490,19 @@ void AProceduralTerrain::CarvePaths()
 
 	PathCellLines.Reserve(NumPaths);
 
-	// Spawn points are kept one cell inset from the absolute mesh edge/corners so spawns stay
-	// connected to the walkable mesh near boundaries and corners.
+	// Keep spawn points one cell in from the edge of the mesh so they stay connected to
+	// the walkable ground near the edges and corners.
 	const int32 Inset = 1;
 	const int32 Side = FMath::Max(GridSize - 1 - 2 * Inset, 1);
 	const int32 Perimeter = 4 * Side;
 
 	for (int32 P = 0; P < NumPaths; ++P)
 	{
-		// --- Choose a spawn cell on the border, spread evenly around the perimeter ---
-		// Centred within each path's allocated segment (not at its start) so spawn points never
-		// land exactly on a corner — with the default NumPaths=4, an un-offset T would place
-		// all four spawns exactly on the four corners, which are the hardest points for Recast
-		// to keep connected (two boundary edges converge, maximising erosion).
-		int32 T = (Perimeter * P) / NumPaths + Perimeter / (2 * NumPaths); // Position along the border edge sequence.
+		// --- Pick a spawn cell on the edge, spread evenly around the border ---
+		// We use the middle of each path's share of the border, not the start. With 4 paths,
+		// starting at 0 would put every spawn on a corner, and corners are where the NavMesh
+		// is most likely to get cut off.
+		int32 T = (Perimeter * P) / NumPaths + Perimeter / (2 * NumPaths); // How far along the border we are.
 		int32 SX = 0, SY = 0;
 		if (T < Side)            { SX = Inset + T;                    SY = Inset; }              // Top edge.
 		else if (T < 2 * Side)   { SX = Inset + Side;                 SY = Inset + (T - Side); }  // Right edge.
@@ -538,7 +514,7 @@ void AProceduralTerrain::CarvePaths()
 
 		int32 X = SX, Y = SY;
 		int32 Guard = 0;
-		const int32 MaxGuard = GridSize * GridSize + 10; // Hard cap so the loop can never hang.
+		const int32 MaxGuard = GridSize * GridSize + 10; // Limit so the loop can't run forever.
 
 		while ((X != CX || Y != CY) && Guard++ < MaxGuard)
 		{
@@ -548,13 +524,13 @@ void AProceduralTerrain::CarvePaths()
 			const int32 DX = FMath::Sign(CX - X); // -1, 0 or +1 toward the centre on X.
 			const int32 DY = FMath::Sign(CY - Y); // -1, 0 or +1 toward the centre on Y.
 
-			// Decide which axis to advance on this step.
+			// Pick which axis to move along this step.
 			bool bMoveX;
 			if (DX != 0 && DY != 0) { bMoveX = (Rng.RandRange(0, 1) == 0); }
 			else                    { bMoveX = (DX != 0); }
 
-			// ~18% of the time, take a sideways "wiggle" step instead (keeps interior only),
-			// which bends the path without preventing eventual arrival at the centre.
+			// About 18% of the time, step sideways instead, but never onto the outer edge.
+			// This bends the path and it still reaches the centre in the end.
 			if (Rng.FRand() < 0.18f)
 			{
 				if (bMoveX)
@@ -569,16 +545,16 @@ void AProceduralTerrain::CarvePaths()
 				}
 			}
 
-			// Normal progress step toward the centre.
+			// Normal step toward the centre.
 			if (bMoveX) { X += DX; } else { Y += DY; }
 		}
 
-		// Ensure the final centre cell is included as the last waypoint.
+		// Add the centre cell as the last waypoint.
 		Line.Add(FIntPoint(CX, CY));
 		PaintPathCell(CX, CY);
 	}
 
-	// Restore the centre as the Tower cell (PaintPathCell skips it, but be explicit).
+	// Set the centre back to Tower. PaintPathCell already skips it, this is just to be safe.
 	Cells[CellIndex(CX, CY)] = ECellType::Tower;
 
 	RebuildEnemyPathsFromCellLines();
@@ -956,15 +932,15 @@ void AProceduralTerrain::AppendNewBuildableSlots()
 }
 
 // --------------------------------------------------------------------------------------
-// Stage 3: fill the vertex heightmap with fractal noise, then flatten every vertex that
-// touches a flat cell type (Path/Tower) down to the path plane so corridors are level.
+// Step 3: fill the vertex heights with fractal noise, then flatten every vertex that touches
+// a Path or Tower cell down to the path level so the paths are flat.
 // --------------------------------------------------------------------------------------
 void AProceduralTerrain::BuildHeightmap()
 {
 	const int32 VertsPerSide = GridSize + 1;
 	VertexHeights.SetNumUninitialized(VertsPerSide * VertsPerSide);
 
-	// Base terrain height from seeded fractal noise.
+	// Starting ground height from the seeded fractal noise.
 	for (int32 VY = 0; VY < VertsPerSide; ++VY)
 	{
 		for (int32 VX = 0; VX < VertsPerSide; ++VX)
@@ -973,8 +949,8 @@ void AProceduralTerrain::BuildHeightmap()
 		}
 	}
 
-	// Flatten the four corner vertices of every flat cell to the path plane. Because
-	// neighbouring cells share corner vertices, this produces seamless level corridors.
+	// Flatten the four corners of every flat cell to the path level. Cells next to each
+	// other share corners, so the paths come out level with no gaps.
 	for (int32 Y = 0; Y < GridSize; ++Y)
 	{
 		for (int32 X = 0; X < GridSize; ++X)
@@ -1010,13 +986,13 @@ void AProceduralTerrain::BuildHeightmap()
 }
 
 // --------------------------------------------------------------------------------------
-// Stage 4: pick the defender pads. Candidates are Terrain cells orthogonally adjacent to a
-// path (so defenders sit beside the route, never on it). We shuffle and keep up to
-// MaxDefenderSlots, flatten each into a level pad, and publish its world location.
+// Step 4: pick the defender pads. We look for Terrain cells right next to a path, not
+// diagonally, so defenders sit beside the path and never on it. We shuffle them, keep up to
+// MaxDefenderSlots, flatten each one into a pad and save its world location.
 // --------------------------------------------------------------------------------------
 void AProceduralTerrain::MarkBuildableSlots()
 {
-	// Gather all Terrain cells that neighbour a Path cell.
+	// Collect every Terrain cell that touches a Path cell.
 	TArray<FIntPoint> Candidates;
 	const int32 OffX[4] = { 1, -1, 0, 0 };
 	const int32 OffY[4] = { 0, 0, 1, -1 };
@@ -1036,13 +1012,13 @@ void AProceduralTerrain::MarkBuildableSlots()
 				if (InBounds(NX, NY) && Cells[CellIndex(NX, NY)] == ECellType::Path)
 				{
 					Candidates.Add(FIntPoint(X, Y));
-					break; // One adjacency is enough; avoid adding the cell twice.
+					break; // One path neighbour is enough. Stops us adding the cell twice.
 				}
 			}
 		}
 	}
 
-	// Fisher-Yates shuffle using the seeded stream so slot choice is reproducible.
+	// Fisher-Yates shuffle with the seeded stream, so the same seed picks the same slots.
 	for (int32 I = Candidates.Num() - 1; I > 0; --I)
 	{
 		const int32 J = Rng.RandRange(0, I);
@@ -1055,11 +1031,9 @@ void AProceduralTerrain::MarkBuildableSlots()
 		const FIntPoint C = Candidates[I];
 		Cells[CellIndex(C.X, C.Y)] = ECellType::Buildable;
 
-		// Flatten the pad so defenders sit level and it reads as a distinct build spot. Also
-		// flatten its orthogonal neighbours' corners (without changing their cell type) so the
-		// pad isn't a single flat cell surrounded by up-to-HeightScale cliffs on its other three
-		// sides — a lone flat "postage stamp" like that can get entirely eroded out of the
-		// NavMesh by the agent radius, leaving the pad unreachable even though it looks fine.
+		// Flatten the pad so defenders stand level on it. We also flatten the cells around it,
+		// without changing their type. A single flat cell with cliffs around it can get cut
+		// out of the NavMesh completely, so the pad would be unreachable even if it looks fine.
 		for (int32 OY = -1; OY <= 1; ++OY)
 		{
 			for (int32 OX = -1; OX <= 1; ++OX)
@@ -1084,8 +1058,8 @@ void AProceduralTerrain::MarkBuildableSlots()
 }
 
 // --------------------------------------------------------------------------------------
-// Stage 5: turn the grid + heightmap into an actual mesh. Each cell becomes its own quad
-// (four unique vertices) for a clean low-poly look and easy per-cell vertex colouring.
+// Step 5: turn the grid and heights into a mesh. Each cell gets its own quad with four
+// vertices, which gives a low poly look and makes colouring each cell easy.
 // --------------------------------------------------------------------------------------
 void AProceduralTerrain::BuildMesh()
 {
@@ -1094,7 +1068,7 @@ void AProceduralTerrain::BuildMesh()
 	TArray<FVector> Normals;
 	TArray<FVector2D> UVs;
 	TArray<FLinearColor> Colors;
-	TArray<FProcMeshTangent> Tangents; // Left empty; smoothness isn't needed for low-poly.
+	TArray<FProcMeshTangent> Tangents; // Left empty. We don't need smooth shading for low poly.
 
 	const int32 CellCount = GridSize * GridSize;
 	Vertices.Reserve(CellCount * 4);
@@ -1104,13 +1078,13 @@ void AProceduralTerrain::BuildMesh()
 	{
 		for (int32 X = 0; X < GridSize; ++X)
 		{
-			// Corner heights from the shared vertex heightmap (keeps the surface seamless).
+			// Corner heights come from the shared vertex heights, so there are no gaps between cells.
 			const float H00 = VertexHeights[VertIndex(X,     Y)];
 			const float H10 = VertexHeights[VertIndex(X + 1, Y)];
 			const float H01 = VertexHeights[VertIndex(X,     Y + 1)];
 			const float H11 = VertexHeights[VertIndex(X + 1, Y + 1)];
 
-			// Local-space corner positions (grid is centred on the actor origin).
+			// Corner positions in local space. The grid is centred on the actor.
 			const FVector V0 = CornerLocal(X,     Y,     H00); // Bottom-left
 			const FVector V1 = CornerLocal(X + 1, Y,     H10); // Bottom-right
 			const FVector V2 = CornerLocal(X,     Y + 1, H01); // Top-left
@@ -1122,32 +1096,32 @@ void AProceduralTerrain::BuildMesh()
 			Vertices.Add(V2);
 			Vertices.Add(V3);
 
-			// Two triangles (0,2,3) and (0,3,1) -> upward-facing quad in Unreal's winding.
+			// Two triangles, (0,2,3) and (0,3,1), so the quad faces up with Unreal's winding order.
 			Triangles.Add(Base + 0); Triangles.Add(Base + 2); Triangles.Add(Base + 3);
 			Triangles.Add(Base + 0); Triangles.Add(Base + 3); Triangles.Add(Base + 1);
 
-			// Flat per-quad normal (cross of the two in-plane edges, oriented to +Z).
+			// One flat normal for the whole quad, from the cross product of two edges. It points up.
 			const FVector Normal = FVector::CrossProduct(V1 - V0, V2 - V0).GetSafeNormal();
 			Normals.Add(Normal); Normals.Add(Normal); Normals.Add(Normal); Normals.Add(Normal);
 
-			// UVs simply follow the grid coordinates (one tile per cell).
+			// UVs just follow the grid, so the texture tiles once per cell.
 			UVs.Add(FVector2D(X, Y));
 			UVs.Add(FVector2D(X + 1, Y));
 			UVs.Add(FVector2D(X, Y + 1));
 			UVs.Add(FVector2D(X + 1, Y + 1));
 
-			// Colour the quad by cell type so the layout is readable without materials yet.
+			// Colour the quad by cell type so you can see the layout without a real material.
 			const float AvgHeight = (H00 + H10 + H01 + H11) * 0.25f;
 			const FLinearColor Color = CellColor(Cells[CellIndex(X, Y)], AvgHeight);
 			Colors.Add(Color); Colors.Add(Color); Colors.Add(Color); Colors.Add(Color);
 		}
 	}
 
-	// Rebuild section 0 (replaces any previous geometry). Collision on so pawns can walk it.
+	// Rebuild section 0, replacing the old mesh. Collision is on so pawns can walk on it.
 	MeshComponent->ClearAllMeshSections();
 	MeshComponent->CreateMeshSection_LinearColor(0, Vertices, Triangles, Normals, UVs, Colors, Tangents, /*bCreateCollision=*/true);
 
-	// Apply the terrain material to the section so vertex colours (or a custom material) show.
+	// Put the terrain material on the section so the vertex colours or a custom material show up.
 	if (TerrainMaterial)
 	{
 		MeshComponent->SetMaterial(0, TerrainMaterial);
@@ -1179,14 +1153,14 @@ FLinearColor AProceduralTerrain::CellColor(ECellType Type, float AvgHeight) cons
 	case ECellType::Tower:     return FLinearColor(0.20f, 0.35f, 0.85f); // Blue tower pad.
 	default:
 	{
-		// Terrain: blend grass (low) to rock (high) by normalised height.
+		// Terrain blends from grass when low to rock when high, based on height.
 		const float T = HeightScale > 0.0f ? FMath::Clamp(AvgHeight / HeightScale, 0.0f, 1.0f) : 0.0f;
 		return FMath::Lerp(FLinearColor(0.13f, 0.38f, 0.12f), FLinearColor(0.45f, 0.45f, 0.45f), T);
 	}
 	}
 }
 
-// Seeded 2D value noise in [0,1): hash the integer lattice corners and smoothly interpolate.
+// Seeded 2D value noise from 0 to 1. We hash the four whole number corners and blend between them smoothly.
 float AProceduralTerrain::ValueNoise(float X, float Y) const
 {
 	const int32 X0 = FMath::FloorToInt(X);
@@ -1194,16 +1168,16 @@ float AProceduralTerrain::ValueNoise(float X, float Y) const
 	const float FX = X - X0;
 	const float FY = Y - Y0;
 
-	// Hash a lattice point to a float in [0,1). Seed is mixed in so each seed => new terrain.
+	// Hash a grid point to a float from 0 to 1. The Seed is mixed in so each seed gives new terrain.
 	auto Hash = [this](int32 IX, int32 IY) -> float
 	{
 		uint32 H = (uint32)IX * 374761393u + (uint32)IY * 668265263u + (uint32)Seed * 2246822519u;
 		H = (H ^ (H >> 13)) * 1274126177u;
 		H ^= (H >> 16);
-		return (H & 0xFFFFFFu) / (float)0x1000000; // Keep 24 bits -> [0,1).
+		return (H & 0xFFFFFFu) / (float)0x1000000; // Keep 24 bits, which gives a value from 0 up to 1.
 	};
 
-	// Smoothstep weights for gentle interpolation.
+	// Smoothstep weights so the blend is gentle.
 	const float SX = FX * FX * (3.0f - 2.0f * FX);
 	const float SY = FY * FY * (3.0f - 2.0f * FY);
 
@@ -1217,9 +1191,9 @@ float AProceduralTerrain::ValueNoise(float X, float Y) const
 	return FMath::Lerp(NX0, NX1, SY);
 }
 
-// Fractal (fBm) noise: sum a configurable number of octaves of value noise at rising
-// frequency / falling amplitude. All three shape parameters (NoiseOctaves, NoiseBaseFrequency,
-// NoisePersistence) are designer-editable — nothing about the noise shape is hardcoded.
+// Fractal (fBm) noise. Adds up several layers of value noise, each one with double the
+// frequency and less strength than the last. NoiseOctaves, NoiseBaseFrequency and
+// NoisePersistence can all be changed in the editor.
 float AProceduralTerrain::FractalNoise(float X, float Y) const
 {
 	float Total = 0.0f;
@@ -1234,7 +1208,7 @@ float AProceduralTerrain::FractalNoise(float X, float Y) const
 		Amplitude *= NoisePersistence;
 		Frequency *= 2.0f;
 	}
-	return MaxValue > 0.0f ? Total / MaxValue : 0.0f; // Normalised back to [0,1].
+	return MaxValue > 0.0f ? Total / MaxValue : 0.0f; // Scaled back to between 0 and 1.
 }
 
 void AProceduralTerrain::EnsureDefaultDecorationMeshes()
@@ -1267,8 +1241,8 @@ void AProceduralTerrain::EnsureDefaultDecorationMeshes()
 	CompactNulls(RockMeshes);
 	CompactNulls(BuildingMeshes);
 
-	// Always (re)fill scatter pools from VRS_LowPolyNatureEssentials so TerrainProp actors
-	// keep pack meshes even if instance arrays were cleared or filled with placeholders.
+	// Fill the mesh lists from VRS_LowPolyNatureEssentials if they don't have any pack meshes,
+	// so props still use the nice meshes even if the arrays were cleared or hold placeholders.
 	auto TryAddMesh = [](TArray<TObjectPtr<UStaticMesh>>& Pool, const TCHAR* Path)
 	{
 		if (UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, Path))
@@ -1490,13 +1464,13 @@ void AProceduralTerrain::SpawnDecorationAtCell(int32 X, int32 Y, ETerrainDecorat
 	{
 		if (bUsingPackTree)
 		{
-			// Nature Essentials trees are authored at real size — vary slightly, keep uniform.
+			// The pack trees are already the right size, so only change the scale a little and keep it even.
 			const float TreeScale = Rng.FRandRange(0.75f, 1.25f);
 			BaseScale = FVector(TreeScale);
 		}
 		else
 		{
-			// Legacy placeholder: stretched cylinder trunk + sphere canopy.
+			// Old placeholder tree, a stretched cylinder trunk with a sphere on top.
 			const float TrunkHeight = Rng.FRandRange(2.8f, 4.2f);
 			const float TrunkRadius = Rng.FRandRange(0.35f, 0.55f);
 			BaseScale = FVector(TrunkRadius, TrunkRadius, TrunkHeight);
@@ -1601,9 +1575,8 @@ void AProceduralTerrain::ScatterDecorations()
 }
 
 // --------------------------------------------------------------------------------------
-// Debug visualisation. Entirely gated behind bDebugMode — leaving it off removes every
-// trace of this (no shapes drawn, no log spam), so it's safe to ship with and trivial to
-// strip out entirely later if desired.
+// Debug drawing. It only runs when bDebugMode is on. With it off nothing is drawn or
+// logged, so it is fine to leave in and easy to remove later.
 // --------------------------------------------------------------------------------------
 void AProceduralTerrain::DrawDebugVisualization() const
 {
@@ -1616,16 +1589,16 @@ void AProceduralTerrain::DrawDebugVisualization() const
 	UE_LOG(LogTemp, Display, TEXT("ProceduralTerrain [DEBUG]: seed=%d, GridSize=%d, CellSize=%.0f, paths=%d, buildSlots=%d"),
 		Seed, GridSize, CellSize, EnemyPaths.Num(), DefenderSlots.Num());
 
-	// --- Terrain bounds: a box covering the full generated footprint. ---
+	// --- Terrain bounds, a box around the whole map. ---
 	const float Half = GridSize * CellSize * 0.5f;
 	const FVector Center = GetActorLocation() + FVector(0.0f, 0.0f, HeightScale * 0.5f);
 	const FVector Extent(Half, Half, HeightScale * 0.5f + 50.0f);
 	DrawDebugBox(World, Center, Extent, FColor::White, false, DebugDrawDuration, 0, 6.0f);
 
-	// --- Tower position: a distinct magenta sphere at the centre. ---
+	// --- Tower position, a magenta sphere in the centre. ---
 	DrawDebugSphere(World, TowerLocation + FVector(0, 0, 60.0f), 80.0f, 16, FColor::Magenta, false, DebugDrawDuration, 0, 6.0f);
 
-	// --- Every path: a coloured line strip through its waypoints, plus a marker at its spawn. ---
+	// --- Each path gets a coloured line through its waypoints and a marker at its spawn. ---
 	static const FColor PathColors[] = { FColor::Cyan, FColor::Orange, FColor::Yellow, FColor::Green, FColor::Red, FColor::Purple, FColor::Blue, FColor::Emerald };
 	for (int32 P = 0; P < EnemyPaths.Num(); ++P)
 	{
@@ -1638,14 +1611,14 @@ void AProceduralTerrain::DrawDebugVisualization() const
 				Color, false, DebugDrawDuration, 0, 8.0f);
 		}
 
-		// Spawn point: a larger marker so it's easy to pick out from the path line itself.
+		// Bigger marker for the spawn point so it stands out from the line.
 		if (Path.Waypoints.Num() > 0)
 		{
 			DrawDebugSphere(World, Path.SpawnPoint + FVector(0, 0, 60.0f), 50.0f, 12, Color, false, DebugDrawDuration, 0, 4.0f);
 		}
 	}
 
-	// --- Every build slot: green if free, red if occupied. ---
+	// --- Build slots are green when free and red when taken. ---
 	for (const FDefenderSlot& Slot : DefenderSlots)
 	{
 		DrawDebugPoint(World, Slot.Location + FVector(0, 0, 30.0f), 12.0f, Slot.bOccupied ? FColor::Red : FColor::Green, false, DebugDrawDuration, 0);
@@ -1653,7 +1626,7 @@ void AProceduralTerrain::DrawDebugVisualization() const
 }
 
 // --------------------------------------------------------------------------------------
-// Threat-aware routing
+// Routing that avoids defenders
 // --------------------------------------------------------------------------------------
 
 bool AProceduralTerrain::FindLowestCostRoute(const FVector& From, TFunctionRef<float(const FVector&)> CellCost,
@@ -1678,7 +1651,7 @@ bool AProceduralTerrain::FindLowestCostRoute(const FVector& From, TFunctionRef<f
 		return Type == ECellType::Path || Type == ECellType::Tower;
 	};
 
-	// Start from the walkable cell under (or closest to) the enemy.
+	// Start from the walkable cell under the enemy, or the closest one to it.
 	const FVector Local = ActorToWorld().InverseTransformPosition(From);
 	const float Half = GridSize * CellSize * 0.5f;
 	const int32 SX = FMath::FloorToInt((Local.X + Half) / CellSize);
@@ -1732,7 +1705,7 @@ bool AProceduralTerrain::FindLowestCostRoute(const FVector& From, TFunctionRef<f
 		return Cached;
 	};
 
-	// Octile distance: admissible because every cell costs at least 1.
+	// Octile distance. It never overestimates because every cell costs at least 1.
 	auto Heuristic = [&Goal](int32 X, int32 Y)
 	{
 		const int32 DX = FMath::Abs(X - Goal.X);
@@ -1767,7 +1740,7 @@ bool AProceduralTerrain::FindLowestCostRoute(const FVector& From, TFunctionRef<f
 		const int32 Y = Node.Index / GridSize;
 		if (Node.Priority > CostSoFar[Node.Index] + Heuristic(X, Y) + KINDA_SMALL_NUMBER)
 		{
-			continue; // Stale entry.
+			continue; // Old entry, we already found a cheaper way here.
 		}
 
 		for (int32 Dir = 0; Dir < 8; ++Dir)
@@ -1780,7 +1753,7 @@ bool AProceduralTerrain::FindLowestCostRoute(const FVector& From, TFunctionRef<f
 			}
 
 			const bool bDiagonal = Dir >= 4;
-			// No corner cutting: a diagonal step needs both side cells to be walkable too.
+			// No cutting corners. A diagonal step needs both side cells to be walkable too.
 			if (bDiagonal && (!IsWalkable(NX, Y) || !IsWalkable(X, NY)))
 			{
 				continue;

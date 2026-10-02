@@ -1,6 +1,6 @@
 // TDEndScreenWidget.h
-// Victory / defeat overlay. C++ drives logic and tiered reward numbers; a Widget Blueprint
-// child supplies the art layout via BindWidgetOptional bindings.
+// The victory and defeat screen. C++ handles the logic and reward numbers.
+// A Widget Blueprint child gives the art layout through optional bindings.
 
 #pragma once
 
@@ -35,16 +35,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "HUD")
 	void HideScreen();
 
-	/** Push a computed match result into bound widgets (works from C++ or Blueprint graphs). */
+	/** Shows a match result on the screen. Can be called from C++ or Blueprint. */
 	UFUNCTION(BlueprintCallable, Category = "HUD")
 	void PresentMatchResult(bool bVictory, const FMatchResult& Result);
 
-	/** Fired after PresentMatchResult updates the UI — hook custom Blueprint styling here. */
+	/** Called after the result is shown. Add any extra Blueprint styling here. */
 	UFUNCTION(BlueprintImplementableEvent, Category = "HUD")
 	void OnMatchResultPresented(bool bVictory, const FMatchResult& Result);
 
 protected:
-	/** Optional designer root — if absent, C++ builds a fullscreen fallback layout. */
+	/** Optional root canvas. If it is missing, C++ builds a simple fullscreen layout instead. */
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UCanvasPanel> RootCanvas;
 
@@ -57,11 +57,11 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UBorder> PanelBorder;
 
-	/** Full victory panel art (left half of the concept sheet). */
+	/** The victory panel art, from the left half of the concept sheet. */
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UImage> VictoryBackground;
 
-	/** Full defeat panel art (right half of the concept sheet). */
+	/** The defeat panel art, from the right half of the concept sheet. */
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UImage> DefeatBackground;
 

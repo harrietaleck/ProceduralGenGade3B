@@ -1,11 +1,7 @@
 // HeroCharacter.h
-// A Dungeon Defenders / Orcs Must Die-style playable hero: a third-person character the
-// player walks around the battlefield while the tower-defence systems run. The camera is a
-// tactical follow rig (Spring Arm + Camera) positioned high and behind, angled down ~40°,
-// biased so the hero sits low-centre and the player sees the paths ahead.
-//
-// Controls: WASD walk (relative to the camera), hold Right Mouse to orbit/tilt the camera,
-// mouse wheel to zoom. All feel values are exposed to Blueprint so BP_Hero can tune them.
+// Third person hero the player walks around the map with, a bit like Dungeon Defenders.
+// The camera sits high behind the hero. WASD walks, hold right mouse to turn the camera,
+// and the mouse wheel zooms. The settings can be tweaked in BP_Hero.
 
 #pragma once
 
@@ -25,50 +21,50 @@ class PROCEDURALGENGADE3B_API AHeroCharacter : public ACharacter
 public:
 	AHeroCharacter();
 
-	// ---- Camera feel (all editable in BP_Hero / the Details panel) ----
+	// Camera settings. These can all be changed in BP_Hero or the Details panel.
 
-	/** Boom length = camera distance. ~600 gives the tactical "high behind" framing. */
+	/** How far the camera is from the hero. About 600 gives a good view from high behind. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "100.0"))
 	float TargetArmLength = 600.0f;
 
-	/** Closest zoom (min boom length). */
+	/** The closest the camera can zoom in. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "100.0"))
 	float MinZoom = 450.0f;
 
-	/** Furthest zoom (max boom length). Scaled up at runtime from map size so the full
-	 *  battlefield stays visible even after procedural expansion. */
+	/** The furthest the camera can zoom out. It gets bigger at runtime based on
+	 *  the map size, so the whole map can still be seen after it grows. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "100.0"))
 	float MaxZoom = 10000.0f;
 
-	/** Multiplier applied to the terrain's world width to compute the runtime max zoom. */
+	/** The terrain width is multiplied by this to work out the max zoom at runtime. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "1.0"))
 	float MapZoomOutMultiplier = 2.35f;
 
-	/** How far one wheel notch changes zoom. */
+	/** How much one click of the mouse wheel changes the zoom. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "1.0"))
 	float ZoomStep = 300.0f;
 
-	/** How quickly zoom eases toward its target. */
+	/** How quickly the zoom catches up to its target. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "0.1"))
 	float ZoomInterpSpeed = 10.0f;
 
-	/** Starting downward tilt of the camera (degrees). */
+	/** How far the camera tilts down at the start, in degrees. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "-89.0", ClampMax = "0.0"))
 	float DefaultPitch = -40.0f;
 
-	/** Steepest allowed tilt (closest to straight-down). Wider range helps when zoomed out. */
+	/** The steepest tilt allowed, closest to looking straight down. A wider range helps when zoomed out. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "-89.0", ClampMax = "0.0"))
 	float MinPitch = -75.0f;
 
-	/** Shallowest allowed tilt (closest to level). */
+	/** The flattest tilt allowed. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "-89.0", ClampMax = "0.0"))
 	float MaxPitch = -25.0f;
 
-	/** Degrees of camera rotation per pixel of mouse movement while holding Right Mouse. */
+	/** How many degrees the camera turns per pixel of mouse movement while holding right mouse. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Camera", meta = (ClampMin = "0.0"))
 	float MouseLookSpeed = 0.3f;
 
-	/** Ground movement speed (also pushed onto the CharacterMovement component). */
+	/** How fast the hero walks. This also gets copied to the CharacterMovement component. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hero|Movement", meta = (ClampMin = "0.0"))
 	float WalkSpeed = 600.0f;
 
@@ -77,52 +73,52 @@ protected:
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
-	/** Right-mouse press/release: enter/leave camera-orbit mode. */
+	/** Pressing and releasing right mouse starts and stops turning the camera. */
 	void BeginLook();
 	void EndLook();
 
-	/** Mouse-wheel handlers: nudge target zoom in/out (clamped). */
+	/** Mouse wheel handlers. They move the target zoom in or out, within the limits. */
 	void ZoomIn();
 	void ZoomOut();
 
 private:
-	/** The follow boom: holds the camera high and behind; its length is the zoom. */
+	/** Holds the camera high and behind the hero. Its length is the zoom. */
 	UPROPERTY(VisibleAnywhere, Category = "Hero|Camera", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USpringArmComponent> CameraBoom;
 
-	/** The tactical follow camera at the end of the boom. */
+	/** The follow camera on the end of the camera boom. */
 	UPROPERTY(VisibleAnywhere, Category = "Hero|Camera", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UCameraComponent> FollowCamera;
 
-	/** Simple visible body so the hero is seen until a proper mesh is assigned. */
+	/** A simple body mesh to show the hero until a proper mesh is set. */
 	UPROPERTY(VisibleAnywhere, Category = "Hero", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> BodyMesh;
 
-	/** A small sphere "head" purely to make facing direction readable. */
+	/** A small sphere head so you can tell which way the hero is facing. */
 	UPROPERTY(VisibleAnywhere, Category = "Hero", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> HeadMesh;
 
-	/** True while the Right Mouse button is held (camera-orbit mode). */
+	/** True while the right mouse button is held down. */
 	bool bIsLooking = false;
 
-	/** Zoom distance we ease toward each frame. */
+	/** The zoom distance we move towards each frame. */
 	float TargetArm = 600.0f;
 
-	/** Designer-authored max zoom before terrain scaling is applied. */
+	/** The max zoom set in the editor, before the terrain size is taken into account. */
 	float BaseMaxZoom = 10000.0f;
 
-	/** Recompute MaxZoom from the current procedural map size (grows after each wave). */
+	/** Works out MaxZoom again from the current map size, since the map grows after each wave. */
 	void RefreshZoomLimitsFromTerrain();
 
-	/** Poll WASD and move relative to the camera's yaw. */
+	/** Checks WASD and moves the hero based on which way the camera faces. */
 	void UpdateWalk();
 
-	/** While Right Mouse is held, turn mouse motion into camera yaw + clamped pitch. */
+	/** While right mouse is held, mouse movement turns and tilts the camera. */
 	void UpdateLook();
 
-	/** Drop the hero onto an open spot on the procedurally-generated ground at start. */
+	/** Puts the hero on an open spot on the generated ground at the start. */
 	void SnapToGround();
 
-	/** Force this hero's camera to be the player's view (beats any auto-activating level camera). */
+	/** Makes the hero's camera the player's view, even if a level camera tried to take over. */
 	void ForceViewToSelf();
 };

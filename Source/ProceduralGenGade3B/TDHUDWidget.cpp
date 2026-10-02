@@ -1,4 +1,4 @@
-// TDHUDWidget.cpp — see TDHUDWidget.h for the overview.
+// TDHUDWidget.cpp. See TDHUDWidget.h for an overview.
 
 #include "TDHUDWidget.h"
 
@@ -20,7 +20,7 @@ void UTDHUDWidget::InitializeHUD(ATDGameMode* InGameMode)
         return;
     }
 
-    //Connect the 3 defenders to the player controller
+    //Hook the 3 defender buttons up to the player controller
     BindDefenderButtons();
 
     if (PauseButton)
@@ -96,21 +96,21 @@ void UTDHUDWidget::InitializeHUD(ATDGameMode* InGameMode)
                 TEXT("0 Remaining")));
     }
 
-    //Basic is selected when the HUD first appears
+    //Basic starts selected, so it gets the bright yellow
     if (BasicDefenderButton)
     {
         BasicDefenderButton->SetBackgroundColor(
             FLinearColor(1.0f, 0.85f, 0.05f));
     }
 
-    //Archer starts darker green.
+    //Archer starts as a darker green
     if (ArcherDefenderButton)
     {
         ArcherDefenderButton->SetBackgroundColor(
             FLinearColor(0.15f, 0.55f, 0.2f));
     }
 
-    //Poison Light Bomb starts darker red.
+    //Poison Light Bomb starts as a darker red
     if (PoisonLightBombButton)
     {
         PoisonLightBombButton->SetBackgroundColor(
@@ -122,8 +122,8 @@ void UTDHUDWidget::InitializeHUD(ATDGameMode* InGameMode)
 
 void UTDHUDWidget::BindDefenderButtons()
 {
-    //Connect the three HUD buttons to their defender selection functions
-    //Prevent duplicate button bindings when the HUD is initialized more than once
+    //Link each HUD button to its defender select function
+    //RemoveAll first so we don't bind twice if the HUD gets set up again
     if (BasicDefenderButton)
     {
         BasicDefenderButton->OnClicked.RemoveAll(this);
@@ -132,7 +132,7 @@ void UTDHUDWidget::BindDefenderButtons()
             this,
             &UTDHUDWidget::HandleBasicDefenderClicked);
 
-        //Give the Basic Defender button its yellow colour
+        //Basic Defender button is yellow
         BasicDefenderButton->SetBackgroundColor(
             FLinearColor(0.75f, 0.60f, 0.03f));
     }
@@ -146,7 +146,7 @@ void UTDHUDWidget::BindDefenderButtons()
             this,
             &UTDHUDWidget::HandleArcherDefenderClicked);
 
-        //Give the Archer Defender button its green colour
+        //Archer Defender button is green
         ArcherDefenderButton->SetBackgroundColor(
             FLinearColor(0.15f, 0.55f, 0.2f));
     }
@@ -159,7 +159,7 @@ void UTDHUDWidget::BindDefenderButtons()
             this,
             &UTDHUDWidget::HandlePoisonLightBombClicked);
 
-        //Give the Poison Light Bomb button its red colour
+        //Poison Light Bomb button is red
         PoisonLightBombButton->SetBackgroundColor(
             FLinearColor(0.65f, 0.08f, 0.08f));
     }
@@ -167,28 +167,28 @@ void UTDHUDWidget::BindDefenderButtons()
 
 void UTDHUDWidget::HandleBasicDefenderClicked()
 {
-    //Select basic defender
+    //Select the basic defender
     if (ATDPlayerController* PC =
         GetWorld()->GetFirstPlayerController<ATDPlayerController>())
     {
         PC->SelectBasicDefender();
     }
 
-    //Basic BTN becomes yellow whenn  selected
+    //Basic button goes bright yellow when selected
     if (BasicDefenderButton)
     {
         BasicDefenderButton->SetBackgroundColor(
             FLinearColor(1.0f, 0.85f, 0.05f));
     }
 
-    //Archer BTN becomes darker whenn not selected
+    //Archer button goes darker when not selected
     if (ArcherDefenderButton)
     {
         ArcherDefenderButton->SetBackgroundColor(
             FLinearColor(0.15f, 0.55f, 0.2f));
     }
 
-    //Bomb BTN becomes darker whenn not selected
+    //Bomb button goes darker when not selected
     if (PoisonLightBombButton)
     {
         PoisonLightBombButton->SetBackgroundColor(
@@ -198,28 +198,28 @@ void UTDHUDWidget::HandleBasicDefenderClicked()
 
 void UTDHUDWidget::HandleArcherDefenderClicked()
 {
-    //Select archer defender
+    //Select the archer defender
     if (ATDPlayerController* PC =
         GetWorld()->GetFirstPlayerController<ATDPlayerController>())
     {
         PC->SelectArcherDefender();
     }
 
-    //Basic BTN becomes darker whenn not selected
+    //Basic button goes darker when not selected
     if (BasicDefenderButton)
     {
         BasicDefenderButton->SetBackgroundColor(
             FLinearColor(0.75f, 0.60f, 0.03f));
     }
 
-    //Archer BTN becomes green whenn  selected
+    //Archer button goes bright green when selected
     if (ArcherDefenderButton)
     {
         ArcherDefenderButton->SetBackgroundColor(
             FLinearColor(0.25f, 1.0f, 0.3f));
     }
 
-    //Bomb BTN becomes darker whenn not selected
+    //Bomb button goes darker when not selected
     if (PoisonLightBombButton)
     {
         PoisonLightBombButton->SetBackgroundColor(
@@ -236,21 +236,21 @@ void UTDHUDWidget::HandlePoisonLightBombClicked()
         PC->SelectPoisonLightBombDefender();
     }
 
-    //Basic BTN becomes darker whenn not selected
+    //Basic button goes darker when not selected
     if (BasicDefenderButton)
     {
         BasicDefenderButton->SetBackgroundColor(
             FLinearColor(0.75f, 0.60f, 0.03f));
     }
 
-    //Archer BTN becomes darker whenn not selected
+    //Archer button goes darker when not selected
     if (ArcherDefenderButton)
     {
         ArcherDefenderButton->SetBackgroundColor(
             FLinearColor(0.15f, 0.55f, 0.2f));
     }
 
-    //Bomb button become bright red when selected
+    //Bomb button goes bright red when selected
     if (PoisonLightBombButton)
     {
         PoisonLightBombButton->SetBackgroundColor(
@@ -496,23 +496,23 @@ void UTDHUDWidget::HideLootFlash()
     }
 }
 
-//Placed to have match implementations declared
+//Empty for now, it just gives the declared function a body
 void UTDHUDWidget::ResolveHudBindings()
 {
 }
 
-//Buttton bind
+//Binds the HUD buttons
 void UTDHUDWidget::BindHudButtons()
 {
     BindDefenderButtons();
 }
 
-//Keep the Hud layout for the widget blueprint
+//Empty, the Widget Blueprint handles the HUD layout and hit testing
 void UTDHUDWidget::ConfigureHudHitTesting()
 {
 }
 
-//HUD stretching is controlled by the Widget Blueprint anchors
+//Empty, the anchors in the Widget Blueprint handle stretching the HUD
 void UTDHUDWidget::StretchTopBanner()
 {
 }

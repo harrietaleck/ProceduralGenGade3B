@@ -1,4 +1,5 @@
-﻿// TDEndScreenWidget_Layout.inl — included by the parent .cpp (not compiled alone).
+﻿// TDEndScreenWidget_Layout.inl
+// Layout code for the end screen. It is included in TDEndScreenWidget.cpp and not compiled on its own.
 
 void UTDEndScreenWidget::EnsureBlueprintLayoutFitsScreen()
 {

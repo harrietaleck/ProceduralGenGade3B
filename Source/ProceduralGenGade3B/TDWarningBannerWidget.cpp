@@ -1,4 +1,4 @@
-// TDWarningBannerWidget.cpp — see TDWarningBannerWidget.h
+// TDWarningBannerWidget.cpp. See TDWarningBannerWidget.h for an overview.
 
 #include "TDWarningBannerWidget.h"
 #include "Blueprint/WidgetTree.h"

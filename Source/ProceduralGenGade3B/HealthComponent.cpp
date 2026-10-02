@@ -1,4 +1,5 @@
-// HealthComponent.cpp — see HealthComponent.h for the overview.
+// HealthComponent.cpp
+// Damage, healing and death for the health component. See the header for more.
 
 #include "HealthComponent.h"
 #include "Enemy.h"
@@ -7,7 +8,7 @@
 
 UHealthComponent::UHealthComponent()
 {
-    // Health logic is event-driven (ApplyDamage / Heal), so no per-frame tick is needed.
+    // Health only changes in ApplyDamage and Heal, so it does not need to tick.
     PrimaryComponentTick.bCanEverTick = false;
 }
 
@@ -15,7 +16,7 @@ void UHealthComponent::BeginPlay()
 {
     Super::BeginPlay();
 
-    // Start at full health and let any bound UI initialise itself.
+    // Start at full health and tell the UI so it can set itself up.
     CurrentHealth = MaxHealth;
     bIsDead = false;
     OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
@@ -23,31 +24,31 @@ void UHealthComponent::BeginPlay()
 
 void UHealthComponent::ApplyDamage(float Amount, AActor* Killer)
 {
-    // Ignore damage once dead, or non-positive amounts (healing goes through Heal()).
+    // Ignore damage if already dead or if the amount is zero or less. Healing uses Heal instead.
     if (bIsDead || Amount <= 0.0f)
     {
         return;
     }
 
-    //Decrease the damage when a defender attacks an enemy
+    // Lower the damage when a defender attacks an enemy
     if (ADefender* DefenderAttacker = Cast<ADefender>(Killer))
     {
-        //Check if the object being attacked is an enemy
+        // Check if the actor being attacked is an enemy
         if (AEnemy* EnemyOwner = Cast<AEnemy>(GetOwner()))
         {
-            //If a bear let it get 50% damage
+            // Bears only take 50% damage
             if (EnemyOwner->EnemyType == EEnemyType::Bear)
             {
                 Amount *= 0.50f;
             }
 
-            //If a wolf let it get 75% damage
+            // Wolves take 75% damage
             else if (EnemyOwner->EnemyType == EEnemyType::Wolf)
             {
                 Amount *= 0.75f;
             }
 
-            //If a basic enemy let it get 100% damage
+            // Basic enemies take the full damage
             else
             {
                 Amount *= 1.0f;
@@ -55,7 +56,7 @@ void UHealthComponent::ApplyDamage(float Amount, AActor* Killer)
         }
     }
 
-    //Elite shields and defender combos
+    // Elite shields and defender combos
     if (AEnemy* EnemyOwner = Cast<AEnemy>(GetOwner()))
     {
         Amount = EnemyOwner->ModifyIncomingDamage(Amount, Killer);
@@ -70,7 +71,7 @@ void UHealthComponent::ApplyDamage(float Amount, AActor* Killer)
 
     OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
 
-    // Count player combat hits against enemies for the end-screen score.
+    // Count the player's hits on enemies for the score on the end screen.
     if (Cast<AEnemy>(GetOwner()))
     {
         if (UWorld* World = GetWorld())
@@ -82,7 +83,7 @@ void UHealthComponent::ApplyDamage(float Amount, AActor* Killer)
         }
     }
 
-    // Transition to dead exactly once.
+    // Only die once.
     if (CurrentHealth <= 0.0f)
     {
         bIsDead = true;

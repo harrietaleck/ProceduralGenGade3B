@@ -1,9 +1,7 @@
 // BuildPadMarker.h
-// A small stone platform placed on every generated defender build pad. Purely visual — it
-// carries no gameplay logic — but it gives the player a clear, persistent signal of exactly
-// where defenders may be placed, directly answering the brief's UI/UX question "is it clear
-// where I can build?". The player controller layers a coloured hover highlight on top of
-// these base markers to additionally show whether the pad the cursor is over is valid right now.
+// A small marker placed on every build pad so the player can always see where defenders can go.
+// It is only visual and has no gameplay logic. The player controller adds a coloured
+// hover highlight on top to show if the pad under the mouse can be used right now.
 
 #pragma once
 
@@ -18,7 +16,7 @@ class UStaticMeshComponent;
 class UTexture2D;
 class UWidgetComponent;
 
-/** Minimal world-space widget used to display the defender portal texture. */
+/** A basic widget in the world that shows the defender portal picture. */
 UCLASS()
 class PROCEDURALGENGADE3B_API UBuildPadPortalWidget : public UUserWidget
 {
@@ -51,15 +49,15 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
-	/** Radius of the platform disc, in uu. */
+	/** Radius of the platform, in Unreal units. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BuildPad", meta = (ClampMin = "10.0"))
 	float Radius = 90.0f;
 
-	/** Platform thickness, in uu. */
+	/** How thick the platform is, in Unreal units. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BuildPad", meta = (ClampMin = "1.0"))
 	float Thickness = 12.0f;
 
-	/** Texture shown on the build pad. Defaults to UI/SourceArt/DefendersPortal. */
+	/** The picture shown on the build pad. By default it is UI/SourceArt/DefendersPortal. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BuildPad")
 	TSoftObjectPtr<UTexture2D> PortalTexture;
 
@@ -67,11 +65,11 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "BuildPad", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USceneComponent> SceneRoot;
 
-	/** World-space image displaying DefendersPortal. */
+	/** Shows the DefendersPortal picture in the world. */
 	UPROPERTY(VisibleAnywhere, Category = "BuildPad", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UWidgetComponent> PortalWidgetComponent;
 
-	/** Legacy disc used only when the portal texture is unavailable. */
+	/** Old disc mesh. We only show it if the portal picture can't be loaded. */
 	UPROPERTY(VisibleAnywhere, Category = "BuildPad", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> PlatformMesh;
 };

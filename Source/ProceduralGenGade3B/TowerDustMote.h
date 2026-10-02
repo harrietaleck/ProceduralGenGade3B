@@ -1,5 +1,5 @@
 // TowerDustMote.h
-// A tiny drifting puff element used for the tower's dust cloud on destruction.
+// A tiny floating puff. Lots of these make the dust cloud when the tower is destroyed.
 
 #pragma once
 

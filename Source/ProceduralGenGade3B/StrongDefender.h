@@ -1,6 +1,6 @@
-// StrongDefender.h — elite defender that costs Gem Stones in addition to forest resources.
-// Instead of lobbing balls it fires a heavy arcane bolt that stuns its target, holding
-// enemies in place so the rest of the defence can finish them.
+// StrongDefender.h
+// A stronger defender that also costs Gem Stones. It fires a bolt that stuns its target,
+// which holds enemies still so the other defenders can finish them off.
 
 #pragma once
 
@@ -16,7 +16,7 @@ class PROCEDURALGENGADE3B_API AStrongDefender : public ADefender
 public:
 	AStrongDefender();
 
-	/** Seconds each bolt stuns its target (bears resist half). */
+	/** How many seconds each bolt stuns its target. Bears only get stunned for half as long. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Strong Defender", meta = (ClampMin = "0.0"))
 	float StunDuration = 0.9f;
 
@@ -28,6 +28,6 @@ protected:
 private:
 	FTimerHandle BoltTimerHandle;
 
-	/** Picks the healthiest enemy in range (best use of a stun) and strikes it. */
+	/** Picks the enemy in range with the most health and hits it, since that gets the most out of a stun. */
 	void FireStunBolt();
 };

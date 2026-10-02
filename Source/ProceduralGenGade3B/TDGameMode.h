@@ -1,7 +1,6 @@
 // TDGameMode.h
-// The central coordinator for a match. On BeginPlay it locates the procedural terrain,
-// spawns the tower at the terrain's central tower location, and starts the enemy spawner.
-// It also owns the resource economy and the game-over state that the UI reads.
+// Runs the match. On BeginPlay it finds the terrain, spawns the tower in the middle and starts the enemies.
+// It also holds the Loot economy and the game over state that the UI reads.
 
 #pragma once
 
@@ -22,10 +21,10 @@ class UTDWarningBannerWidget;
 class UUserWidget;
 class UButton;
 
-// Broadcast whenever the player's resource count changes (UI binds to this).
+// Fires whenever the player's resources change. The UI listens to this.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnResourcesChanged, int32, NewAmount);
 
-// Broadcast once when the tower is destroyed and the game ends.
+// Fires once when the tower is destroyed and the game ends.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameOver);
 
 UCLASS()
@@ -36,53 +35,53 @@ class PROCEDURALGENGADE3B_API ATDGameMode : public AGameModeBase
 public:
 	ATDGameMode();
 
-	/** Loot the player starts with (Economy spec: 200). */
+	/** Loot the player starts with. The economy spec says 200. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules", meta = (ClampMin = "0"))
 	int32 StartingResources = 200;
 
-	/** Loot deducted after each cleared wave for every living defender (lecture: economy
-	 *  grows from kills but drains while defenders are fielded). */
+	/** Loot taken away for every living defender after each cleared wave.
+	 *  Kills grow the economy, but keeping defenders out slowly drains it. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules", meta = (ClampMin = "0"))
 	int32 DefenderUpkeepPerWave = 8;
 
-	/** Which tower class to spawn (defaults to the C++ ATower; can be a Blueprint child). */
+	/** Tower class to spawn. Defaults to the C++ ATower, but a Blueprint child works too. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<ATower> TowerClass;
 
-	/** Which spawner class to use (defaults to the C++ AEnemySpawner; can be a Blueprint child). */
+	/** Enemy spawner class to use. Defaults to the C++ AEnemySpawner, but a Blueprint child works too. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<AEnemySpawner> SpawnerClass;
 
-	/** Which wave manager class to use (defaults to the C++ AWaveManager; can be a Blueprint child). */
+	/** Wave manager class to use. Defaults to the C++ AWaveManager, but a Blueprint child works too. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<AWaveManager> WaveManagerClass;
 
-	/** Visual marker spawned on every generated build pad (defaults to ABuildPadMarker). */
+	/** Marker spawned on every generated build pad so the player can see it. Defaults to ABuildPadMarker. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<ABuildPadMarker> BuildPadMarkerClass;
 
-	/** The always-visible UMG match HUD (Widget Blueprint child of UTDHUDWidget). Created and
-	 *  wired up once Tower/WaveManager exist, at the end of BeginPlay. */
+	/** The match HUD that is always on screen. It should be a Widget Blueprint child of UTDHUDWidget.
+	 *  It gets created at the end of BeginPlay, once the tower and wave manager exist. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<UTDHUDWidget> HUDWidgetClass;
 
-	/** Full-screen defeat overlay (C++ widget by default; assign your Gameoverscreen BP here). */
+	/** Full screen defeat overlay. It uses the C++ widget by default, so put the Gameoverscreen BP here. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<UTDEndScreenWidget> EndScreenWidgetClass;
 
-	/** Full-screen victory overlay. Supports the existing plain VictoryScreen UserWidget. */
+	/** Full screen victory overlay. The plain VictoryScreen UserWidget works here. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<UUserWidget> VictoryScreenWidgetClass;
 
-	/** Pause / settings overlay (Blueprint UserWidget — settings controls stay in Blueprint). */
+	/** Pause and settings overlay. This is a Blueprint UserWidget and the settings controls stay in Blueprint. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<UUserWidget> SettingsWidgetClass;
 
-	/** Meta-currency granted on the first match if the wallet is empty (lets defenders work immediately). */
+	/** Meta currency given on the first match if the wallet is empty, so the player can buy defenders straight away. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules|Meta")
 	FMetaCurrencyRewards StartingMetaWallet;
 
-	/** Light Lantern cost for each tower beam upgrade during a match. */
+	/** How many Light Lanterns each tower beam upgrade costs during a match. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules|Meta", meta = (ClampMin = "1"))
 	int32 BeamUpgradeLanternCost = 12;
 
@@ -90,15 +89,15 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules|Meta", meta = (ClampMin = "0.1"))
 	float BeamUpgradeDamageBonus = 8.0f;
 
-	/** Maximum beam upgrades purchasable in one match. */
+	/** Most beam upgrades the player can buy in one match. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules|Meta", meta = (ClampMin = "1"))
 	int32 MaxBeamUpgradeLevel = 5;
 
-	/** Active match HUD widget instance (may be null if no WBP asset is configured). */
+	/** The match HUD widget in use. Can be null if no WBP asset was set. */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	UTDHUDWidget* GetMatchHUDWidget() const { return MatchHUDWidget; }
 
-	/** Bottom-centre warning when defender placement is rejected (e.g. not enough Loot). */
+	/** Shows a warning at the bottom centre when a defender can't be placed, like when there isn't enough Loot. */
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void ShowInsufficientFundsWarning();
 
@@ -106,21 +105,21 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Rules")
 	FOnResourcesChanged OnResourcesChanged;
 
-	/** Fired when the game ends (tower destroyed). */
+	/** Fired when the game ends because the tower was destroyed. */
 	UPROPERTY(BlueprintAssignable, Category = "Rules")
 	FOnGameOver OnGameOver;
 
-	// ---- Economy API (used by the player controller when placing defenders) ----
+	// ---- Economy functions, used by the player controller when placing defenders ----
 
-	/** Current resource total. */
+	/** How many resources the player has right now. */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	int32 GetResources() const { return Resources; }
 
-	/** Add resources (e.g. an enemy bounty) and notify listeners. */
+	/** Adds resources, like an enemy bounty, and tells anything listening. */
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void AddResources(int32 Amount);
 
-	/** Spend resources if affordable. Returns true and deducts on success, false otherwise. */
+	/** Spends the resources if the player can afford it. Returns false if there isn't enough. */
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	bool TrySpendResources(int32 Amount);
 
@@ -128,36 +127,36 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	bool IsGameOver() const { return bGameOver; }
 
-	/** True once the final configured wave has been cleared. WaveManager is the sole
-	 *  authority for this — GameMode only forwards the query, it never tracks its own copy. */
+	/** True once the last wave has been cleared. The wave manager owns this value.
+	 *  The game mode just asks it and never keeps its own copy. */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	bool IsVictory() const;
 
-	/** Reload the current level for a fresh game (regenerates terrain, resets economy). */
+	/** Reloads the level for a fresh game. This makes new terrain and resets the economy. */
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void RestartGame();
 
-	/** Leave the match and open the Blueprint start menu level. */
+	/** Leaves the match and opens the start menu level. */
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void ReturnToMainMenu();
 
-	/** Hide the between-wave results screen and start the next wave. */
+	/** Hides the results screen between waves and starts the next wave. */
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void ContinueToNextWave();
 
-	/** Hide victory results and replay the wave that was just completed. */
+	/** Hides the victory results and plays the wave we just finished again. */
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void RetryCurrentWave();
 
-	/** Toggle match pause and show/hide the settings widget. */
+	/** Pauses or unpauses the match and shows or hides the settings widget. */
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void TogglePause();
 
-	/** Open the settings widget and pause match interaction. */
+	/** Opens the settings widget and pauses the match. */
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void ShowSettings();
 
-	/** Close settings and resume the match (call from Blueprint Resume buttons). */
+	/** Closes settings and carries on with the match. Call this from the Blueprint Resume buttons. */
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void ResumeFromSettings();
 
@@ -169,7 +168,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	bool IsSettingsVisible() const;
 
-	/** The procedural terrain located at startup (source of paths / slots / tower location). */
+	/** The terrain found at startup. It gives us the paths, build slots and tower location. */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	AProceduralTerrain* GetTerrain() const { return Terrain; }
 
@@ -177,72 +176,72 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	ATower* GetTower() const { return Tower; }
 
-	/** The wave manager driving enemy waves (may be null before BeginPlay finishes). */
+	/** The wave manager that runs the enemy waves. Can be null before BeginPlay is done. */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	AWaveManager* GetWaveManager() const { return WaveManager; }
 
-	/** Convenience for the HUD: the current wave number (0 if waves haven't started). */
+	/** Current wave number for the HUD. Returns 0 if the waves haven't started yet. */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	int32 GetCurrentWave() const;
 
-	/** Score + meta-currency rewards from the most recently finished match. */
+	/** Score and meta currency rewards from the last finished match. */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	FMatchResult GetLastMatchResult() const { return LastMatchResult; }
 
-	/** Current persistent meta-currency wallet. */
+	/** The meta currency wallet that is kept between matches. */
 	UFUNCTION(BlueprintPure, Category = "Rules|Meta")
 	FMetaCurrencyRewards GetMetaWallet() const;
 
-	/** Spend meta-currency if the wallet can afford it. */
+	/** Spends meta currency if the wallet has enough. */
 	UFUNCTION(BlueprintCallable, Category = "Rules|Meta")
 	bool TrySpendMeta(const FMetaCurrencyRewards& Cost);
 
-	/** True when the wallet can cover a defender or upgrade cost. */
+	/** True when the wallet has enough for a defender or upgrade. */
 	UFUNCTION(BlueprintPure, Category = "Rules|Meta")
 	bool CanAffordMeta(const FMetaCurrencyRewards& Cost) const;
 
-	/** True while paused, defeated, or victorious — blocks placement and upgrades. */
+	/** True while paused, after a loss or after a win. The player can't place or upgrade then. */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	bool IsInteractionBlocked() const;
 
-	/** Push current meta-currency totals into the match HUD. */
+	/** Sends the current meta currency totals to the match HUD. */
 	void RefreshMetaHUD() const;
 
-	/** Live match score from placements / hits / kills / surviving defenders. */
+	/** Current match score, worked out from placements, hits, kills and surviving defenders. */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	int32 GetLiveMatchScore() const;
 
-	/** Spend Light Lanterns to permanently boost the tower beam for this match. */
+	/** Spends Light Lanterns to make the tower beam stronger for the rest of this match. */
 	UFUNCTION(BlueprintCallable, Category = "Rules|Meta")
 	bool TryUpgradeTowerBeam();
 
-	/** Defenders placed so far this match (wave director uses it to count losses per wave). */
+	/** Defenders placed so far this match. The wave director uses this to count losses per wave. */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	int32 GetMatchDefendersPlaced() const { return MatchDefendersPlaced; }
 
-	/** Defender status combos (Shatter, Venom spread) triggered this match. */
+	/** How many defender status combos, like Shatter or Venom spread, happened this match. */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	int32 GetMatchCombos() const { return MatchCombos; }
 
-	/** Count one defender status combo. */
+	/** Adds one to the defender status combo count. */
 	void NotifyCombo() { ++MatchCombos; }
 
-	/** How many beam upgrades have been purchased this match. */
+	/** How many beam upgrades have been bought this match. */
 	UFUNCTION(BlueprintPure, Category = "Rules|Meta")
 	int32 GetBeamUpgradeLevel() const { return BeamUpgradeLevel; }
 
 	// ---- Notifications called by other actors ----
 
-	/** Called by an enemy when it dies: award its bounty. */
+	/** Called by an enemy when it dies. Gives the player its bounty. */
 	void NotifyEnemyKilled(AEnemy* DeadEnemy);
 
-	/** Count a successful hit on an enemy (tower / defender / projectile). */
+	/** Counts a hit on an enemy from the tower, a defender or a projectile. */
 	void NotifyEnemyHit();
 
-	/** Count a defender that was successfully placed this match. */
+	/** Counts a defender that was placed this match. */
 	void NotifyDefenderPlaced();
 
-	/** Called by the tower when it dies: end the game. */
+	/** Called by the tower when it dies. Ends the game. */
 	void NotifyTowerDestroyed();
 
 protected:
@@ -250,7 +249,7 @@ protected:
 	virtual void Tick(float DeltaSeconds) override;
 
 private:
-	/** Live resource total. */
+	/** The player's current resources. */
 	UPROPERTY(VisibleAnywhere, Category = "Rules", meta = (AllowPrivateAccess = "true"))
 	int32 Resources = 0;
 
@@ -260,7 +259,7 @@ private:
 	/** True while the player has paused the match. */
 	bool bPaused = false;
 
-	// Cached references to the key actors.
+	// Saved pointers to the main actors so we don't have to search for them again.
 	UPROPERTY()
 	TObjectPtr<AProceduralTerrain> Terrain;
 
@@ -277,7 +276,7 @@ private:
 	TObjectPtr<UTDHUDWidget> MatchHUDWidget;
 
 	UPROPERTY()
-	TObjectPtr<UTDEndScreenWidget> EndScreenWidget;   // defeat screen instance
+	TObjectPtr<UTDEndScreenWidget> EndScreenWidget;   // the defeat screen
 
 	UPROPERTY()
 	TObjectPtr<UUserWidget> VictoryScreenWidget;
@@ -290,33 +289,32 @@ private:
 
 	FTimerHandle MenuStretchTimerHandle;
 
-	/** Visual platforms spawned on every generated build pad this attempt — tracked so a failed
-	 *  world-validation pass can tear them down before regenerating. */
+	/** Platforms spawned on every build pad in this attempt. We keep track of them so they
+	 *  can be removed if the world check fails and the terrain has to be made again. */
 	UPROPERTY()
 	TArray<TObjectPtr<ABuildPadMarker>> BuildPadMarkers;
 
-	/** Find the terrain actor already placed in the level. */
+	/** Finds the terrain actor that is already placed in the level. */
 	AProceduralTerrain* FindTerrain() const;
 
-	/** Spawns the tower on the terrain's published tower location, retrying with a fresh terrain
-	 *  regeneration if the spawn is ever rejected or lands away from that location. Returns false
-	 *  if no valid placement was reached within the attempt budget. */
+	/** Spawns the tower at the terrain's tower location. If the spawn fails or lands in the
+	 *  wrong place, it makes new terrain and tries again. Returns false if it runs out of tries. */
 	bool SpawnTowerWithRetry();
 
-	/** Spawns a visual platform on every one of the terrain's current build slots. */
+	/** Spawns a platform on every build slot the terrain has right now. */
 	void SpawnBuildPadMarkers();
 
-	/** Spawns markers only for build slots added since the last call (used after path expansion). */
+	/** Spawns markers just for the build slots added since last time. Used after the paths grow. */
 	void SpawnBuildPadMarkersFromIndex(int32 StartSlotIndex);
 
-	/** Deduct upkeep for all living defenders after a wave ends. */
+	/** Takes upkeep for every living defender after a wave ends. */
 	void ApplyDefenderUpkeep();
 
-	/** Wave-complete hook: extend lanes, add new pads, charge upkeep, show results. */
+	/** Runs when a wave is cleared. Grows the lanes, adds new build pads, charges upkeep and shows the results. */
 	UFUNCTION()
 	void HandleWaveComplete(int32 WaveNumber);
 
-	/** Final-wave win hook (no-op if results were already shown on the last wave clear). */
+	/** Runs when the final wave is won. Does nothing if the results already showed when that wave was cleared. */
 	UFUNCTION()
 	void HandleMatchVictory();
 
@@ -331,7 +329,7 @@ private:
 	UPROPERTY()
 	FMatchResult LastMatchResult;
 
-	/** Cumulative rewards already banked this match (so each wave only pays the delta). */
+	/** Total rewards already paid out this match, so each wave only pays the difference. */
 	FMetaCurrencyRewards PaidMatchRewards;
 
 	bool bWaveResultsVisible = false;
@@ -346,15 +344,14 @@ private:
 
 	void EnsureStartingMetaWallet();
 
-	/** Resolve default Match HUD / End Screen Widget Blueprints without ConstructorHelpers. */
+	/** Loads the default HUD and end screen Widget Blueprints without using ConstructorHelpers. */
 	void EnsureDefaultWidgetClasses();
 
-	/** Destroys the tower and every build-pad marker spawned so far, so a failed world-validation
-	 *  attempt can regenerate cleanly rather than leaving stale actors from the last attempt. */
+	/** Destroys the tower and all build pad markers spawned so far. This way a failed world
+	 *  check can start over clean, without old actors left behind from the last try. */
 	void DestroySpawnedWorldActors();
 
-	/** Final gate before gameplay (enemy spawning, HUD) is allowed to start: re-checks the whole
-	 *  placed world — terrain, tower, build pads, navigation — as actually spawned, not just the
-	 *  terrain's own self-validation during generation. */
+	/** Last check before enemies and the HUD start. It looks at the terrain, tower, build pads
+	 *  and navigation as they were really spawned, not just the terrain's own check during generation. */
 	bool ValidateWorldBeforeGameplay() const;
 };

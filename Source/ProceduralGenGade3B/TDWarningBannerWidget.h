@@ -1,6 +1,6 @@
 // TDWarningBannerWidget.h
-// Bottom-centre toast for placement rejections (e.g. not enough Loot). Lives on its own
-// viewport layer so it never fights with the match HUD layout or Wave Active text.
+// Small popup at the bottom centre when you can't place a defender, like when you're out of Loot.
+// It sits on its own viewport layer so it doesn't mess with the match HUD layout.
 
 #pragma once
 

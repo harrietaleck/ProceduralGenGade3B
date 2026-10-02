@@ -1,6 +1,6 @@
-// TDGameMode.cpp — core startup plus included UI / world / match units.
-// Companion .inl files keep each physical file under 500 lines while remaining
-// one translation unit (required for Live Coding after a file split).
+// TDGameMode.cpp - match startup. The UI, world and match code live in the .inl files at the bottom.
+// Splitting into .inl files keeps each file under 500 lines but still builds as one unit,
+// which Live Coding needs after a file split.
 
 #include "TDGameMode.h"
 #include "ProceduralTerrain.h"

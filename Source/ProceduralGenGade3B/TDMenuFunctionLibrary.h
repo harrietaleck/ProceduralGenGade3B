@@ -1,5 +1,5 @@
-// Blueprint helpers for menu screens (StartScreen, etc.). UI stays in Widget Blueprints;
-// these nodes only handle leaving the menu into gameplay and fullscreen layout.
+// Blueprint helper nodes for the menu screens like StartScreen. The UI itself is in Widget Blueprints.
+// These nodes just start the game from the menu and stretch the menus to fill the screen.
 
 #pragma once
 
@@ -15,15 +15,15 @@ class PROCEDURALGENGADE3B_API UTDMenuFunctionLibrary : public UBlueprintFunction
 	GENERATED_BODY()
 
 public:
-	/** Removes all widgets and opens the gameplay map. Wire StartScreen PlayButton to this. */
+	/** Removes all widgets and opens the gameplay map. Hook the StartScreen PlayButton up to this. */
 	UFUNCTION(BlueprintCallable, Category = "Menu", meta = (WorldContext = "WorldContextObject"))
 	static void StartGameplayFromMenu(UObject* WorldContextObject, FName GameplayLevelName = TEXT("TowerDefense"));
 
-	/** Pins a menu widget to the full viewport and stretches its background image. */
+	/** Makes a menu widget fill the whole viewport and stretches its background image. */
 	UFUNCTION(BlueprintCallable, Category = "Menu")
 	static void StretchWidgetToFillScreen(UUserWidget* Widget, bool bCaptureMouseFocus = true);
 
-	/** Stretch Start / Settings / Upgrades / Defenders store widgets currently in the viewport. */
+	/** Stretches any Start, Settings, Upgrades or Defenders store screens that are open right now. */
 	UFUNCTION(BlueprintCallable, Category = "Menu", meta = (WorldContext = "WorldContextObject"))
 	static void StretchOpenMenuScreens(UObject* WorldContextObject);
 };

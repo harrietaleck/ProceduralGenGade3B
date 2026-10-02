@@ -1,4 +1,5 @@
-// TDPlayerController.cpp — see TDPlayerController.h for the overview.
+// TDPlayerController.cpp
+// Player input and defender placement. See TDPlayerController.h for the overview.
 
 #include "TDPlayerController.h"
 
@@ -6,7 +7,7 @@
 
 #include "StrongDefender.h"
 
-//Add the new defenders with unique functions and the buttons can select their own c++ class
+//Include the new defenders so each button can select its own C++ class
 
 #include "ArcherDefender.h"
 
@@ -30,7 +31,7 @@ ATDPlayerController::ATDPlayerController()
 
     StrongDefenderClass = AStrongDefender::StaticClass();
 
-    // Ticks every frame to draw the build-pad hover highlight.
+    // Tick every frame so we can draw the build pad hover highlight.
 
     PrimaryActorTick.bCanEverTick = true;
 
@@ -42,7 +43,7 @@ void ATDPlayerController::BeginPlay()
 
     Super::BeginPlay();
 
-    // Show the cursor and allow click hit-tests against the world.
+    // Show the mouse cursor and let clicks hit things in the world.
 
     bShowMouseCursor = true;
 
@@ -56,7 +57,7 @@ void ATDPlayerController::SetupInputComponent()
 {
     Super::SetupInputComponent();
 
-    // Bind left mouse button directly (simple and sufficient for Part 1 placement).
+    // Left click places a defender.
     InputComponent->BindKey(
         EKeys::LeftMouseButton,
         IE_Pressed,
@@ -64,7 +65,7 @@ void ATDPlayerController::SetupInputComponent()
         &ATDPlayerController::OnPlaceDefenderClicked
     );
 
-    // Bind R to restart at any time (brief: restart whenever the player wants).
+    // R restarts the game at any time, as the brief asks.
     InputComponent->BindKey(
         EKeys::R,
         IE_Pressed,
@@ -72,12 +73,12 @@ void ATDPlayerController::SetupInputComponent()
         &ATDPlayerController::OnRestartPressed
     );
 
-    // Bind P to pause/unpause the match.
+    // P pauses or unpauses the match. It has to work while paused too.
     FInputKeyBinding& PauseBinding =
         InputComponent->BindKey(EKeys::P, IE_Pressed, this, &ATDPlayerController::OnPausePressed);
     PauseBinding.bExecuteWhenPaused = true;
 
-    // Bind N to toggle the NavMesh debug overlay.
+    // N shows or hides the NavMesh debug view.
     InputComponent->BindKey(
         EKeys::N,
         IE_Pressed,
@@ -85,7 +86,7 @@ void ATDPlayerController::SetupInputComponent()
         &ATDPlayerController::OnToggleNavMeshDebug
     );
 
-    // Bind Tab to toggle basic vs strong defender placement.
+    // Tab switches between basic and strong defender placement.
     InputComponent->BindKey(
         EKeys::Tab,
         IE_Pressed,
@@ -93,7 +94,7 @@ void ATDPlayerController::SetupInputComponent()
         &ATDPlayerController::OnToggleDefenderMode
     );
 
-    // Bind U to upgrade the tower beam.
+    // U upgrades the tower beam.
     InputComponent->BindKey(
         EKeys::U,
         IE_Pressed,
@@ -133,7 +134,7 @@ void ATDPlayerController::SetupInputComponent()
         &ATDPlayerController::SelectStrongDefender
     );
 
-    //Press G to show the wave director graph (works on the paused results screen too)
+    //Press G to show the wave director graph. This also works on the paused results screen
     FInputKeyBinding& GraphBinding =
         InputComponent->BindKey(EKeys::G, IE_Pressed, this, &ATDPlayerController::OnToggleDirectorGraph);
     GraphBinding.bExecuteWhenPaused = true;
@@ -151,8 +152,7 @@ void ATDPlayerController::OnToggleNavMeshDebug()
 
 {
 
-    // "show Navigation" is the engine's own NavMesh debug-draw toggle — reuse it rather than
-    // reimplementing NavMesh visualisation.
+    // "show Navigation" is Unreal's built-in NavMesh debug view, so we just use that.
 
     ConsoleCommand(TEXT("show Navigation"));
 
@@ -244,7 +244,7 @@ void ATDPlayerController::OnToggleDefenderMode()
 
 }
 
-//Secet original defender and switch off the stronger defender mode
+//Select the original defender and switch off strong defender mode
 
 void ATDPlayerController::SelectBasicDefender()
 
@@ -254,7 +254,7 @@ void ATDPlayerController::SelectBasicDefender()
 
 }
 
-//Select the archer defender button to activate to place
+//Select the archer defender so it can be placed
 
 void ATDPlayerController::SelectArcherDefender()
 
@@ -264,7 +264,7 @@ void ATDPlayerController::SelectArcherDefender()
 
 }
 
-//Select the bomber defender button to activate to place
+//Select the bomb defender so it can be placed
 
 void ATDPlayerController::SelectPoisonLightBombDefender()
 
@@ -295,7 +295,7 @@ void ATDPlayerController::SelectStrongDefender()
     }
 }
 
-//Change the defeder class using the placement system that exists
+//Change the defender class but keep using the existing placement system
 
 void ATDPlayerController::SelectDefenderClass(
 
@@ -317,7 +317,7 @@ void ATDPlayerController::SelectDefenderClass(
 
     {
 
-        //Do not allw defender slection after a match or when blocked
+        //Do not allow defender selection after a match or when input is blocked
 
         if (GameMode->IsGameOver() ||
 
@@ -333,13 +333,13 @@ void ATDPlayerController::SelectDefenderClass(
 
     }
 
-    //Select the 1 of the 3 defenders button
+    //Pick one of the 3 normal defenders and turn off strong mode
 
     bPlacingStrongDefender = false;
 
     DefenderClass = NewDefenderClass;
 
-    //Continiously refresh the HUD so that the defenders information can update immediately
+    //Refresh the HUD so the defender info updates straight away
 
     if (ATDGameMode* GameMode =
 
@@ -437,8 +437,8 @@ void ATDPlayerController::OnPlaceDefenderClicked()
 
     }
 
-    // Check affordability using the defender's own Cost, but don't spend yet — Loot is only
-    // ever deducted for a placement that actually happens (see below).
+    // Check we can pay the defender's Cost, but don't spend yet.
+    // Loot is only taken once the defender has really spawned, further down.
 
     const ADefender* Defaults =
 
@@ -460,7 +460,7 @@ void ATDPlayerController::OnPlaceDefenderClicked()
 
     // Spawn the defender on the slot, raised so its base rests on the ground.
 
-    // (Named DefenderSpawnLocation to avoid hiding the inherited APlayerController::SpawnLocation.)
+    // It is called DefenderSpawnLocation so it does not hide APlayerController's own SpawnLocation.
 
     const FVector DefenderSpawnLocation =
 
@@ -472,7 +472,7 @@ void ATDPlayerController::OnPlaceDefenderClicked()
 
         ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-    //The selected defender activates and can be placed using the placement system
+    //Spawn whichever defender is selected
 
     ADefender* NewDefender =
 
@@ -488,7 +488,7 @@ void ATDPlayerController::OnPlaceDefenderClicked()
 
         );
 
-    // Only pay for a placement that actually succeeded.
+    // Only pay if the defender really spawned.
 
     if (NewDefender)
 
@@ -564,7 +564,7 @@ bool ATDPlayerController::FindNearestSlotUnderCursor(
 
     }
 
-    // Trace under the cursor to find where on the world the player is pointing.
+    // Trace under the cursor to find where in the world the player is pointing.
 
     FHitResult Hit;
 
@@ -584,7 +584,7 @@ bool ATDPlayerController::FindNearestSlotUnderCursor(
 
     const FVector CursorLocation = Hit.Location;
 
-    // Snap to the nearest buildable slot (compared on the ground plane, ignoring Z).
+    // Snap to the nearest build slot. We only compare X and Y and ignore height.
 
     const TArray<FDefenderSlot>& Slots =
 
@@ -676,11 +676,11 @@ void ATDPlayerController::UpdateBuildPadHighlight() const
 
     {
 
-        return; // Cursor isn't near any build pad right now -> no highlight to draw.
+        return; // Cursor isn't near a build pad, so there is nothing to draw.
 
     }
 
-    // Valid = free slot AND the player can currently afford this defender.
+    // Valid means the slot is free and the player can afford this defender.
 
     const bool bOccupied =
 
@@ -706,9 +706,8 @@ void ATDPlayerController::UpdateBuildPadHighlight() const
 
             : FColor(220, 60, 60, 140);
 
-    // A flat, short-lived translucent patch over the pad. Redrawn every tick so it tracks the
-    // cursor smoothly (same technique as the muzzle tracers in Tower/Defender) without ever
-    // leaving stale debug geometry behind if the cursor moves off the pad.
+    // A flat see-through patch over the pad that only lasts a moment. We redraw it every tick
+    // so it follows the cursor, like the tracers in Tower and Defender, and old patches never stay behind.
 
     DrawDebugSolidPlane(
 

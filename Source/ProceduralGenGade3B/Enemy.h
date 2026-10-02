@@ -1,13 +1,6 @@
 // Enemy.h
-// Base enemy class for the tower defence game.
-// Supports Basic, Bear and Wolf enemy variants, each with its own behaviour:
-//   Basic - walks the path and fights whatever defender or tower is in reach.
-//   Wolf  - pack hunter: leaves the path to chase nearby defenders, then rejoins it.
-//   Bear  - juggernaut: never stops for defenders, slams everything around it while
-//           marching on the tower, and enrages when badly hurt.
-// On top of the type, the wave director can make an enemy elite (Shielded, Regenerating, Swift,
-// Splitting) and let it reroute over the path network around heavily defended cells.
-// Poison and stun statuses drive the defender combos (Shatter, Venom spread).
+// Base enemy for the tower defence game. Basics walk the path and fight, Wolves hunt defenders and Bears march on the tower.
+// The wave director can also make an enemy elite or let it reroute. Poison and stun are used for the defender combos.
 
 #pragma once
 
@@ -21,7 +14,7 @@ class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
 class ADefender;
 
-// The flavour of loot an enemy drops.
+// The kind of loot an enemy drops.
 UENUM(BlueprintType)
 enum class EResourceType : uint8
 {
@@ -38,14 +31,14 @@ enum class EEnemyType : uint8
     Wolf UMETA(DisplayName = "Wolf")
 };
 
-// Elite modifiers the wave director can stamp onto an enemy to counter the player's defence.
+// Elite types the wave director can give an enemy to counter the player's defence.
 UENUM(BlueprintType)
 enum class EEliteModifier : uint8
 {
     None UMETA(DisplayName = "None"),
     Shielded UMETA(DisplayName = "Shielded"),         // Blocks the first few direct hits.
     Regenerating UMETA(DisplayName = "Regenerating"), // Heals over time unless poisoned.
-    Swift UMETA(DisplayName = "Swift"),               // Much faster, outruns slow area attacks.
+    Swift UMETA(DisplayName = "Swift"),               // Much faster, so it outruns slow area attacks.
     Splitting UMETA(DisplayName = "Splitting")        // Splits into small Basics on death.
 };
 
@@ -105,11 +98,11 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy")
     EEnemyType EnemyType = EEnemyType::Basic;
 
-    // Body colour, set per enemy type so each variant reads differently on the battlefield.
+    // Body colour. Each enemy type gets its own so they are easy to tell apart.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Visual")
     FLinearColor BodyColor = FLinearColor(0.85f, 0.15f, 0.15f);
 
-    // Wolf: how far from itself a wolf will notice a defender and leave the path to hunt it.
+    // Wolf: how close a defender has to be before the wolf leaves the path to hunt it.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Wolf")
     float HuntRadius = 750.0f;
 
@@ -121,83 +114,83 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Bear")
     float SlamInterval = 2.5f;
 
-    // Bear: radius of the ground slam that hits every defender around it.
+    // Bear: size of the ground slam that hits every defender around it.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Bear")
     float SlamRadius = 380.0f;
 
-    // Bear: fraction of AttackDamage dealt to each defender caught in a slam.
+    // Bear: how much of AttackDamage each defender in the slam takes.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Bear")
     float SlamDamageScale = 0.6f;
 
-    // Bear: health fraction at which the bear enrages.
+    // Bear: the bear gets angry when its health drops to this fraction.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Bear")
     float EnrageHealthFraction = 0.4f;
 
-    // Bear: movement speed multiplier while enraged.
+    // Bear: speed multiplier while enraged.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Bear")
     float EnrageSpeedMultiplier = 1.6f;
 
-    // Elite: health multiplier applied on top of the wave's scaling.
+    // Elite: extra health multiplier on top of the wave scaling.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Elite")
     float EliteHealthMultiplier = 1.5f;
 
-    // Elite (Shielded): direct hits blocked before the shield breaks.
+    // Elite, Shielded: how many direct hits get blocked before the shield breaks.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Elite")
     int32 ShieldHits = 3;
 
-    // Elite (Regenerating): fraction of max health healed per second while not poisoned.
+    // Elite, Regenerating: fraction of max health healed per second when not poisoned.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Elite")
     float RegenFractionPerSecond = 0.035f;
 
-    // Elite (Swift): movement speed multiplier.
+    // Elite, Swift: speed multiplier.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Elite")
     float SwiftSpeedMultiplier = 1.4f;
 
-    // Elite (Splitting): number of small Basics released on death.
+    // Elite, Splitting: how many small Basics come out when it dies.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Elite")
     int32 SplitCount = 2;
 
-    // Elite (Splitting): each child's max health as a fraction of the parent's.
+    // Elite, Splitting: each child's max health as a fraction of the parent's.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Elite")
     float SplitHealthFraction = 0.35f;
 
-    // Combo "Shatter": area damage multiplier against a stunned enemy.
+    // Shatter combo: area damage multiplier against a stunned enemy.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Combos")
     float ShatterMultiplier = 1.5f;
 
-    // Combo "Venom spread": radius poison jumps to when an arrow hits a poisoned enemy.
+    // Venom spread combo: how far the poison jumps when an arrow hits a poisoned enemy.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Combos")
     float VenomSpreadRadius = 320.0f;
 
-    // Combo "Venom spread": poison damage per second applied to each enemy it reaches.
+    // Venom spread combo: poison damage per second on each enemy it reaches.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Combos")
     float VenomDamagePerSecond = 6.0f;
 
-    // Combo "Venom spread": how long the spread poison lasts.
+    // Venom spread combo: how long the spread poison lasts.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Combos")
     float VenomDuration = 2.5f;
 
-    // Rerouting: whether this enemy looks for a less defended route (set by the wave manager).
+    // Rerouting: whether this enemy looks for a less defended route. The wave manager sets this.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Routing")
     bool bCanReroute = false;
 
-    // Rerouting: seconds between route evaluations.
+    // Rerouting: seconds between route checks.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Routing")
     float RerouteCheckInterval = 1.5f;
 
-    // Rerouting: switch only if the new route costs at most this fraction of the current one.
+    // Rerouting: only switch if the new route costs this fraction of the current one or less.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Routing")
     float RerouteImprovementRatio = 0.7f;
 
-    // Rerouting: route cost added per point of defender damage-per-second covering a cell.
+    // Rerouting: extra cost for each point of defender damage per second covering a cell.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Routing")
     float DangerCostWeight = 0.15f;
 
-    // Rerouting: limit so an enemy cannot flip between routes forever.
+    // Rerouting: a limit so an enemy cannot keep swapping routes forever.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Routing")
     int32 MaxReroutes = 2;
 
-    // Fired when a Splitting elite releases a child, so the wave manager can track it.
+    // Fires when a Splitting elite makes a child, so the wave manager can keep track of it.
     UPROPERTY(BlueprintAssignable, Category = "Enemy|Elite")
     FOnEnemySplit OnSplit;
 
@@ -245,7 +238,7 @@ public:
     UFUNCTION(BlueprintPure, Category = "Enemy|Bear")
     bool IsEnraged() const { return bEnraged; }
 
-    // Freeze movement and attacks for Duration seconds (bears shrug off half of it).
+    // Stops movement and attacks for Duration seconds. Bears only take half the stun.
     UFUNCTION(BlueprintCallable, Category = "Enemy")
     void ApplyStun(float Duration);
 
@@ -257,7 +250,7 @@ public:
 
     static FString GetEliteName(EEliteModifier Modifier);
 
-    // Turn this enemy into an elite (call after spawning and wave scaling).
+    // Turns this enemy into an elite. Call it after spawning and wave scaling.
     UFUNCTION(BlueprintCallable, Category = "Enemy|Elite")
     void MakeElite(EEliteModifier Modifier);
 
@@ -270,14 +263,14 @@ public:
     UFUNCTION(BlueprintPure, Category = "Enemy|Elite")
     int32 GetShieldHitsRemaining() const { return ShieldHitsRemaining; }
 
-    // Poison this enemy. DamagePerSecond may be 0 to only mark it (bomb clouds deal their own damage).
+    // Poisons this enemy. DamagePerSecond can be 0 to just mark it, because bomb clouds do their own damage.
     UFUNCTION(BlueprintCallable, Category = "Enemy|Combos")
     void ApplyPoison(float DamagePerSecond, float Duration, AActor* Source);
 
     UFUNCTION(BlueprintPure, Category = "Enemy|Combos")
     bool IsPoisoned() const { return PoisonTimeRemaining > 0.0f; }
 
-    // Called by the health component for every hit: shields, Shatter and Venom spread.
+    // The health component calls this on every hit. It handles shields, Shatter and Venom spread.
     float ModifyIncomingDamage(float Amount, AActor* Source);
 
     UFUNCTION(BlueprintPure, Category = "Enemy|Routing")
@@ -327,7 +320,7 @@ private:
     // Bear: slam cooldown.
     float SlamTimer = 0.0f;
 
-    // Bear: true once enraged (one-way).
+    // Bear: true once enraged. It never turns back off.
     bool bEnraged = false;
 
     // Seconds of stun left.
@@ -336,14 +329,14 @@ private:
     EEliteModifier EliteModifier = EEliteModifier::None;
     int32 ShieldHitsRemaining = 0;
 
-    // Poison status (bomb clouds mark it, venom spread also deals damage over time).
+    // Poison status. Bomb clouds mark it and venom spread also does damage over time.
     float PoisonTimeRemaining = 0.0f;
     float PoisonDamagePerSecond = 0.0f;
     float PoisonDamageAccumulated = 0.0f;
     float PoisonTickTimer = 0.0f;
     TWeakObjectPtr<AActor> PoisonSource;
 
-    // True while this enemy applies its own poison tick, so ticks skip shields and combos.
+    // True while this enemy applies its own poison tick, so the tick skips shields and combos.
     bool bApplyingStatusDamage = false;
 
     float RerouteTimer = 0.0f;
@@ -355,19 +348,19 @@ private:
     // Spawn effect timer.
     float SpawnEffectElapsed = 0.0f;
 
-    // Final scale after spawn effect.
+    // Final scale after the spawn effect.
     FVector SpawnTargetScale = FVector::OneVector;
 
-    // Apply the correct stats and mesh for the enemy type.
+    // Sets the right stats and mesh for the enemy type.
     void ApplyEnemyType();
 
-    // Push BodyColor onto the mesh material.
+    // Puts BodyColor onto the mesh material.
     void ApplyBodyColor();
 
     // Spawn animation.
     void UpdateSpawnEffect(float DeltaSeconds);
 
-    // Per-type behaviour, called from Tick.
+    // Behaviour for each enemy type, called from Tick.
     void TickBasic(float DeltaSeconds);
     void TickWolf(float DeltaSeconds);
     void TickBear(float DeltaSeconds);
@@ -375,13 +368,13 @@ private:
     // Movement.
     void MoveAlongPath(float DeltaSeconds);
 
-    // Steer towards a world location on the ground plane. Returns the remaining distance.
+    // Moves towards a point along the ground. Returns how far is left to go.
     float MoveTowardsLocation(const FVector& Destination, float DeltaSeconds);
 
-    // Turn to face a target (used while attacking).
+    // Turns to face a target while attacking.
     void FaceTowards(const FVector& Location, float DeltaSeconds);
 
-    // After leaving the path (wolf hunt), continue from the closest remaining waypoint.
+    // After a wolf hunt, carry on from the closest waypoint that is left.
     void RejoinPath();
 
     // Attack.
@@ -389,34 +382,34 @@ private:
         AActor* Target,
         float DeltaSeconds);
 
-    // Closest living defender within Radius, or null.
+    // Closest living defender within Radius, or null if there is none.
     ADefender* FindClosestDefender(float Radius) const;
 
-    // Basic: closest defender in attack range, otherwise the tower if in range.
+    // Basic: closest defender in attack range, or the tower if that is in range instead.
     AActor* FindTargetInRange() const;
 
     // Bear: damage every defender within SlamRadius.
     void PerformGroundSlam();
 
-    // Poison damage over time, regeneration and the elite/shield visuals.
+    // Poison damage over time, regeneration and the elite and shield visuals.
     void TickStatusEffects(float DeltaSeconds);
 
-    // Combo "Venom spread": poison every enemy around this one.
+    // Venom spread combo: poisons every enemy around this one.
     void SpreadVenom(AActor* Source);
 
-    // Splitting elite: release small Basics that carry on along this enemy's route.
+    // Splitting elite: spawns small Basics that carry on along this enemy's route.
     void SpawnSplitChildren();
 
-    // Shrink and weaken a freshly spawned split child.
+    // Makes a new split child smaller and weaker.
     void ConfigureAsSplitChild(float ParentMaxHealth);
 
-    // Look for a cheaper (less defended) route to the tower over the path network.
+    // Looks for a cheaper, less defended route to the tower over the path network.
     void TryReroute();
 
-    // Route cost from Start along Points, using the same cell cost as the pathfinder.
+    // Works out the cost from Start along Points, with the same cell cost the pathfinder uses.
     float EvaluateRouteCost(const FVector& Start, const TArray<FVector>& Points,
         TFunctionRef<float(const FVector&)> CellCost, float CellSize) const;
 
-    // Floating combat text above the enemy.
+    // Shows floating combat text above the enemy.
     void ShowCombatText(const FString& Text, const FColor& Color) const;
 };

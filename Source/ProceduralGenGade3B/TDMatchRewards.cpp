@@ -1,4 +1,4 @@
-// TDMatchRewards.cpp — see TDMatchRewards.h
+// TDMatchRewards.cpp - the overview is in TDMatchRewards.h.
 
 #include "TDMatchRewards.h"
 
@@ -86,7 +86,7 @@ FMatchResult UTDMatchRewards::BuildMatchResult(
 	Result.EnemiesKilled = FMath::Max(0, EnemiesKilled);
 	Result.SurvivingDefenders = FMath::Max(0, SurvivingDefenders);
 
-	// Score = defenders(10) + hits(30) + kills(20) + surviving defenders(5)
+	// Points per thing: 10 per defender placed, 30 per hit, 20 per kill and 5 per surviving defender.
 	Result.Score =
 		(Result.DefendersPlaced * 10)
 		+ (Result.HitsLanded * 30)

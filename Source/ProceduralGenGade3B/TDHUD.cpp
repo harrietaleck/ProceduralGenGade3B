@@ -1,4 +1,4 @@
-// TDHUD.cpp — see TDHUD.h for the overview.
+// TDHUD.cpp. See TDHUD.h for an overview.
 
 #include "TDHUD.h"
 #include "TDGameMode.h"
@@ -28,14 +28,14 @@ void ATDHUD::DrawHUD()
 {
 	Super::DrawHUD();
 
-	// The HUD is a pure view: everything it shows comes from the game mode.
+	// The HUD only draws things. All the values come from the game mode.
 	ATDGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ATDGameMode>() : nullptr;
 	if (!GameMode)
 	{
 		return;
 	}
 
-	// Hide match HUD chrome on the Blueprint start/menu level.
+	// Don't draw the match HUD on the start menu level.
 	const FString LevelName = GetWorld()->GetMapName();
 	if (LevelName.Contains(TEXT("StartScreen")))
 	{
@@ -113,7 +113,7 @@ void ATDHUD::DrawWaveForecast(ATDGameMode* GameMode, AWaveManager* WaveManager)
 			const bool bHeavy = Lane.BearCount > 0 || Lane.EliteCount > 0;
 			Lines.Add({ Text, bHeavy ? Danger : Body });
 
-			// Marker over the lane's spawn point so the player can see where it will come from.
+			// Put a marker over the lane's spawn point so the player can see where enemies come from.
 			if (Paths.IsValidIndex(Lane.Lane) && PlayerOwner)
 			{
 				FVector2D ScreenPos;
@@ -183,7 +183,7 @@ void ATDHUD::DrawDirectorGraph(const UWaveDirector* Director)
 		return FMath::Lerp(OutMin, OutMax, FMath::Clamp((Value - InMin) / (InMax - InMin), 0.0f, 1.0f));
 	};
 	auto WaveToX = [&](float Wave) { return Map(Wave, 1.0f, static_cast<float>(MaxWave), Left, Right); };
-	// Difficulty uses the left axis (0.6 - 1.7), score the right axis (0 - 100%).
+	// Difficulty goes on the left axis from 0.6 to 1.7. Score goes on the right axis from 0 to 100%.
 	auto DifficultyToY = [&](float D) { return Map(D, 0.6f, 1.7f, Bottom, Top); };
 	auto ScoreToY = [&](float S) { return Map(S, 0.0f, 1.0f, Bottom, Top); };
 
@@ -192,7 +192,7 @@ void ATDHUD::DrawDirectorGraph(const UWaveDirector* Director)
 	DrawLine(Left, Bottom, Right, Bottom, Axis, 2.0f);
 	DrawLine(Right, Top, Right, Bottom, Axis, 2.0f);
 
-	// Target score the director steers towards.
+	// The score the director is trying to hit.
 	const float TargetY = ScoreToY(Director->TargetPerformance);
 	DrawLine(Left, TargetY, Right, TargetY, FLinearColor(0.3f, 0.8f, 0.4f, 0.8f), 1.5f);
 	DrawText(TEXT("target"), FLinearColor(0.3f, 0.8f, 0.4f), Right - 60.0f, TargetY - 22.0f, Font, 0.9f);
@@ -212,7 +212,7 @@ void ATDHUD::DrawDirectorGraph(const UWaveDirector* Director)
 		return;
 	}
 
-	// Difficulty rating used for each wave, then the rating it moved to for the next one.
+	// Plot the difficulty used for each wave, then the difficulty picked for the next one.
 	const FLinearColor DifficultyColor(0.4f, 0.75f, 1.0f);
 	const FLinearColor ScoreColor(1.0f, 0.6f, 0.3f);
 	FVector2D PrevDifficulty(-1.0f, -1.0f);
@@ -321,7 +321,7 @@ void ATDHUD::DrawInfoPanel(ATDGameMode* GameMode)
 			InfoSecondaryScale, FLinearColor(0.92f, 0.92f, 0.92f));
 	}
 
-	// Wave director read-out: shows the adaptation happening live.
+	// Wave director info, so you can see the difficulty change while you play.
 	const AWaveManager* WaveManager = GameMode->GetWaveManager();
 	const UWaveDirector* Director = WaveManager && WaveManager->bUseAdaptiveDirector ? WaveManager->Director.Get() : nullptr;
 	if (Director)
@@ -404,7 +404,7 @@ void ATDHUD::DrawInfoPanel(ATDGameMode* GameMode)
 		TextY += InfoLineSpacing;
 	}
 
-	// Skip canvas PAUSED banner while SettingScreen is open.
+	// Don't draw the paused banner while the settings screen is open.
 	if (GameMode->IsPaused() && !GameMode->IsGameOver() && !GameMode->IsVictory() && !GameMode->IsSettingsVisible())
 	{
 		const float CenterX = Canvas->SizeX * 0.5f;
@@ -428,7 +428,7 @@ void ATDHUD::DrawEnemyHealthBars()
 		const FVector BarLocation = Enemy->GetActorLocation() + FVector(0.0f, 0.0f, 90.0f);
 		DrawWorldHealthBar(BarLocation, Health->GetHealthPercent(), Enemy->IsElite() ? 75.0f : 55.0f, 6.0f);
 
-		// Elite modifier and status effects above the bar.
+		// Show the elite type and any status effects above the bar.
 		FString Status;
 		if (Enemy->IsElite())
 		{
@@ -467,10 +467,10 @@ void ATDHUD::DrawDefenderHealthBars()
 		UHealthComponent* Health = Defender ? Defender->HealthComponent : nullptr;
 		if (!Health || Health->IsDead())
 		{
-			continue; // Destroyed/dying defenders don't need a bar drawn over them.
+			continue; // Dead defenders don't need a health bar.
 		}
 
-		// Float the bar a little above the defender's mesh so it doesn't overlap the model.
+		// Put the bar a bit above the defender so it doesn't cover the model.
 		const FVector BarLocation = Defender->GetActorLocation() + FVector(0.0f, 0.0f, 140.0f);
 		DrawWorldHealthBar(BarLocation, Health->GetHealthPercent(), 70.0f, 8.0f);
 	}
@@ -483,8 +483,8 @@ void ATDHUD::DrawWorldHealthBar(const FVector& WorldLocation, float HealthPercen
 		return;
 	}
 
-	// Project the 3D world position to a 2D screen position. Returns false if the point is
-	// behind the camera, in which case there's nothing sensible to draw.
+	// Turn the 3D world position into a 2D screen position. If the point is behind
+	// the camera this returns false and we skip it.
 	FVector2D ScreenPos;
 	if (!PlayerOwner->ProjectWorldLocationToScreen(WorldLocation, ScreenPos))
 	{
@@ -494,11 +494,11 @@ void ATDHUD::DrawWorldHealthBar(const FVector& WorldLocation, float HealthPercen
 	const float Left = ScreenPos.X - BarWidth * 0.5f;
 	const float Top = ScreenPos.Y - BarHeight * 0.5f;
 
-	// Dark background so the bar reads clearly against any part of the battlefield...
+	// Dark background first so the bar is easy to see on any part of the map.
 	DrawRect(FLinearColor(0.05f, 0.05f, 0.05f, 0.75f), Left, Top, BarWidth, BarHeight);
 
-	// ...then a green-to-red fill scaled by remaining health, same colour language as the
-	// Citadel readout so health always means the same thing everywhere on screen.
+	// Then fill it from red to green based on health, the same colours as the tower health
+	// so it reads the same everywhere.
 	const float Pct = FMath::Clamp(HealthPercent, 0.0f, 1.0f);
 	const FLinearColor FillColor = FMath::Lerp(FLinearColor::Red, FLinearColor::Green, Pct);
 	DrawRect(FillColor, Left, Top, BarWidth * Pct, BarHeight);

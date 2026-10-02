@@ -1,4 +1,5 @@
-// WaveDirector.cpp — see WaveDirector.h for the overview.
+// WaveDirector.cpp
+// The overview of how this works is at the top of WaveDirector.h.
 
 #include "WaveDirector.h"
 #include "Defender.h"
@@ -148,7 +149,7 @@ void UWaveDirector::EvaluateWave(UWorld* World)
 	FWavePerformance Result;
 	Result.bValid = true;
 
-	// Tower: losing TowerLossForZeroScore of max health in one wave scores zero.
+	// Tower score. Losing TowerLossForZeroScore of the max health in one wave gives zero.
 	if (const UHealthComponent* TowerHealth = GetTowerHealth(World))
 	{
 		Result.TowerDamageFraction = FMath::Max(0.0f, TowerHealthAtStart - TowerHealth->GetCurrentHealth())
@@ -156,19 +157,19 @@ void UWaveDirector::EvaluateWave(UWorld* World)
 	}
 	const float TowerScore = 1.0f - FMath::Clamp(Result.TowerDamageFraction / TowerLossForZeroScore, 0.0f, 1.0f);
 
-	// Kill speed: how far along their path enemies got before dying (leaks count as 1).
+	// Kill speed. How far along the path enemies got before dying. Enemies that reached the tower count as 1.
 	Result.AverageKillProgress = OutcomeCount > 0 ? KillProgressSum / OutcomeCount : 0.0f;
 	Result.Leaks = LeakCount;
 	const float KillScore = 1.0f - Result.AverageKillProgress;
 
-	// Defenders: share of the defence that survived the wave.
+	// Defenders. How much of the defence survived the wave.
 	const ATDGameMode* GameMode = GetTDGameMode(World);
 	const int32 PlacedDuring = GameMode ? FMath::Max(0, GameMode->GetMatchDefendersPlaced() - PlacedAtStart) : 0;
 	const int32 Fielded = DefendersAtStart + PlacedDuring;
 	Result.DefendersLost = FMath::Max(0, Fielded - CountLivingDefenders(World));
 	const float DefenderScore = Fielded > 0 ? 1.0f - static_cast<float>(Result.DefendersLost) / Fielded : 1.0f;
 
-	// Economy: a big unspent bank means the player is comfortable.
+	// Economy. If the player has lots of unspent loot, they are probably doing fine.
 	Result.BankedLoot = GameMode ? GameMode->GetResources() : 0;
 	const float EconomyScore = FMath::Clamp(Result.BankedLoot / 300.0f, 0.0f, 1.0f);
 
@@ -178,7 +179,7 @@ void UWaveDirector::EvaluateWave(UWorld* World)
 	Result.EconomyScore = EconomyScore;
 	Result.Score = 0.4f * TowerScore + 0.3f * KillScore + 0.2f * DefenderScore + 0.1f * EconomyScore;
 
-	// Rubber band towards the target: above target -> harder, below -> easier.
+	// Pull the difficulty towards the target. Doing better than the target makes it harder, doing worse makes it easier.
 	const float PreviousDifficulty = Difficulty;
 	Difficulty = FMath::Clamp(Difficulty + (Result.Score - TargetPerformance) * AdaptRate, MinDifficulty, MaxDifficulty);
 	Result.DifficultyBefore = PreviousDifficulty;
@@ -219,7 +220,7 @@ FWavePlan UWaveDirector::PlanWave(UWorld* World, int32 WaveNumber)
 {
 	BuildProfile(World);
 
-	// Same map seed + same play = same waves, while different play gives different waves.
+	// The same map seed and the same play give the same waves. Playing differently gives different waves.
 	const ATDGameMode* GameMode = GetTDGameMode(World);
 	const AProceduralTerrain* Terrain = GameMode ? GameMode->GetTerrain() : nullptr;
 	Random.Initialize((Terrain ? Terrain->Seed : 0) + WaveNumber * 7919 + FMath::RoundToInt(Difficulty * 100.0f));
@@ -228,16 +229,16 @@ FWavePlan UWaveDirector::PlanWave(UWorld* World, int32 WaveNumber)
 	Plan.WaveNumber = WaveNumber;
 	Plan.ThreatBudget = (BaseThreatBudget + BudgetGrowthPerWave * (WaveNumber - 1)) * Difficulty;
 
-	// When to spawn which type: unlock gradually, then weight by the player's style.
+	// Enemy types unlock over time, then we weight them by how the player plays.
 	const float Pressure = FMath::Clamp(Profile.DefendersPerLane / 3.0f, 0.0f, 1.0f);
 	const bool bWolvesUnlocked = WaveNumber >= WolfUnlockWave;
 	const bool bBearsUnlocked = WaveNumber >= BearUnlockWave;
 
-	// Basic: the filler, more of them for a struggling player (easiest to handle).
+	// Basics fill up the wave. A struggling player gets more of them because they are the easiest.
 	const float BasicWeight = 1.0f + (Difficulty < 0.9f ? 0.8f : 0.0f);
-	// Wolves hunt defenders: answer defender-heavy builds and slow single-target archers.
+	// Wolves hunt defenders, so they are good against lots of defenders and slow archers.
 	const float WolfWeight = bWolvesUnlocked ? 0.6f + 1.0f * Pressure + 0.8f * Profile.ArcherShare : 0.0f;
-	// Bears tank area damage and punish thin defences by marching straight to the tower.
+	// Bears can take area damage and walk straight to the tower if the defence is thin.
 	const float BearWeight = bBearsUnlocked
 		? 0.4f + 1.0f * Profile.AreaShare + 0.6f * (1.0f - Pressure) + (Difficulty > 1.1f ? 0.4f : 0.0f)
 		: 0.0f;
@@ -266,7 +267,7 @@ FWavePlan UWaveDirector::PlanWave(UWorld* World, int32 WaveNumber)
 		}
 	};
 
-	// Introduce each new type the wave it unlocks so the player always meets it.
+	// Add each new enemy type in the wave it unlocks, so the player always sees it.
 	if (WaveNumber == WolfUnlockWave && Remaining >= WolfCost * 2.0f)
 	{
 		AddWolfPack(2);
@@ -277,7 +278,7 @@ FWavePlan UWaveDirector::PlanWave(UWorld* World, int32 WaveNumber)
 		Remaining -= BearCost;
 	}
 
-	// Spend the rest of the budget with a weighted random pick among affordable types.
+	// Spend the rest of the budget by randomly picking types we can still afford, using the weights.
 	while (Remaining >= BasicCost)
 	{
 		const float W0 = BasicWeight;
@@ -302,8 +303,8 @@ FWavePlan UWaveDirector::PlanWave(UWorld* World, int32 WaveNumber)
 		}
 	}
 
-	// Open each wave with a Basic so the first contact is readable, keep the rest shuffled
-	// in pack-sized blocks so wolf packs stay together.
+	// Start each wave with a Basic so the first enemy is easy to read. The rest get shuffled
+	// in blocks so wolf packs stay together.
 	TArray<TArray<FPlannedSpawn>> Blocks;
 	for (const FPlannedSpawn& Spawn : Plan.Spawns)
 	{
@@ -337,8 +338,8 @@ FWavePlan UWaveDirector::PlanWave(UWorld* World, int32 WaveNumber)
 
 	const float Norm = NormalisedDifficulty();
 
-	// Elites: from the unlock wave, some enemies get a modifier, mostly the one that counters
-	// how the player is defending. Better players see more of them.
+	// Elites. Once they unlock, some enemies get a modifier, mostly the one that counters
+	// how the player defends. Better players see more of them.
 	if (WaveNumber >= EliteUnlockWave)
 	{
 		Plan.CounterElite = ChooseCounterElite();
@@ -364,7 +365,7 @@ FWavePlan UWaveDirector::PlanWave(UWorld* World, int32 WaveNumber)
 
 		int32 LastLeader = INDEX_NONE;
 		bool bAnyElite = false;
-		// Index 0 stays a plain Basic so the wave still opens readably.
+		// Skip the first spawn so the wave still starts with a normal Basic.
 		for (int32 i = 1; i < Plan.Spawns.Num(); ++i)
 		{
 			if (Plan.Spawns[i].bPackFollower)
@@ -379,7 +380,7 @@ FWavePlan UWaveDirector::PlanWave(UWorld* World, int32 WaveNumber)
 			}
 		}
 
-		// The unlock wave always introduces one elite so the player meets the mechanic.
+		// The first elite wave always has at least one elite so the player sees how they work.
 		if (!bAnyElite && WaveNumber == EliteUnlockWave && LastLeader != INDEX_NONE)
 		{
 			Plan.Spawns[LastLeader].Elite = Plan.CounterElite;
@@ -400,11 +401,11 @@ FWavePlan UWaveDirector::PlanWave(UWorld* World, int32 WaveNumber)
 		}
 	}
 
-	// Stat scaling: steady growth per wave, nudged by how well the player is doing.
+	// Enemy stats grow a bit every wave and get pushed up or down by how well the player is doing.
 	Plan.HealthMultiplier = (1.0f + 0.08f * (WaveNumber - 1)) * FMath::Lerp(0.85f, 1.15f, Norm);
 	Plan.DamageMultiplier = (1.0f + 0.06f * (WaveNumber - 1)) * FMath::Lerp(0.9f, 1.1f, Norm);
 	Plan.SpeedMultiplier = Difficulty > 1.2f ? 1.1f : 1.0f;
-	// Catch-up economy: struggling players earn a little more per kill.
+	// Struggling players get a bit more loot per kill to help them catch up.
 	Plan.RewardMultiplier = Difficulty < 1.0f ? 1.2f : 1.0f;
 
 	CurrentPlan = Plan;
@@ -464,7 +465,7 @@ int32 UWaveDirector::ChooseLaneWith(UWorld* World, EEnemyType Type, FRandomStrea
 
 	const TArray<FEnemyPath>& Paths = Terrain->GetEnemyPaths();
 
-	// A struggling player gets an even spread, and so do Basics for a player who is holding.
+	// Spread enemies evenly over the lanes for a struggling player. Basics also spread evenly for a player who is holding.
 	const bool bEvenSpread = Difficulty < 0.9f || (Type == EEnemyType::Basic && Difficulty <= 1.1f);
 	if (bEvenSpread)
 	{
@@ -476,8 +477,8 @@ int32 UWaveDirector::ChooseLaneWith(UWorld* World, EEnemyType Type, FRandomStrea
 	for (const FEnemyPath& Path : Paths)
 	{
 		const float Coverage = LaneCoverage(World, Path);
-		// Wolves are drawn to defended lanes (they hunt defenders); Bears and confident
-		// Basics probe the weakest lane.
+		// Wolves like lanes with defenders because they hunt them. Bears and Basics
+		// on a higher difficulty go for the weakest lane.
 		const float Weight = Type == EEnemyType::Wolf
 			? 1.0f + Coverage
 			: 1.0f / (1.0f + Coverage * 0.2f);
@@ -515,7 +516,7 @@ TArray<FLaneForecast> UWaveDirector::ForecastLanes(UWorld* World) const
 		Result[i].Lane = i;
 	}
 
-	// Dry run on copies so the real wave's random sequence is untouched.
+	// Do a test run on copies so the real wave's random numbers stay the same.
 	FRandomStream Stream = Random;
 	int32 RoundRobin = RoundRobinLane;
 	int32 PackLane = INDEX_NONE;
@@ -555,22 +556,22 @@ bool UWaveDirector::ShouldEnemyReroute(EEnemyType Type, EEliteModifier Elite) co
 
 EEliteModifier UWaveDirector::ChooseCounterElite() const
 {
-	// Light or no defence cannot out-damage healing.
+	// With no defenders the player cannot do enough damage to beat healing.
 	if (Profile.DefenderCount == 0)
 	{
 		return EEliteModifier::Regenerating;
 	}
-	// Fast elites run through bomb clouds before they finish ticking.
+	// Fast elites run through bomb clouds before the damage adds up.
 	if (Profile.AreaShare >= 0.4f)
 	{
 		return EEliteModifier::Swift;
 	}
-	// Shields soak the many small hits archers rely on.
+	// Shields block the many small hits that archers need.
 	if (Profile.ArcherShare >= 0.4f)
 	{
 		return EEliteModifier::Shielded;
 	}
-	// Heavy single-target defences get swarmed when an elite splits.
+	// Lots of single target defenders get swarmed when an elite splits into smaller enemies.
 	if (Profile.DefendersPerLane >= 2.0f)
 	{
 		return EEliteModifier::Splitting;

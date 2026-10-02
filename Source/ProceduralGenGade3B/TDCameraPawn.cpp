@@ -1,4 +1,4 @@
-// TDCameraPawn.cpp — see TDCameraPawn.h for the overview.
+// TDCameraPawn.cpp - the overview is in TDCameraPawn.h.
 
 #include "TDCameraPawn.h"
 #include "ProceduralTerrain.h"
@@ -9,26 +9,26 @@
 
 ATDCameraPawn::ATDCameraPawn()
 {
-	// We poll input and ease the zoom every frame.
+	// We check input and smooth the zoom every frame.
 	PrimaryActorTick.bCanEverTick = true;
 
-	// Bare scene root acts as the pivot the camera orbits/pans around.
+	// An empty scene root. The camera pans and turns around this point.
 	USceneComponent* Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
 
-	// Spring arm holds the camera up and back; its length is our zoom control.
+	// The spring arm holds the camera up and back. Changing its length is how we zoom.
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
 	SpringArm->SetupAttachment(Root);
 	SpringArm->TargetArmLength = TargetArmLength;
 	SpringArm->SetRelativeRotation(FRotator(CameraPitch, 0.0f, 0.0f));
-	SpringArm->bDoCollisionTest = true;    // Shorten the boom so the lens never clips terrain.
-	SpringArm->ProbeSize = 12.0f;          // Collision probe radius for that test.
-	SpringArm->bEnableCameraLag = true;    // Smooth, weighty movement.
+	SpringArm->bDoCollisionTest = true;    // Pulls the camera in so it doesn't go inside the terrain.
+	SpringArm->ProbeSize = 12.0f;          // Size of the sphere used for that check.
+	SpringArm->bEnableCameraLag = true;    // Makes movement feel smooth.
 	SpringArm->CameraLagSpeed = 10.0f;
-	SpringArm->bEnableCameraRotationLag = true; // Ease rotation too, so turns glide.
+	SpringArm->bEnableCameraRotationLag = true; // Smooth the turning as well.
 	SpringArm->CameraRotationLagSpeed = 10.0f;
 
-	// The view camera on the end of the boom.
+	// The camera sits on the end of the spring arm.
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(SpringArm, USpringArmComponent::SocketName);
 }
@@ -37,13 +37,13 @@ void ATDCameraPawn::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Apply the (possibly designer-tuned) pitch and starting zoom.
+	// Use the pitch and starting zoom set in the editor.
 	CurrentPitch = CameraPitch;
 	SpringArm->SetRelativeRotation(FRotator(CurrentPitch, 0.0f, 0.0f));
 	TargetArmLength = FMath::Clamp(TargetArmLength, MinZoom, MaxZoom);
 	SpringArm->TargetArmLength = TargetArmLength;
 
-	// Centre the view over the terrain's tower point so the player starts looking at the map.
+	// Start the camera over the tower so the player can see the map straight away.
 	for (TActorIterator<AProceduralTerrain> It(GetWorld()); It; ++It)
 	{
 		const FVector Focus = It->GetTowerLocation();
@@ -56,11 +56,11 @@ void ATDCameraPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-	// Zoom is event-driven (the wheel fires discrete notches); pan/rotate are polled in Tick.
+	// Zoom uses events because the wheel moves in clicks. Panning and turning are checked in Tick.
 	PlayerInputComponent->BindKey(EKeys::MouseScrollUp, IE_Pressed, this, &ATDCameraPawn::ZoomIn);
 	PlayerInputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &ATDCameraPawn::ZoomOut);
 
-	// Hold the middle mouse button to freely rotate the view around the battlefield.
+	// Hold the middle mouse button to turn the view around the map.
 	PlayerInputComponent->BindKey(EKeys::MiddleMouseButton, IE_Pressed, this, &ATDCameraPawn::BeginDragRotate);
 	PlayerInputComponent->BindKey(EKeys::MiddleMouseButton, IE_Released, this, &ATDCameraPawn::EndDragRotate);
 }
@@ -83,12 +83,12 @@ void ATDCameraPawn::UpdateDragRotation()
 		return;
 	}
 
-	// Raw mouse delta since last frame.
+	// How much the mouse moved since last frame.
 	float MouseX = 0.0f;
 	float MouseY = 0.0f;
 	PC->GetInputMouseDelta(MouseX, MouseY);
 
-	// Horizontal drag -> yaw the whole rig around the battlefield.
+	// Dragging sideways turns the whole camera around the map.
 	if (MouseX != 0.0f)
 	{
 		FRotator NewRot = GetActorRotation();
@@ -96,7 +96,7 @@ void ATDCameraPawn::UpdateDragRotation()
 		SetActorRotation(NewRot);
 	}
 
-	// Vertical drag -> tilt the boom, clamped between MaxPitch (steep) and MinPitch (shallow).
+	// Dragging up or down tilts the arm. It stays between MaxPitch (steep) and MinPitch (flat).
 	if (MouseY != 0.0f)
 	{
 		CurrentPitch = FMath::Clamp(CurrentPitch + MouseY * MouseRotateSpeed, MaxPitch, MinPitch);
@@ -110,13 +110,13 @@ void ATDCameraPawn::Tick(float DeltaSeconds)
 
 	UpdateMovement(DeltaSeconds);
 
-	// Free-rotate the view while the middle mouse button is held.
+	// Turn the view while the middle mouse button is held.
 	if (bIsDragging)
 	{
 		UpdateDragRotation();
 	}
 
-	// Ease the spring-arm length toward the desired zoom for a smooth feel.
+	// Slowly move the spring arm length towards the target zoom so it feels smooth.
 	SpringArm->TargetArmLength = FMath::FInterpTo(SpringArm->TargetArmLength, TargetArmLength, DeltaSeconds, ZoomInterpSpeed);
 }
 
@@ -128,7 +128,7 @@ void ATDCameraPawn::UpdateMovement(float DeltaSeconds)
 		return;
 	}
 
-	// --- Pan (WASD + arrow keys) ---
+	// Panning with WASD or the arrow keys
 	float Forward = 0.0f;
 	float Right = 0.0f;
 	if (PC->IsInputKeyDown(EKeys::W) || PC->IsInputKeyDown(EKeys::Up))    { Forward += 1.0f; }
@@ -138,13 +138,13 @@ void ATDCameraPawn::UpdateMovement(float DeltaSeconds)
 
 	if (Forward != 0.0f || Right != 0.0f)
 	{
-		// Pan on the ground plane relative to the current view yaw (ignore pitch).
+		// Move along the ground based on which way the camera faces. Tilt is ignored.
 		const FRotator YawOnly(0.0f, GetActorRotation().Yaw, 0.0f);
 		const FVector Dir = YawOnly.RotateVector(FVector(Forward, Right, 0.0f)).GetSafeNormal();
 		AddActorWorldOffset(Dir * PanSpeed * DeltaSeconds, /*bSweep=*/false);
 	}
 
-	// --- Rotate (Q/E) ---
+	// Turning with Q and E
 	float Turn = 0.0f;
 	if (PC->IsInputKeyDown(EKeys::E)) { Turn += 1.0f; }
 	if (PC->IsInputKeyDown(EKeys::Q)) { Turn -= 1.0f; }

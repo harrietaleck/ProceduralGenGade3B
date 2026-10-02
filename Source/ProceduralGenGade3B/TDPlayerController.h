@@ -1,7 +1,6 @@
 // TDPlayerController.h
-// Handles the player's only interaction in Part 1: clicking a buildable slot to place a
-// defender. It traces under the mouse cursor, snaps the click to the nearest terrain build
-// slot, checks the slot is free and affordable, then spends resources and spawns a defender.
+// Handles player input, mainly clicking a build slot to place a defender.
+// It finds the nearest slot under the mouse, checks it is free and that we can pay, then spawns the defender.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -19,22 +18,22 @@ class PROCEDURALGENGADE3B_API ATDPlayerController : public APlayerController
 public:
     ATDPlayerController();
 
-    /** Which defender to place (defaults to the C++ ADefender; can be a Blueprint child). */
+    /** Which defender to place. Starts as the C++ ADefender but can be a Blueprint child. */
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "TowerDefense")
     TSubclassOf<ADefender> DefenderClass;
 
-    /** How close (uu, on the ground plane) a click must be to a slot to count as selecting it. */
+    /** How close a click has to be to a slot to select it, in Unreal units on the ground. */
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "TowerDefense", meta = (ClampMin = "1.0"))
     float SlotClickTolerance = 160.0f;
 
-    /** Elite defender class toggled with Tab (costs Gem Stones from the meta wallet). */
+    /** The strong defender, switched on with Tab. It costs Gem Stones from the meta wallet. */
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "TowerDefense|Meta")
     TSubclassOf<ADefender> StrongDefenderClass;
 
     UFUNCTION(BlueprintPure, Category = "TowerDefense|Meta")
     bool IsPlacingStrongDefender() const { return bPlacingStrongDefender; }
 
-    //Select the basic /original defender from the HUD
+    //Select the basic/original defender from the HUD
     UFUNCTION(BlueprintCallable, Category = "TowerDefense|Defenders")
     void SelectBasicDefender();
 
@@ -46,15 +45,15 @@ public:
     UFUNCTION(BlueprintCallable, Category = "TowerDefense|Defenders")
     void SelectPoisonLightBombDefender();
 
-    //Select the gem-priced Strong defender (key 4, or toggle with Tab)
+    //Select the Strong defender that costs gems. Press 4 or toggle with Tab
     UFUNCTION(BlueprintCallable, Category = "TowerDefense|Defenders")
     void SelectStrongDefender();
 
-    //Change the defender that is active without chnaging the existing placement system
+    //Change the active defender without changing the existing placement system
     UFUNCTION(BlueprintCallable, Category = "TowerDefense|Defenders")
     void SelectDefenderClass(TSubclassOf<ADefender> NewDefenderClass);
 
-    //The defender class a click would place right now (null if nothing is selected)
+    //The defender a click would place right now. Null if nothing is selected
     TSubclassOf<ADefender> GetActiveDefenderClass() const;
 
 protected:
@@ -65,25 +64,25 @@ protected:
 
     virtual void Tick(float DeltaSeconds) override;
 
-    /** Left-click handler: attempt to place a defender under the cursor. */
+    /** Left click tries to place a defender under the cursor. */
     void OnPlaceDefenderClicked();
 
-    /** R-key handler: restart the match (new procedural map). */
+    /** R restarts the match with a new procedural map. */
     void OnRestartPressed();
 
-    /** P-key handler: pause/unpause the match. */
+    /** P pauses or unpauses the match. */
     void OnPausePressed();
 
-    /** N-key handler: toggle the engine's NavMesh debug overlay. */
+    /** N turns Unreal's NavMesh debug view on or off. */
     void OnToggleNavMeshDebug();
 
-    /** Tab: toggle basic vs strong defender placement. */
+    /** Tab switches between basic and strong defender placement. */
     void OnToggleDefenderMode();
 
-    /** U: spend Light Lanterns to upgrade the tower beam. */
+    /** U spends Light Lanterns to upgrade the tower beam. */
     void OnUpgradeBeamPressed();
 
-    /** G: show or hide the wave director graph. */
+    /** G shows or hides the wave director graph. */
     void OnToggleDirectorGraph();
 
 private:
@@ -95,14 +94,14 @@ private:
         const ATDGameMode* GameMode
     ) const;
 
-    /** True if the terrain's stored slot state says a defender already occupies this world slot. */
+    /** True if the terrain says a defender is already on this slot. */
     bool IsSlotOccupied(const FVector& SlotLocation) const;
 
-    /** Finds the terrain's build slot nearest the cursor, within SlotClickTolerance. Shared
-     *  by the click handler and the every-frame hover highlight so they never disagree. */
+    /** Finds the build slot nearest the cursor, within SlotClickTolerance. The click and
+     *  the hover highlight both use this so they always pick the same slot. */
     bool FindNearestSlotUnderCursor(FVector& OutSlotLocation) const;
 
-    /** Draws a translucent green (valid) or red (occupied / unaffordable) patch over the
-     *  build pad nearest the cursor, each frame, so placement validity is always clear. */
+    /** Draws a see-through patch on the build pad under the cursor every frame.
+     *  Green means you can place there, red means it is taken or too expensive. */
     void UpdateBuildPadHighlight() const;
 };

@@ -1,4 +1,5 @@
-﻿// TDGameMode_World.inl — included by the parent .cpp (not compiled alone).
+﻿// TDGameMode_World.inl - spawning the tower and build pads, and wave flow.
+// This file is included by TDGameMode.cpp and is not compiled on its own.
 
 AProceduralTerrain* ATDGameMode::FindTerrain() const
 {

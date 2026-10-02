@@ -1,8 +1,6 @@
-// The always-visible in-match HUD, built as a real UMG widget (not hand-drawn Canvas) so it
-// can host proper anchored layout, styled text, and a health bar. Every value it shows is
-// pushed to it by the gameplay systems' own delegates — it never polls, and it never ticks.
-// InitializeHUD() is called once, right after the match's actors exist, to bind those
-// delegates and do a single first-paint refresh; from then on the widget is purely reactive.
+// The main match HUD, made as a UMG widget so it can use anchors, styled text and a health bar.
+// It doesn't tick. It only updates when the gameplay delegates tell it something changed.
+// InitializeHUD() binds those delegates once and fills in the starting values.
 
 #pragma once
 
@@ -38,125 +36,125 @@ class PROCEDURALGENGADE3B_API UTDHUDWidget : public UUserWidget
 
 public:
 
-    /** Wires this widget up to the current match's GameMode/Tower/WaveManager and does an
-     *  immediate first refresh. Must be called once, after those actors exist (BeginPlay). */
+    /** Connects the widget to the game mode, tower and wave manager and shows the starting values.
+     *  Call it once in BeginPlay, after those actors exist. */
 
     UFUNCTION(BlueprintCallable, Category = "HUD")
 
     void InitializeHUD(ATDGameMode* InGameMode);
 
-    /** Briefly flash the Loot counter red when placement is rejected. */
+    /** Turns the Loot text red when the player can't afford a defender. */
 
     UFUNCTION(BlueprintCallable, Category = "HUD")
 
     void FlashLootInsufficient();
 
-    // --- Part A layout: five zones, one widget each, bound by exact name to the matching
-    // elements the Widget Blueprint's designer view must contain. ---
+    // Part A layout. Each of these binds to a widget with the same name in the Widget Blueprint,
+    // so the names have to match.
 
-    /** Top-left: "Wave 3 / 5". */
+    /** Top left, shows "Wave 3 / 5". */
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
     TObjectPtr<UTextBlock> WaveText;
 
-    /** Top-centre: "Preparing...", "Wave Starting", "Wave Active", "Wave Complete", etc. */
+    /** Top centre, shows the wave status like "Preparing..." or "Wave Active". */
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
     TObjectPtr<UTextBlock> WaveStatusText;
 
-    /** Top-right: "Loot: 175". */
+    /** Top right, shows "Loot: 175". */
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
     TObjectPtr<UTextBlock> LootText;
 
-    /** Bottom-left: the Citadel's health bar. */
+    /** Bottom left, the tower's health bar. */
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
     TObjectPtr<UProgressBar> TowerHealthBar;
 
-    /** Bottom-left: "82 / 100 HP" underneath the bar. */
+    /** Bottom left, shows "82 / 100 HP" under the bar. */
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
     TObjectPtr<UTextBlock> TowerHealthText;
 
-    /** Bottom-right: "7 Remaining". */
+    /** Bottom right, shows "7 Remaining". */
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
     TObjectPtr<UTextBlock> EnemiesRemainingText;
 
-    /** Optional: persistent meta-currency readout (leaf/logs/gems/lanterns). */
+    /** Optional text that shows the saved currencies, like essence, wood, gems and lanterns. */
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
     TObjectPtr<UTextBlock> MetaCurrencyText;
 
-    /** Optional: which defender type is selected + controls hint. */
+    /** Optional text that shows which defender is selected. */
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
     TObjectPtr<UTextBlock> DefenderModeText;
 
-    /** Optional: pause / settings button on the match HUD. */
+    /** Optional pause button on the match HUD. */
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
     TObjectPtr<UButton> PauseButton;
 
-    /** Optional alternate settings button name used by WBP_MatchHUD_V2. */
+    /** Optional settings button, this is the name WBP_MatchHUD_V2 uses. */
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
     TObjectPtr<UButton> SettingButton;
 
-    /** Live match score (WBP_MatchHUD_V2: Score). */
+    /** The current match score. Called Score in WBP_MatchHUD_V2. */
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
     TObjectPtr<UTextBlock> Score;
 
-    /** Forest Essence amount (WBP_MatchHUD_V2: forestScore). */
+    /** How much Forest Essence we have. Called forestScore in WBP_MatchHUD_V2. */
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
     TObjectPtr<UTextBlock> forestScore;
 
-    /** Wooden Might amount (WBP_MatchHUD_V2: WoodScore). */
+    /** How much Wooden Might we have. Called WoodScore in WBP_MatchHUD_V2. */
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
     TObjectPtr<UTextBlock> WoodScore;
 
-    /** Gem Stones amount (WBP_MatchHUD_V2: GemScore). */
+    /** How many Gem Stones we have. Called GemScore in WBP_MatchHUD_V2. */
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
     TObjectPtr<UTextBlock> GemScore;
 
-    /** Light Lanterns amount (WBP_MatchHUD_V2: LightScore). */
+    /** How many Light Lanterns we have. Called LightScore in WBP_MatchHUD_V2. */
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
     TObjectPtr<UTextBlock> LightScore;
 
-    //This is the button to select the original defender
+    //Button that selects the basic defender
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
     TObjectPtr<UButton> BasicDefenderButton;
 
-    //This is the button to select the arccheer defender
+    //Button that selects the archer defender
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
     TObjectPtr<UButton> ArcherDefenderButton;
 
-    //This is the button to select the Poison Light Bomb defender.
+    //Button that selects the Poison Light Bomb defender
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 
@@ -174,7 +172,7 @@ public:
 
     );
 
-    /** Push the live match score into the HUD Score text. */
+    /** Updates the Score text with the current match score. */
 
     UFUNCTION(BlueprintCallable, Category = "HUD")
 
@@ -242,23 +240,23 @@ private:
 
     void HandleSettingsClicked();
 
-    //Connect the 3 defenders to the player controller
+    //Hooks the 3 defender buttons up to the player controller
 
     void BindDefenderButtons();
 
-    //Basic defender button callback
+    //Runs when the basic defender button is clicked
 
     UFUNCTION()
 
     void HandleBasicDefenderClicked();
 
-    //Archer defender button callback
+    //Runs when the archer defender button is clicked
 
     UFUNCTION()
 
     void HandleArcherDefenderClicked();
 
-    //Poison Light Bomb button callback
+    //Runs when the Poison Light Bomb button is clicked
 
     UFUNCTION()
 
@@ -272,12 +270,12 @@ private:
 
     void StretchTopBanner();
 
-    /** Refreshes the parts of the display that don't have their own dedicated delegate
-     *  (the "Wave X / Y" counter, which changes alongside several different events). */
+    /** Updates the "Wave X / Y" counter. It has no delegate of its own because
+     *  a few different wave events can change it. */
 
     void RefreshWaveCounter();
 
-    /** Applies the Green/Yellow/Red colour rule to the tower health bar for a given fraction. */
+    /** Sets the tower health bar to green, yellow or red depending on how much health is left. */
 
     void UpdateTowerHealthBarColor(float HealthFraction);
 

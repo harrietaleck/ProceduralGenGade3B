@@ -28,7 +28,7 @@ namespace
 
 	static int32 PreferredMenuZOrder(const FString& Name)
 	{
-		// Keep overlays above the start screen.
+		// Other menus go on top of the start screen.
 		if (Name.Contains(TEXT("StartScreen")))
 		{
 			return 100;
@@ -75,9 +75,9 @@ namespace
 
 		if (UImage* Image = Cast<UImage>(Root))
 		{
-			// Only resize images that already represent a screen-sized background.
-			// Stretching icons and decorative images makes them overlap the entire
-			// viewport and intercept clicks intended for menu buttons.
+			// Only stretch images that are meant to be full screen backgrounds.
+			// If we stretch icons too they cover the whole screen and block clicks
+			// on the menu buttons.
 			if (const UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Image->Slot))
 			{
 				const FVector2D Size = CanvasSlot->GetSize();
@@ -145,7 +145,7 @@ void UTDMenuFunctionLibrary::StretchWidgetToFillScreen(UUserWidget* Widget, bool
 		ClassName.Contains(TEXT("SettingScreen"))
 		|| ClassName.Contains(TEXT("GameOverview"));
 
-	// Do NOT call SetDesiredSizeInViewport — that forces point anchors and a fixed size.
+	// Don't use SetDesiredSizeInViewport here. It forces point anchors and a fixed size.
 	if (UGameViewportSubsystem* ViewportSubsystem = UGameViewportSubsystem::Get())
 	{
 		FGameViewportWidgetSlot Slot;
@@ -183,7 +183,7 @@ void UTDMenuFunctionLibrary::StretchWidgetToFillScreen(UUserWidget* Widget, bool
 		RootScale->SetStretch(EStretch::ScaleToFill);
 		RootScale->SetStretchDirection(EStretchDirection::Both);
 	}
-	// Stretch only screen-sized background images; controls retain their designer slots.
+	// Only stretch the background images. Buttons and other controls keep their designer layout.
 	StretchImagesRecursive(Root, bForceScreenImage);
 
 	Widget->SetVisibility(ESlateVisibility::Visible);
@@ -212,7 +212,7 @@ void UTDMenuFunctionLibrary::StretchOpenMenuScreens(UObject* WorldContextObject)
 	}
 
 	TArray<UUserWidget*> MenuWidgets;
-	// Include non-top-level in case a screen was parented oddly.
+	// Get every user widget in the world so we can find the menu screens.
 	UWidgetBlueprintLibrary::GetAllWidgetsOfClass(
 		World,
 		MenuWidgets,
@@ -232,8 +232,8 @@ void UTDMenuFunctionLibrary::StretchOpenMenuScreens(UObject* WorldContextObject)
 			continue;
 		}
 
-		// Do not resurrect removed/hidden menu screens. The owning Blueprint decides
-		// which screen is active; this helper only corrects active screen geometry.
+		// Skip screens that were removed, we don't want to bring them back. The Blueprint
+		// picks which screen is open. This just fixes the size of the open ones.
 		if (UGameViewportSubsystem* ViewportSubsystem = UGameViewportSubsystem::Get())
 		{
 			if (!ViewportSubsystem->IsWidgetAdded(Widget))

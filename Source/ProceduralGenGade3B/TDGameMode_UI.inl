@@ -1,4 +1,5 @@
-﻿// TDGameMode_UI.inl — included by the parent .cpp (not compiled alone).
+﻿// TDGameMode_UI.inl - settings, pause and end screen widgets.
+// This file is included by TDGameMode.cpp and is not compiled on its own.
 
 void ATDGameMode::BindSettingsButtons()
 {
