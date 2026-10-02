@@ -198,6 +198,9 @@ private:
 
     void HideLootFlash();
 
+    //Moves the loot readout to the bottom right so other panels cannot cover it
+    void PlaceLootBottomRight();
+
     UFUNCTION()
 
     void HandleResourcesChanged(int32 NewAmount);

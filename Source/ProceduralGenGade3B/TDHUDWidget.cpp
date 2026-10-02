@@ -10,10 +10,62 @@
 #include "Components/TextBlock.h"
 #include "Components/ProgressBar.h"
 #include "Components/Button.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+
+void UTDHUDWidget::PlaceLootBottomRight()
+{
+    if (!LootText)
+    {
+        return;
+    }
+
+    //Put it straight on the root canvas so a parent box can't push it off screen
+    UCanvasPanelSlot* LootSlot = nullptr;
+
+    if (UCanvasPanel* RootCanvas = Cast<UCanvasPanel>(GetRootWidget()))
+    {
+        if (LootText->GetParent() != RootCanvas)
+        {
+            LootText->RemoveFromParent();
+            RootCanvas->AddChildToCanvas(LootText);
+        }
+
+        LootSlot = Cast<UCanvasPanelSlot>(LootText->Slot);
+    }
+    else
+    {
+        LootSlot = Cast<UCanvasPanelSlot>(LootText->Slot);
+    }
+
+    if (LootSlot)
+    {
+        LootSlot->SetAnchors(FAnchors(1.0f, 1.0f));
+        LootSlot->SetAlignment(FVector2D(1.0f, 1.0f));
+        LootSlot->SetAutoSize(true);
+        LootSlot->SetPosition(FVector2D(-40.0f, -30.0f));
+        LootSlot->SetZOrder(100);
+    }
+
+    FSlateFontInfo LootFont = LootText->GetFont();
+    LootFont.Size = FMath::Max(LootFont.Size, 30);
+    LootText->SetFont(LootFont);
+
+    LootText->SetJustification(ETextJustify::Right);
+    LootText->SetShadowOffset(FVector2D(2.0f, 2.0f));
+    LootText->SetShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.85f));
+    LootText->SetRenderOpacity(1.0f);
+    LootText->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+    DefaultLootColor = FLinearColor(1.0f, 0.85f, 0.2f);
+    LootText->SetColorAndOpacity(DefaultLootColor);
+}
 
 void UTDHUDWidget::InitializeHUD(ATDGameMode* InGameMode)
 {
     GameMode = InGameMode;
+
+    PlaceLootBottomRight();
 
     if (!GameMode)
     {
