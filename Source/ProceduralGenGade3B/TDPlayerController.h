@@ -83,6 +83,9 @@ protected:
     /** U: spend Light Lanterns to upgrade the tower beam. */
     void OnUpgradeBeamPressed();
 
+    /** G: show or hide the wave director graph. */
+    void OnToggleDirectorGraph();
+
 private:
 
     bool bPlacingStrongDefender = false;
