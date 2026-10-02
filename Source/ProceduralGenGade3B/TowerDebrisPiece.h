@@ -1,5 +1,5 @@
 // TowerDebrisPiece.h
-// A single physics-driven stone chunk spawned when the central tower is destroyed.
+// One stone chunk that uses physics. These spawn when the main tower is destroyed.
 
 #pragma once
 
@@ -17,7 +17,7 @@ class PROCEDURALGENGADE3B_API ATowerDebrisPiece : public AActor
 public:
 	ATowerDebrisPiece();
 
-	/** Spawn with a mesh, size, and outward impulse from the tower centre. */
+	/** Sets the mesh, the size, and the push away from the tower centre. */
 	void InitDebris(UStaticMesh* Mesh, const FVector& Scale, const FVector& Impulse);
 
 protected:

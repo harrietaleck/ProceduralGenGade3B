@@ -1,4 +1,4 @@
-//First header matches
+//BombDefender.cpp, the poison light bomb defender that throws area bombs
 #include "BombDefender.h"
 
 #include "Enemy.h"
@@ -12,7 +12,7 @@
 
 APoisonLightBombDefender::APoisonLightBombDefender()
 {
-    //Disable the settings of the original firing system
+    //Turn off the original firing system
     bUseDefaultAttack = false;
     DefenderName = TEXT("Bomb");
 
@@ -26,7 +26,7 @@ APoisonLightBombDefender::APoisonLightBombDefender()
     {
         MeshComponent->SetStaticMesh(SphereMesh.Object);
 
-        //Save the sphere mesh so DetonateBomb() can reuse it safely
+        //Save the sphere mesh so the blast visuals can reuse it later
         BombAreaMesh = SphereMesh.Object;
     }
 
@@ -36,7 +36,7 @@ APoisonLightBombDefender::APoisonLightBombDefender()
         MeshComponent->SetRelativeScale3D(FVector(0.8f, 0.8f, 0.8f));
     }
 
-    //Make sure the defender doesnt rely on projectile
+    //The bomb defender doesn't use projectiles
     ProjectileClass = nullptr;
 
     //Bombs are lobbed over a wide area
@@ -157,7 +157,7 @@ void APoisonLightBombDefender::SpawnBlastVisuals(const FVector& AreaLocation)
     //Create a temporary flattened sphere to show the blast area
     if (UStaticMeshComponent* BombAreaVisual = NewObject<UStaticMeshComponent>(this))
     {
-        //Reuse the sphere loaded in the constructor (ConstructorHelpers can't run during gameplay)
+        //Reuse the sphere from the constructor. ConstructorHelpers can't run during gameplay
         if (BombAreaMesh)
         {
             BombAreaVisual->SetStaticMesh(BombAreaMesh);
@@ -191,7 +191,7 @@ int32 APoisonLightBombDefender::DamageEnemiesInArea(const FVector& AreaLocation,
         return 0;
     }
 
-    //Collect first so enemies destroyed by the damage don't disturb the iteration
+    //Collect the enemies first, so ones that die from the damage don't break the loop
     TArray<UHealthComponent*> Victims;
     TArray<AEnemy*> PoisonTargets;
     for (TActorIterator<AEnemy> It(GetWorld()); It; ++It)

@@ -4,9 +4,9 @@
 #include "Defender.h"
 #include "ArcherDefender.generated.h"
 
-//Create a defender that attacks in long distances.
-//It always shoots the enemies closest to the tower (the biggest threat) and every few
-//shots looses a volley that hits several enemies at once.
+//Create a defender that attacks from a long distance.
+//It always shoots the enemies closest to the tower, since they are the biggest threat.
+//Every few shots it fires a volley that hits several enemies at once.
 UCLASS()
 class PROCEDURALGENGADE3B_API AArcherDefender : public ADefender
 {
@@ -39,7 +39,7 @@ private:
     //Counts shots so every Nth one becomes a volley
     int32 ShotCounter = 0;
 
-    //Form the archer functionality to fire arrows afar
+    //Fires the archer's arrows at enemies far away
     void FireArrow();
 
     //Spawn one arrow at an enemy

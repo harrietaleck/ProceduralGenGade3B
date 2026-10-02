@@ -1,4 +1,4 @@
-// Tower.cpp — see Tower.h for the overview.
+// Tower.cpp - the overview is in Tower.h.
 
 #include "Tower.h"
 #include "HealthComponent.h"

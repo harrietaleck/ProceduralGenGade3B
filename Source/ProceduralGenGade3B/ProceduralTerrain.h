@@ -1,16 +1,6 @@
 // ProceduralTerrain.h
-// A runtime-generated tower-defence terrain.
-//
-// Responsibilities:
-//   * Build a 3D grid mesh entirely in code (no pre-authored landscape), so the map
-//     is different every time the game starts (driven by a random seed).
-//   * Carve at least three walkable PATHS from the map edges to a central TOWER point.
-//   * Publish the data the rest of the game needs: enemy spawn points, the ordered
-//     path waypoints enemies walk along, the tower location, and the buildable
-//     locations where the player may place defenders (never on the path).
-//
-// The mesh itself is drawn with a UProceduralMeshComponent. We use one vertex-per-cell-corner
-// (a low-poly / faceted look) which makes per-cell colouring and path flattening simple.
+// Tower defence terrain that is built in code from a random seed, so every game gets a new map.
+// It carves the enemy paths to the tower and gives the rest of the game the spawn points, waypoints and build pads.
 
 #pragma once
 
@@ -24,50 +14,49 @@ class UProceduralMeshComponent;
 class UMaterialInterface;
 class UStaticMesh;
 
-/** What a single grid cell is used for. Drives colour, height flattening and buildability. */
+/** What a grid cell is used for. This decides its colour, height and if you can build on it. */
 UENUM(BlueprintType)
 enum class ECellType : uint8
 {
-	Terrain    UMETA(DisplayName = "Terrain"),   // Default decorative ground (raised by noise, not walkable).
-	Path       UMETA(DisplayName = "Path"),       // Flattened corridor the enemies walk along.
-	Buildable  UMETA(DisplayName = "Buildable"),  // Flat pad next to a path where a defender may be placed.
-	Tower      UMETA(DisplayName = "Tower")        // The single central cell that holds the player's tower.
+	Terrain    UMETA(DisplayName = "Terrain"),   // Normal ground, raised by noise. Enemies don't walk here.
+	Path       UMETA(DisplayName = "Path"),       // Flat strip the enemies walk along.
+	Buildable  UMETA(DisplayName = "Buildable"),  // Flat pad next to a path where a defender can go.
+	Tower      UMETA(DisplayName = "Tower")        // The centre cell where the player's tower sits.
 };
 
 /**
- * One enemy route through the map: the spawn point plus the ordered list of world-space
- * waypoints leading to the tower. Exposed to Blueprint so the spawner/enemies can read it.
+ * One enemy route: where it spawns and the list of world points it walks to reach the tower.
+ * Blueprint can read it so the spawner and enemies can use it.
  */
 USTRUCT(BlueprintType)
 struct FEnemyPath
 {
 	GENERATED_BODY()
 
-	/** World location where enemies for this route spawn (first waypoint). */
+	/** Where enemies on this route spawn. Same as the first waypoint. */
 	UPROPERTY(BlueprintReadOnly, Category = "Terrain")
 	FVector SpawnPoint = FVector::ZeroVector;
 
-	/** Ordered world-space points from the spawn point to the tower. Enemies walk these in order. */
+	/** World points from the spawn to the tower. Enemies walk them in order. */
 	UPROPERTY(BlueprintReadOnly, Category = "Terrain")
 	TArray<FVector> Waypoints;
 };
 
 /**
- * A single procedurally-placed defender build pad: its world location plus whether a defender
- * currently stands on it. Occupancy is explicit, persisted state set by the placement flow
- * (ATDPlayerController::SetSlotOccupied via the terrain) rather than re-derived every frame by
- * scanning all placed defenders.
+ * A build pad for a defender, with its location and whether something is on it.
+ * The placement code sets bOccupied through the terrain, so we don't have to scan
+ * every defender each frame to work it out.
  */
 USTRUCT(BlueprintType)
 struct FDefenderSlot
 {
 	GENERATED_BODY()
 
-	/** World-space location of the pad (ground level, cell centre). */
+	/** World location of the pad, at ground level in the centre of the cell. */
 	UPROPERTY(BlueprintReadOnly, Category = "Terrain")
 	FVector Location = FVector::ZeroVector;
 
-	/** True while a defender occupies this pad. */
+	/** True while a defender is standing on this pad. */
 	UPROPERTY(BlueprintReadOnly, Category = "Terrain")
 	bool bOccupied = false;
 };
@@ -80,165 +69,160 @@ class PROCEDURALGENGADE3B_API AProceduralTerrain : public AActor
 public:
 	AProceduralTerrain();
 
-	// ---- Tunable generation parameters (editable per-instance in the editor / Blueprint) ----
+	// ---- Generation settings you can tweak in the editor or Blueprint ----
 
-	/** Number of cells along each side of the square grid. Larger = bigger, more detailed map. */
+	/** How many cells along each side of the square grid. Bigger number, bigger map. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Grid", meta = (ClampMin = "8"))
 	int32 GridSize = 40;
 
-	/** World size (Unreal units) of one square cell. */
+	/** Size of one square cell in Unreal units. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Grid", meta = (ClampMin = "50.0"))
 	float CellSize = 200.0f;
 
-	/** Maximum height (uu) that noise can raise a terrain vertex above the path plane. */
+	/** The highest the noise can push the ground above the path level, in Unreal units. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Grid", meta = (ClampMin = "0.0"))
 	float HeightScale = 600.0f;
 
-	/** Number of fractal-noise octaves summed for the height field. More octaves = more fine
-	 *  detail layered on top of the broad shape, at a small extra generation cost. */
+	/** How many layers of noise get added together for the height. More layers add finer
+	 *  detail on top of the big shapes, but cost a little more to generate. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Noise", meta = (ClampMin = "1", ClampMax = "8"))
 	int32 NoiseOctaves = 4;
 
-	/** Base noise frequency: 1/N means the broadest terrain feature is roughly N cells across.
-	 *  Smaller values = larger, smoother hills; larger values = tighter, choppier terrain. */
+	/** Starting noise frequency. A value of 1/N makes the biggest hills about N cells wide.
+	 *  Smaller values give bigger, smoother hills. Larger values give choppier ground. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Noise", meta = (ClampMin = "0.01", ClampMax = "1.0"))
 	float NoiseBaseFrequency = 0.125f;
 
-	/** How much each successive octave's amplitude shrinks (0..1). Lower = smoother overall;
-	 *  higher = rougher, more jagged detail. */
+	/** How much weaker each noise layer is than the one before (0 to 1). Lower is smoother,
+	 *  higher is rougher and more jagged. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Noise", meta = (ClampMin = "0.1", ClampMax = "0.9"))
 	float NoisePersistence = 0.5f;
 
-	/** How many separate enemy paths to carve. The brief requires at least three. */
+	/** How many enemy paths to carve. The brief says we need at least three. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Paths", meta = (ClampMin = "3"))
 	int32 NumPaths = 4;
 
-	/** Half-width of a carved path, in cells (0 = single-cell path, 1 = three-cell-wide, ...). */
+	/** Half the width of a path in cells. 0 makes a one-cell path, 1 makes it three cells wide. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Paths", meta = (ClampMin = "0", ClampMax = "3"))
 	int32 PathHalfWidth = 1;
 
-	/** Maximum number of buildable defender pads to expose (chosen from all valid candidates). */
+	/** Most defender pads we hand out, picked from all the valid spots. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Defenders", meta = (ClampMin = "1"))
 	int32 MaxDefenderSlots = 24;
 
-	/** Chaikin corner-cutting passes applied to each path's waypoints after the raw random walk
-	 *  is carved. 0 = the raw, blocky cell-by-cell line; higher values round it into a smoother
-	 *  curve. The spawn point and tower point are always kept exact regardless of this value. */
+	/** How many Chaikin smoothing passes to run on each path after it is carved.
+	 *  0 keeps the blocky cell by cell line, higher values make it curvier.
+	 *  The spawn point and tower point never move. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Paths", meta = (ClampMin = "0", ClampMax = "5"))
 	int32 PathSmoothingIterations = 1;
 
-	/** After each cleared wave the whole grid grows and lanes can branch (lecture feedback). */
+	/** How many cells the grid grows on each side after a wave is cleared. Lanes can also branch then. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Grid", meta = (ClampMin = "0"))
 	int32 GridRingGrowthPerWave = 2;
 
-	/** How many times the grid is allowed to grow outward during a match. */
+	/** How many times the grid can grow during one match. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Grid", meta = (ClampMin = "0"))
 	int32 MaxGridExpansions = 8;
 
-	/** Absolute cap on grid width/height after repeated growth. */
+	/** The biggest the grid is allowed to get after growing. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Grid", meta = (ClampMin = "8"))
 	int32 MaxGridSize = 64;
 
-	/** New forked lanes carved from existing paths after each wave. */
+	/** How many new branch lanes split off existing paths after each wave. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Paths", meta = (ClampMin = "0"))
 	int32 BranchesAddedPerWave = 2;
 
-	/** Hard cap on total enemy lanes (main + branches). */
+	/** Most enemy lanes allowed in total, main paths plus branches. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Paths", meta = (ClampMin = "3"))
 	int32 MaxTotalLanes = 16;
 
-	/** Branch lanes are carved narrower than the main routes. */
+	/** Half width for branch lanes. They are thinner than the main paths. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Paths", meta = (ClampMin = "0", ClampMax = "3"))
 	int32 BranchPathHalfWidth = 0;
 
-	/** Material applied to the terrain mesh. Defaults to a vertex-colour material so the
-	 *  path/buildable/tower cell colours are visible. Assignable to a custom material later. */
+	/** Material on the terrain mesh. By default it uses a vertex colour material so you can
+	 *  see the path, build pad and tower colours. You can swap in your own material later. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Visual")
 	TObjectPtr<UMaterialInterface> TerrainMaterial;
 
-	/** When true, BeginPlay picks a brand-new random seed so every play session is different. */
+	/** If true, a new random seed is picked each game so every session is different. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Seed")
 	bool bRandomizeSeedOnBeginPlay = true;
 
-	/** The seed used to drive all randomness. Same seed => identical map (useful for debugging). */
+	/** Seed for all the randomness. The same seed always gives the same map, which helps with debugging. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Seed")
 	int32 Seed = 12345;
 
-	/** When true, draws the terrain bounds, every path, the tower, build slots and spawn
-	 *  points as debug shapes, and logs the seed. Purely diagnostic — safe to leave off;
-	 *  toggling it off removes every trace of the visualisation (nothing else depends on it). */
+	/** If true, draws the terrain bounds, paths, tower, build slots and spawn points as debug
+	 *  shapes and logs the seed. It is only for debugging, nothing else depends on it. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Debug")
 	bool bDebugMode = false;
 
-	/** How long (seconds) the debug shapes persist once drawn. */
+	/** How many seconds the debug shapes stay on screen. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Debug", meta = (ClampMin = "0.0", EditCondition = "bDebugMode"))
 	float DebugDrawDuration = 20.0f;
 
-	// ---- Procedural decoration (trees / rocks / buildings) ----
+	// ---- Decorations (trees, rocks, buildings) ----
 
-	/** When false, terrain generation skips prop scattering entirely. */
+	/** If false, no props get scattered on the terrain. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations")
 	bool bScatterDecorations = true;
 
-	/** Chance [0..1] per eligible terrain cell to spawn a tree. */
+	/** Chance from 0 to 1 that a free terrain cell gets a tree. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float TreeDensity = 0.07f;
 
-	/** Chance [0..1] per eligible terrain cell to spawn a rock. */
+	/** Chance from 0 to 1 that a free terrain cell gets a rock. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float RockDensity = 0.045f;
 
-	/** Chance [0..1] per eligible terrain cell to spawn a building (kept sparse). */
+	/** Chance from 0 to 1 that a free terrain cell gets a building. Keep this low. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float BuildingDensity = 0.018f;
 
-	/** Minimum grid-cell distance from paths, build pads, and the tower centre. */
+	/** How many cells props must stay away from paths, build pads and the tower. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations", meta = (ClampMin = "0"))
 	int32 DecorationPathBufferCells = 2;
 
-	/** Tree meshes for TerrainProp scatter. Empty = auto-load VRS_LowPolyNatureEssentials trees/bushes. */
+	/** Tree meshes to scatter. If empty, the trees and bushes from VRS_LowPolyNatureEssentials are loaded. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations|Meshes")
 	TArray<TObjectPtr<UStaticMesh>> TreeMeshes;
 
-	/** Rock / stump / log meshes. Empty = auto-load VRS_LowPolyNatureEssentials rocks. */
+	/** Rock, stump and log meshes. If empty, the VRS_LowPolyNatureEssentials rocks are loaded. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations|Meshes")
 	TArray<TObjectPtr<UStaticMesh>> RockMeshes;
 
-	/** Ruin / fence / prop meshes. Empty = auto-load VRS_LowPolyNatureEssentials arch props. */
+	/** Ruin, fence and prop meshes. If empty, the VRS_LowPolyNatureEssentials props are loaded. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Terrain|Decorations|Meshes")
 	TArray<TObjectPtr<UStaticMesh>> BuildingMeshes;
 
-	// ---- Generation entry points ----
+	// ---- Generation functions ----
 
-	/** Regenerates the whole terrain from the current parameters. Callable from the editor Details panel. */
+	/** Builds the whole terrain again from the current settings. There is a button for it in the Details panel. */
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Terrain")
 	void GenerateTerrain();
 
-	/** Picks a new random seed and regenerates. Handy as an editor preview button. */
+	/** Picks a new random seed and builds the terrain again. Useful for previewing in the editor. */
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Terrain")
 	void RandomizeAndRegenerate();
 
 	/**
-	 * The single, explicit entry point a match's GameMode must call — once, before reading
-	 * any terrain data — to guarantee this actor's world is freshly generated and current.
-	 * Deliberately NOT done automatically in BeginPlay(): Unreal does not guarantee this
-	 * actor's BeginPlay runs before GameMode's, so leaving generation implicit there was a
-	 * latent ordering bug (GameMode could have read stale, pre-randomisation data). Making
-	 * the trigger explicit removes that ambiguity entirely.
+	 * The GameMode calls this once at the start of a match, before it reads any terrain data,
+	 * so the map is freshly generated. We don't do this in BeginPlay because the GameMode
+	 * might run first and read old terrain data.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Terrain")
 	void PrepareForNewGame();
 
 	/**
-	 * Runs the full generate-and-validate pipeline NumIterations times in a row (a fresh
-	 * random seed each time), logging a pass/fail line per run and an aggregate summary at
-	 * the end. Lets the generation pipeline be stress-tested many times over in seconds,
-	 * without needing a separate PIE session per run. Callable from the editor Details panel.
+	 * Generates and checks the map NumIterations times, with a new random seed each time.
+	 * It logs a pass or fail for every run and a summary at the end, so we can test lots
+	 * of maps in a few seconds without starting Play each time.
 	 */
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Terrain|Debug")
 	void RunStressTest(int32 NumIterations = 20);
 
-	/** Grow the grid, extend spawns, and branch new lanes (called after each wave). */
+	/** Grows the grid, extends the spawns outward and adds branch lanes. Called after each wave. */
 	UFUNCTION(BlueprintCallable, Category = "Terrain")
 	int32 ExpandWorldAfterWave();
 
@@ -248,50 +232,48 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Terrain")
 	int32 GetTotalLaneCount() const { return PathCellLines.Num(); }
 
-	// ---- Data queries used by the rest of the game (Blueprint-friendly) ----
+	// ---- Getters the rest of the game uses (also work in Blueprint) ----
 
-	/** World-space location of the tower cell (top surface, centre). */
+	/** World location of the tower cell, at the centre of its top surface. */
 	UFUNCTION(BlueprintPure, Category = "Terrain")
 	FVector GetTowerLocation() const { return TowerLocation; }
 
-	/** All enemy routes (spawn point + waypoints). */
+	/** All the enemy routes, each with a spawn point and waypoints. */
 	UFUNCTION(BlueprintPure, Category = "Terrain")
 	const TArray<FEnemyPath>& GetEnemyPaths() const { return EnemyPaths; }
 
-	/** All buildable pads (flat spots beside paths, never on a path) with their occupied state. */
+	/** All the build pads next to the paths, and whether each one is taken. */
 	UFUNCTION(BlueprintPure, Category = "Terrain")
 	const TArray<FDefenderSlot>& GetDefenderSlots() const { return DefenderSlots; }
 
-	/** Marks the slot nearest to Location as occupied/free. Called by the placement flow when a
-	 *  defender is placed, and when one is removed/destroyed, so occupancy is always current. */
+	/** Marks the slot closest to Location as taken or free. The placement code calls this when
+	 *  a defender is placed and again when it is removed or destroyed. */
 	UFUNCTION(BlueprintCallable, Category = "Terrain")
 	void SetSlotOccupied(const FVector& Location, bool bOccupied);
 
-	/** Whether the slot nearest to Location is currently occupied. */
+	/** Returns true if the slot closest to Location is taken. */
 	UFUNCTION(BlueprintPure, Category = "Terrain")
 	bool IsSlotOccupied(const FVector& Location) const;
 
 	/**
-	 * A* over the walkable path network (path + tower cells) from From to the tower.
-	 * CellCost gets each cell's world centre and returns its traversal cost (>= 1), so callers
-	 * can make defended cells expensive. Outputs smoothed world waypoints and the route's cost.
+	 * A* search over the path and tower cells, from From to the tower.
+	 * CellCost gets the world centre of a cell and returns how much it costs to walk through,
+	 * at least 1. This lets callers make cells near defenders more expensive.
+	 * Gives back smoothed world waypoints and the total cost of the route.
 	 */
 	bool FindLowestCostRoute(const FVector& From, TFunctionRef<float(const FVector&)> CellCost,
 		TArray<FVector>& OutWaypoints, float& OutCost) const;
 
-	/** Runs synchronous NavMesh pathfinding queries from every path's spawn point to the tower,
-	 *  and from the tower to every build slot, failing if any query is unreachable or only
-	 *  partially successful. Requires the NavMesh to already be rebuilt (RebuildNavigation)
-	 *  against the current geometry before being called. Public so callers outside this class
-	 *  (e.g. TDGameMode's final world-validation gate) can re-verify navigation independently. */
+	/** Asks the NavMesh for a path from each spawn point to the tower, and from each build slot
+	 *  to the tower, and logs how many work. The NavMesh has to be rebuilt first with
+	 *  RebuildNavigation. It is public so other classes like TDGameMode can check it again. */
 	UFUNCTION(BlueprintPure, Category = "Terrain")
 	bool ValidatePathfinding() const;
 
-	/** Forces a full, synchronous NavMesh rebuild and waits for every pending tile task to
-	 *  finish. Public so callers who place additional nav-relevant obstacles after generation
-	 *  (e.g. TDGameMode spawning the Tower actor) can flush the resulting dynamic NavMesh update
-	 *  before querying pathfinding — RuntimeGeneration=Dynamic reactively schedules an update
-	 *  when such an obstacle appears, but does not block until it completes on its own. */
+	/** Rebuilds the NavMesh and waits until every tile is done. It is public so code that adds
+	 *  new obstacles after generation, like TDGameMode spawning the tower, can update the
+	 *  NavMesh before testing paths. With dynamic nav generation Unreal only queues the
+	 *  update, it doesn't wait for it to finish. */
 	UFUNCTION(BlueprintCallable, Category = "Terrain")
 	void RebuildNavigation();
 
@@ -300,32 +282,32 @@ protected:
 	virtual void OnConstruction(const FTransform& Transform) override;
 
 private:
-	/** The mesh that renders the generated terrain. */
+	/** The mesh that draws the terrain. */
 	UPROPERTY(VisibleAnywhere, Category = "Terrain")
 	TObjectPtr<UProceduralMeshComponent> MeshComponent;
 
-	// ---- Internal generation state (rebuilt each GenerateTerrain call) ----
+	// ---- Generation data (rebuilt every time GenerateTerrain runs) ----
 
-	/** Random source seeded from Seed; all "random" choices go through this for reproducibility. */
+	/** Random stream seeded from Seed. All random choices use it so a seed always gives the same map. */
 	FRandomStream Rng;
 
-	/** Per-cell type, indexed by CellIndex(x,y). Size = GridSize * GridSize. */
+	/** Type of each cell, looked up with CellIndex(x,y). Holds GridSize * GridSize entries. */
 	TArray<ECellType> Cells;
 
-	/** Per-vertex height, indexed by VertIndex(x,y). Size = (GridSize+1) * (GridSize+1). */
+	/** Height of each vertex, looked up with VertIndex(x,y). Holds (GridSize+1) * (GridSize+1) entries. */
 	TArray<float> VertexHeights;
 
-	// Published results (filled by generation, read by getters above).
+	// Results that generation fills in and the getters above return.
 	FVector TowerLocation = FVector::ZeroVector;
 	UPROPERTY()
 	TArray<FEnemyPath> EnemyPaths;
 	UPROPERTY()
 	TArray<FDefenderSlot> DefenderSlots;
 
-	/** Centre-line grid cells for each carved path (used to extend/branch lanes between waves). */
+	/** The middle line of cells for each path. We use it to extend and branch lanes between waves. */
 	TArray<TArray<FIntPoint>> PathCellLines;
 
-	/** How many whole-grid growth steps have been applied this match. */
+	/** How many times the grid has grown so far this match. */
 	int32 GridExpansionCount = 0;
 
 	UPROPERTY()
@@ -345,7 +327,7 @@ private:
 	void SpawnDecorationAtCell(int32 X, int32 Y, ETerrainDecorationKind Kind);
 	void EnsureDefaultDecorationMeshes();
 
-	// ---- Generation helper stages ----
+	// ---- Generation steps ----
 	void InitialiseGrid();
 	void CarvePaths();
 	void PaintPathCell(int32 X, int32 Y, int32 HalfWidthOverride = -1);
@@ -361,36 +343,36 @@ private:
 	void MarkBuildableSlots();
 	void BuildMesh();
 
-	/** Checks the just-generated world is actually playable: grid data intact, at least
-	 *  three paths, every path's last waypoint actually reaches the tower, and at least one
-	 *  build slot exists. GenerateTerrain() regenerates automatically if this ever fails. */
+	/** Checks the new map is playable. The grid data must be the right size, there must be at
+	 *  least three paths that all reach the tower, and at least one build slot.
+	 *  GenerateTerrain tries again with a new seed if this fails. */
 	bool ValidateGeneratedWorld() const;
 
-	/** Draws the terrain bounds, every path, the tower, every build slot, every spawn point,
-	 *  and logs the seed — only when bDebugMode is enabled. */
+	/** Draws the terrain bounds, paths, tower, build slots and spawn points, and logs the seed.
+	 *  Only runs when bDebugMode is on. */
 	void DrawDebugVisualization() const;
 
-	// ---- Small index / coordinate helpers ----
+	// ---- Small index and coordinate helpers ----
 
-	/** Flatten a cell coordinate to a 1D index. Assumes 0 <= x,y < GridSize. */
+	/** Turns a cell coordinate into a 1D array index. X and Y must be inside the grid. */
 	FORCEINLINE int32 CellIndex(int32 X, int32 Y) const { return Y * GridSize + X; }
 
-	/** Flatten a vertex coordinate to a 1D index. Vertex grid is (GridSize+1) wide. */
+	/** Turns a vertex coordinate into a 1D array index. The vertex grid is GridSize+1 wide. */
 	FORCEINLINE int32 VertIndex(int32 X, int32 Y) const { return Y * (GridSize + 1) + X; }
 
-	/** True if a cell coordinate is inside the grid. */
+	/** True if the cell coordinate is inside the grid. */
 	FORCEINLINE bool InBounds(int32 X, int32 Y) const { return X >= 0 && Y >= 0 && X < GridSize && Y < GridSize; }
 
 	/** Centre of a cell in the actor's local space, at the given height. */
 	FVector CellCenterLocal(int32 X, int32 Y, float Height) const;
 
-	/** Corner (grid-vertex) position in the actor's local space, at the given height. */
+	/** Position of a grid corner in the actor's local space, at the given height. */
 	FVector CornerLocal(int32 GX, int32 GY, float Height) const;
 
-	/** Vertex colour for a cell, used to visualise the layout before materials are applied. */
+	/** Vertex colour for a cell, so the layout is easy to see without a proper material. */
 	FLinearColor CellColor(ECellType Type, float AvgHeight) const;
 
-	/** Deterministic value-noise in [0,1] for fractal terrain height (seeded, tileable-free). */
+	/** Seeded value noise between 0 and 1, used to build the fractal terrain height. */
 	float ValueNoise(float X, float Y) const;
 	float FractalNoise(float X, float Y) const;
 };

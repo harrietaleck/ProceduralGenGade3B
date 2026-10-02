@@ -1,4 +1,4 @@
-// TowerDustMote.cpp — see TowerDustMote.h
+// TowerDustMote.cpp - the overview is in TowerDustMote.h.
 
 #include "TowerDustMote.h"
 #include "Components/StaticMeshComponent.h"

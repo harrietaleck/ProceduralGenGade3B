@@ -7,8 +7,8 @@
 class UHealthComponent;
 class UStaticMeshComponent;
 
-/** Briefs require clear feedback when units take damage. Listens to HealthComponent and
- *  briefly scales the owner's mesh so hits are visible even with placeholder materials. */
+/** Shows when a unit takes damage. It listens to the HealthComponent and quickly
+ *  scales up the owner's mesh, so hits are easy to see even with basic materials. */
 UCLASS(ClassGroup = (TowerDefense), meta = (BlueprintSpawnableComponent))
 class PROCEDURALGENGADE3B_API UDamageFlashComponent : public UActorComponent
 {

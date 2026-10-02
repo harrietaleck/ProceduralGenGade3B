@@ -1,7 +1,6 @@
 // HealthComponent.h
-// A small reusable component that gives any actor hit points, damage handling and a
-// death event. The tower, enemies and defenders all use this so damage logic lives in
-// exactly one place (rather than being copy-pasted onto three different actors).
+// Gives any actor health, damage and a death event. The tower, enemies and defenders
+// all share it so the damage code is only written once.
 
 #pragma once
 
@@ -9,8 +8,8 @@
 #include "Components/ActorComponent.h"
 #include "HealthComponent.generated.h"
 
-// Fired whenever health changes (damage or healing). Params: current and max health.
-// Dynamic multicast so both C++ and Blueprint/UI widgets can bind to it.
+// Fires whenever health goes up or down. Sends the current and max health.
+// It is dynamic so both C++ and Blueprint widgets can bind to it.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
     FOnHealthChanged,
     float,
@@ -18,7 +17,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
     float,
     MaxHealth);
 
-// Fired once when health reaches zero. Param: the actor that dealt the killing blow (may be null).
+// Fires once when health hits zero. Sends the actor that got the kill, which can be null.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
     FOnDeath,
     AActor*,
@@ -37,19 +36,19 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health", meta = (ClampMin = "1.0"))
     float MaxHealth = 100.0f;
 
-    /** Broadcast on any health change — UI health bars bind to it. */
+    /** Sent on any health change. The UI health bars listen to this. */
     UPROPERTY(BlueprintAssignable, Category = "Health")
     FOnHealthChanged OnHealthChanged;
 
-    /** Broadcast exactly once when this actor dies. */
+    /** Sent once when this actor dies. */
     UPROPERTY(BlueprintAssignable, Category = "Health")
     FOnDeath OnDeath;
 
-    //Apply damage to the actor
+    // Apply damage to the actor
     UFUNCTION(BlueprintCallable, Category = "Health")
     void ApplyDamage(float Amount, AActor* Killer = nullptr);
 
-    /** Restore hit points, clamped to MaxHealth. Ignored if dead. */
+    /** Gives back health, up to MaxHealth. Does nothing if dead. */
     UFUNCTION(BlueprintCallable, Category = "Health")
     void Heal(float Amount);
 
@@ -60,7 +59,7 @@ public:
         return CurrentHealth;
     }
 
-    /** Health as a 0..1 fraction — handy for progress bars. */
+    /** Health as a value from 0 to 1. Useful for progress bars. */
     UFUNCTION(BlueprintPure, Category = "Health")
     float GetHealthPercent() const
     {
@@ -82,10 +81,10 @@ protected:
 
 private:
 
-    /** Live hit points. Initialised to MaxHealth in BeginPlay. */
+    /** Current hit points. Set to MaxHealth in BeginPlay. */
     UPROPERTY(VisibleAnywhere, Category = "Health", meta = (AllowPrivateAccess = "true"))
     float CurrentHealth = 0.0f;
 
-    /** Guards against broadcasting death more than once. */
+    /** Stops the death event from being sent more than once. */
     bool bIsDead = false;
 };

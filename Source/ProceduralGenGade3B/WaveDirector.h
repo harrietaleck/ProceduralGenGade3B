@@ -1,17 +1,17 @@
 // WaveDirector.h
-// The "brain" behind procedural enemy waves. AWaveManager owns the timing and state machine;
-// this object decides WHAT each wave contains and WHERE each enemy enters.
+// The brain behind our procedural enemy waves. AWaveManager handles the timing.
+// This class decides what goes into each wave and which lane each enemy comes from.
 //
-// Every wave it runs one loop:
-//   1. Read the player   - how the last wave went (tower damage, kill speed, defenders lost,
-//                          banked loot) and how they build (defender count / mix per lane).
-//   2. Adapt difficulty  - nudge a difficulty rating towards a target performance so strong
-//                          players get pushed and struggling players get breathing room.
-//   3. Plan the wave     - spend a threat budget (grows each wave, scaled by difficulty) on
-//                          enemy types weighted to counter the player's play style.
-//   4. Choose lanes      - per spawn, pick a lane from how well each lane is defended.
-// From wave 3 it also stamps elite modifiers that counter the player's style, and it can
-// forecast the upcoming wave lane by lane for the HUD.
+// Every wave it goes through the same loop:
+//   1. Read the player   - look at how the last wave went, like tower damage, kill speed,
+//                          defenders lost and saved loot, and at how the player builds.
+//   2. Adapt difficulty  - move the difficulty rating towards a target score, so good players
+//                          get pushed and struggling players get some room to breathe.
+//   3. Plan the wave     - spend a threat budget on enemies. The budget grows every wave and
+//                          the enemy types are picked to counter how the player plays.
+//   4. Choose lanes      - for every spawn, pick a lane based on how well each lane is defended.
+// From wave 3 it also adds elite enemies that counter the player's style. It can also
+// predict the next wave lane by lane so the HUD can show it.
 
 #pragma once
 
@@ -22,7 +22,7 @@
 
 struct FEnemyPath;
 
-/** One enemy the director has scheduled for the coming wave. */
+/** One enemy the director has planned for the next wave. */
 USTRUCT(BlueprintType)
 struct FPlannedSpawn
 {
@@ -31,20 +31,20 @@ struct FPlannedSpawn
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	EEnemyType Type = EEnemyType::Basic;
 
-	/** Seconds to wait after this spawn before the next one. */
+	/** How many seconds to wait after this spawn before the next one. */
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	float DelayAfter = 2.0f;
 
-	/** Wolf pack members after the leader reuse the leader's lane. */
+	/** Wolves that follow the pack leader use the same lane as the leader. */
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	bool bPackFollower = false;
 
-	/** Elite modifier stamped on this enemy (None for a normal enemy). */
+	/** The elite modifier on this enemy. None means it is a normal enemy. */
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	EEliteModifier Elite = EEliteModifier::None;
 };
 
-/** Predicted arrivals on one lane for the upcoming wave (next-wave forecast). */
+/** How many enemies we expect on one lane in the next wave. Used for the forecast. */
 USTRUCT(BlueprintType)
 struct FLaneForecast
 {
@@ -107,7 +107,7 @@ struct FWavePlan
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	int32 EliteCount = 0;
 
-	/** The modifier chosen to counter the player's style this wave (None before elites unlock). */
+	/** The modifier picked to counter the player's style this wave. Stays None until elites unlock. */
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	EEliteModifier CounterElite = EEliteModifier::None;
 };
@@ -124,11 +124,11 @@ struct FPlayerProfile
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	float DefendersPerLane = 0.0f;
 
-	/** Fraction of defenders that deal area damage (Bomb). */
+	/** How much of the defence does area damage, like the Bomb defender. */
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	float AreaShare = 0.0f;
 
-	/** Fraction of defenders that are long-range single-target (Archer). */
+	/** How much of the defence is long range and hits one target, like the Archer. */
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	float ArcherShare = 0.0f;
 
@@ -148,7 +148,7 @@ struct FWavePerformance
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	float TowerDamageFraction = 0.0f;
 
-	/** 0 = enemies died the instant they spawned, 1 = every enemy reached the tower. */
+	/** 0 means enemies died as soon as they spawned. 1 means every enemy reached the tower. */
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	float AverageKillProgress = 0.0f;
 
@@ -161,7 +161,7 @@ struct FWavePerformance
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	int32 BankedLoot = 0;
 
-	/** 0..1 parts of the score, weighted 40 / 30 / 20 / 10. */
+	/** The four parts of the score, each from 0 to 1. They count for 40, 30, 20 and 10 percent. */
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	float TowerScore = 0.0f;
 
@@ -174,7 +174,7 @@ struct FWavePerformance
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	float EconomyScore = 0.0f;
 
-	/** Weighted 0..1 score; the director tries to keep this near TargetPerformance. */
+	/** The final score from 0 to 1. The director tries to keep it close to TargetPerformance. */
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	float Score = 0.0f;
 
@@ -196,7 +196,7 @@ class PROCEDURALGENGADE3B_API UWaveDirector : public UObject
 public:
 	// ---- Difficulty scaling ----
 
-	/** Threat points available in wave 1 (a Basic enemy costs 1). */
+	/** Threat points we can spend in wave 1. A Basic enemy costs 1. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Budget")
 	float BaseThreatBudget = 6.0f;
 
@@ -215,11 +215,11 @@ public:
 
 	// ---- Adaptation ----
 
-	/** Performance score the director aims for: challenged but winning. */
+	/** The score the director aims for. The player should feel challenged but still win. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Adaptation", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float TargetPerformance = 0.65f;
 
-	/** How strongly one wave's result moves the difficulty rating. */
+	/** How much one wave's result changes the difficulty rating. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Adaptation")
 	float AdaptRate = 0.8f;
 
@@ -229,11 +229,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Adaptation")
 	float MaxDifficulty = 1.6f;
 
-	/** Losing this fraction of tower health in one wave counts as a total tower failure. */
+	/** If the tower loses this much of its health in one wave, the tower score is zero. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Adaptation")
 	float TowerLossForZeroScore = 0.25f;
 
-	/** Mid-wave relief kicks in once the tower loses this fraction of its health in one wave. */
+	/** Spawns slow down mid-wave once the tower has lost this much of its health in the wave. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Adaptation")
 	float ReliefTowerLossFraction = 0.3f;
 
@@ -247,26 +247,26 @@ public:
 
 	// ---- Elites ----
 
-	/** First wave that can contain elites (one is guaranteed that wave). */
+	/** The first wave that can have elites. That wave always has at least one. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Elites")
 	int32 EliteUnlockWave = 3;
 
-	/** Chance for each spawn to be elite in the unlock wave, before difficulty scaling. */
+	/** Chance for each spawn to be an elite in the first elite wave, before difficulty is applied. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Elites")
 	float EliteBaseChance = 0.12f;
 
-	/** Extra elite chance per wave after the unlock wave. */
+	/** Extra elite chance added for every wave after the first elite wave. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Elites")
 	float EliteChancePerWave = 0.04f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Elites")
 	float EliteMaxChance = 0.4f;
 
-	/** Share of elites that get the modifier countering the player's style (rest are random). */
+	/** How many elites get the modifier that counters the player. The rest get a random one. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Elites", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float CounterEliteShare = 0.65f;
 
-	/** Basic enemies may reroute around defences once the rating is above this. */
+	/** Once the difficulty is above this, Basic enemies can take a different route around defences. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Routing")
 	float SmartBasicDifficulty = 1.1f;
 
@@ -278,43 +278,43 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Pacing")
 	float MinSpawnDelay = 0.8f;
 
-	/** Gap between wolves in the same pack. */
+	/** Time between wolves in the same pack. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Pacing")
 	float PackSpawnDelay = 0.45f;
 
 	// ---- Wave loop ----
 
-	/** Build the player profile and the plan for the given wave. */
+	/** Works out the player profile and then plans the given wave. */
 	FWavePlan PlanWave(UWorld* World, int32 WaveNumber);
 
-	/** Snapshot tower health / defender count when a wave's spawning begins. */
+	/** Saves the tower health and defender count when a wave starts spawning. */
 	void BeginWave(UWorld* World);
 
-	/** Record how far one enemy got (0..1 of its expected walk) and whether it reached the tower. */
+	/** Saves how far one enemy got along its path, from 0 to 1, and if it reached the tower. */
 	void RecordEnemyOutcome(float KillProgress, bool bLeaked);
 
-	/** Score the finished wave and move the difficulty rating. */
+	/** Scores the wave that just ended and updates the difficulty rating. */
 	void EvaluateWave(UWorld* World);
 
-	/** Pick the lane for one spawn based on the enemy type and live lane coverage. */
+	/** Picks a lane for one spawn using the enemy type and how well each lane is defended right now. */
 	int32 ChooseLane(UWorld* World, EEnemyType Type);
 
-	/** True when the tower has lost enough health this wave that spawning should ease off. */
+	/** True when the tower has lost so much health this wave that spawning should slow down. */
 	bool ShouldGrantRelief(UWorld* World) const;
 
 	/**
-	 * Predict which lane each planned enemy will use, from the current defences. Runs the same
-	 * lane choice on a copy of the random stream, so it matches the real wave if nothing changes.
+	 * Guesses which lane each planned enemy will use, based on the current defences. It uses a
+	 * copy of the random stream, so it matches the real wave if the player changes nothing.
 	 */
 	TArray<FLaneForecast> ForecastLanes(UWorld* World) const;
 
-	/** Whether an enemy of this type/elite should look for less defended routes. */
+	/** Whether an enemy of this type and elite modifier should look for less defended routes. */
 	bool ShouldEnemyReroute(EEnemyType Type, EEliteModifier Elite) const;
 
-	/** The modifier that best counters the player's current defence. */
+	/** The modifier that works best against the player's current defence. */
 	EEliteModifier ChooseCounterElite() const;
 
-	// ---- Read-outs (HUD, logs) ----
+	// ---- Getters for the HUD and logs ----
 
 	UFUNCTION(BlueprintPure, Category = "Wave Director")
 	float GetDifficulty() const { return Difficulty; }
@@ -331,14 +331,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wave Director")
 	const FWavePlan& GetCurrentPlan() const { return CurrentPlan; }
 
-	/** Every evaluated wave this match, in order (end-of-match graph). */
+	/** Every scored wave this match, in order. Used for the graph at the end of the match. */
 	UFUNCTION(BlueprintPure, Category = "Wave Director")
 	const TArray<FWavePerformance>& GetHistory() const { return History; }
 
 private:
 	TArray<FWavePerformance> History;
 
-	/** Shared lane choice used by both the live spawns and the forecast. */
+	/** The lane picking code that both the real spawns and the forecast use. */
 	int32 ChooseLaneWith(UWorld* World, EEnemyType Type, FRandomStream& Stream, int32& RoundRobin) const;
 
 	float Difficulty = 1.0f;
@@ -348,12 +348,12 @@ private:
 	FWavePlan CurrentPlan;
 	FRandomStream Random;
 
-	// Wave-start snapshot
+	// Values saved when the wave starts
 	float TowerHealthAtStart = 0.0f;
 	int32 DefendersAtStart = 0;
 	int32 PlacedAtStart = 0;
 
-	// Per-enemy outcomes for the current wave
+	// How each enemy did in the current wave
 	float KillProgressSum = 0.0f;
 	int32 OutcomeCount = 0;
 	int32 LeakCount = 0;
@@ -362,10 +362,10 @@ private:
 
 	void BuildProfile(UWorld* World);
 
-	/** Sum of defender threat covering any point of the path. */
+	/** Adds up the threat of every defender that can reach any point on the path. */
 	float LaneCoverage(UWorld* World, const FEnemyPath& Path) const;
 
-	/** 0 at MinDifficulty, 1 at MaxDifficulty. */
+	/** Gives 0 at MinDifficulty and 1 at MaxDifficulty. */
 	float NormalisedDifficulty() const;
 
 	static int32 CountLivingDefenders(UWorld* World);

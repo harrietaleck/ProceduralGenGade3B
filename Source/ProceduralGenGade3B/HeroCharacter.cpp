@@ -1,4 +1,4 @@
-// HeroCharacter.cpp — see HeroCharacter.h for the overview.
+// HeroCharacter.cpp - the overview is in HeroCharacter.h.
 
 #include "HeroCharacter.h"
 #include "ProceduralTerrain.h"
@@ -17,43 +17,43 @@ AHeroCharacter::AHeroCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	// The character should face the way it moves (DD/OMD feel), not the controller's yaw.
+	// The hero faces the way it walks, not the way the controller is pointing.
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationRoll = false;
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())
 	{
-		Move->bOrientRotationToMovement = true;             // Turn toward the move direction.
-		Move->RotationRate = FRotator(0.0f, 540.0f, 0.0f);  // Snappy turning.
+		Move->bOrientRotationToMovement = true;             // Turn to face the way we move.
+		Move->RotationRate = FRotator(0.0f, 540.0f, 0.0f);  // Quick turning.
 		Move->MaxWalkSpeed = WalkSpeed;
 	}
 
-	// --- Camera boom: high behind, angled down, over-the-shoulder, collision + lag ---
+	// Camera boom. It sits high behind the hero and looks down over the shoulder.
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
-	CameraBoom->SetupAttachment(RootComponent);           // Root is the capsule.
-	CameraBoom->TargetArmLength = TargetArmLength;         // ~600 uu distance.
-	CameraBoom->bUsePawnControlRotation = true;            // Boom follows the controller's look.
-	CameraBoom->bDoCollisionTest = false;                 // Terrain hills were shortening the boom and blocking zoom-out.
+	CameraBoom->SetupAttachment(RootComponent);           // The root is the capsule.
+	CameraBoom->TargetArmLength = TargetArmLength;         // About 600 units away.
+	CameraBoom->bUsePawnControlRotation = true;            // The boom turns with the controller.
+	CameraBoom->bDoCollisionTest = false;                 // Off because hills kept pulling the camera in and stopping zoom out.
 	CameraBoom->ProbeSize = 12.0f;
-	CameraBoom->bEnableCameraLag = true;                  // Smooth follow on movement.
+	CameraBoom->bEnableCameraLag = true;                  // Smooth follow when moving.
 	CameraBoom->CameraLagSpeed = 10.0f;
-	CameraBoom->bEnableCameraRotationLag = true;          // Smooth orbiting.
+	CameraBoom->bEnableCameraRotationLag = true;          // Smooth turning around the hero.
 	CameraBoom->CameraRotationLagSpeed = 10.0f;
-	// Raise the PIVOT to roughly head height (rotates with the boom, so the arm swings from
-	// a natural "eye line" rather than the character's feet).
+	// Lift the pivot up to about head height, so the camera swings around the eyes
+	// and not the feet.
 	CameraBoom->TargetOffset = FVector(0.0f, 0.0f, 80.0f);
-	// Then a small screen-space shoulder nudge (applied AFTER rotation) so the hero sits
-	// slightly off-centre rather than dead-centre, without stacking excess height like before.
+	// Then move the camera a little to the side, after rotation, so the hero is
+	// slightly off-centre on screen.
 	CameraBoom->SocketOffset = FVector(0.0f, 40.0f, 20.0f);
 
-	// --- Follow camera on the end of the boom ---
+	// Follow camera on the end of the boom.
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
-	FollowCamera->bUsePawnControlRotation = false;        // Boom already handles rotation.
-	FollowCamera->FieldOfView = 80.0f;                    // Slightly wider for tactical map overview.
+	FollowCamera->bUsePawnControlRotation = false;        // The boom already does the turning.
+	FollowCamera->FieldOfView = 80.0f;                    // A bit wider so more of the map is visible.
 
-	// Keep empty visual components for Blueprint compatibility, but the player is invisible.
-	// The Character capsule still provides movement/collision and the camera remains attached.
+	// These meshes stay so old Blueprints still work, but the hero is hidden.
+	// The capsule still handles movement and collision, and the camera stays attached.
 	BodyMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BodyMesh"));
 	BodyMesh->SetupAttachment(RootComponent);
 	BodyMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -82,7 +82,7 @@ void AHeroCharacter::BeginPlay()
 		Move->MaxWalkSpeed = WalkSpeed;
 	}
 
-	// Point the controller's look down at DefaultPitch and clamp how far it can tilt.
+	// Tilt the controller down to DefaultPitch and limit how far it can tilt.
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
 		FRotator Look = PC->GetControlRotation();
@@ -91,19 +91,19 @@ void AHeroCharacter::BeginPlay()
 
 		if (PC->PlayerCameraManager)
 		{
-			// Clamp pitch to [MinPitch, MaxPitch] (e.g. -60..-25).
+			// Keep the pitch between MinPitch and MaxPitch.
 			PC->PlayerCameraManager->ViewPitchMin = MinPitch;
 			PC->PlayerCameraManager->ViewPitchMax = MaxPitch;
 		}
 	}
 
-	// The terrain generates in its OWN BeginPlay, which may run after ours — so defer
-	// placement a moment to guarantee the paths and ground mesh exist before we trace.
+	// The terrain builds itself in its own BeginPlay, which might run after this one.
+	// So we wait a moment to make sure the paths and ground exist before we trace.
 	FTimerHandle PlaceTimer;
 	GetWorldTimerManager().SetTimer(PlaceTimer, this, &AHeroCharacter::SnapToGround, 0.2f, false);
 
-	// A leftover level camera may auto-activate and steal the view; after everything's had
-	// its BeginPlay, force our own camera to be the player's view (with a short blend).
+	// An old camera in the level can take over the view. Once everything has run BeginPlay,
+	// we switch back to the hero's camera with a short blend.
 	FTimerHandle ViewTimer;
 	GetWorldTimerManager().SetTimer(ViewTimer, this, &AHeroCharacter::ForceViewToSelf, 0.4f, false);
 }
@@ -118,9 +118,8 @@ void AHeroCharacter::ForceViewToSelf()
 
 void AHeroCharacter::SnapToGround()
 {
-	// Choose an open spawn spot on a flattened path corridor (partway toward the tower),
-	// so the hero starts in the open with room behind for the camera — not jammed against
-	// the tower or a hillside. Fall back to the tower point if there are no paths.
+	// Pick an open spot partway along a flat enemy path, so the hero has room and the
+	// camera isn't stuck against the tower or a hill. If there are no paths, use the tower point.
 	FVector Target = GetActorLocation();
 	float FaceYaw = 0.0f;
 	for (TActorIterator<AProceduralTerrain> It(GetWorld()); It; ++It)
@@ -131,17 +130,17 @@ void AHeroCharacter::SnapToGround()
 		const TArray<FEnemyPath>& Paths = It->GetEnemyPaths();
 		if (Paths.Num() > 0 && Paths[0].Waypoints.Num() > 1)
 		{
-			// Stand partway along path 0, out in the open corridor (not on the tower).
+			// Stand halfway along the first path, out in the open.
 			const TArray<FVector>& WP = Paths[0].Waypoints;
 			Target = WP[FMath::Clamp(WP.Num() / 2, 0, WP.Num() - 1)];
-			// Face OUTWARD down the path toward where enemies spawn, so the battlefield and
-			// incoming enemies are ahead and the tower is behind the camera.
+			// Face out along the path towards the enemy spawn, so enemies come from
+			// in front and the tower is behind the camera.
 			FaceYaw = (Paths[0].SpawnPoint - TowerLoc).Rotation().Yaw;
 		}
 		break;
 	}
 
-	// Trace straight down from high above to find the terrain surface at that spot.
+	// Trace straight down from high up to find the ground at that spot.
 	const FVector Start = FVector(Target.X, Target.Y, Target.Z + 5000.0f);
 	const FVector End = Start - FVector(0.0f, 0.0f, 12000.0f);
 	FHitResult Hit;
@@ -153,7 +152,7 @@ void AHeroCharacter::SnapToGround()
 		SetActorLocation(Hit.ImpactPoint + FVector(0.0f, 0.0f, HalfHeight + 10.0f));
 	}
 
-	// Face toward the tower, and align the camera behind that facing.
+	// Turn the hero to FaceYaw and put the camera behind it.
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
 		FRotator Look = PC->GetControlRotation();
@@ -168,7 +167,7 @@ void AHeroCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-	// Hold Right Mouse to orbit/tilt the camera around the hero.
+	// Hold right mouse to turn and tilt the camera around the hero.
 	PlayerInputComponent->BindKey(EKeys::RightMouseButton, IE_Pressed, this, &AHeroCharacter::BeginLook);
 	PlayerInputComponent->BindKey(EKeys::RightMouseButton, IE_Released, this, &AHeroCharacter::EndLook);
 
@@ -188,7 +187,7 @@ void AHeroCharacter::Tick(float DeltaSeconds)
 		UpdateLook();
 	}
 
-	// Ease the boom length toward the desired zoom.
+	// Slowly move the boom length towards the target zoom.
 	CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, TargetArm, DeltaSeconds, ZoomInterpSpeed);
 }
 
@@ -200,7 +199,7 @@ void AHeroCharacter::UpdateWalk()
 		return;
 	}
 
-	// Soft-pause / results / game-over: don't walk while menus own the screen.
+	// Don't walk while a pause, results or game over menu is open.
 	if (const ATDGameMode* GameMode = PC->GetWorld() ? PC->GetWorld()->GetAuthGameMode<ATDGameMode>() : nullptr)
 	{
 		if (GameMode->IsInteractionBlocked())
@@ -221,7 +220,7 @@ void AHeroCharacter::UpdateWalk()
 		return;
 	}
 
-	// Move relative to where the camera is facing (yaw only, flattened to the ground).
+	// Move based on which way the camera faces, flat along the ground.
 	const FRotator YawRot(0.0f, GetControlRotation().Yaw, 0.0f);
 	const FVector Fwd = YawRot.RotateVector(FVector::ForwardVector);
 	const FVector Rgt = YawRot.RotateVector(FVector::RightVector);
@@ -241,8 +240,8 @@ void AHeroCharacter::UpdateLook()
 	float MouseY = 0.0f;
 	PC->GetInputMouseDelta(MouseX, MouseY);
 
-	// Horizontal drag -> orbit (yaw). Vertical drag -> tilt (pitch); the camera manager
-	// clamps pitch to [MinPitch, MaxPitch] for us.
+	// Moving the mouse sideways turns the camera, and up and down tilts it.
+	// The camera manager keeps the tilt between MinPitch and MaxPitch for us.
 	if (MouseX != 0.0f)
 	{
 		PC->AddYawInput(MouseX * MouseLookSpeed);
@@ -256,7 +255,7 @@ void AHeroCharacter::UpdateLook()
 void AHeroCharacter::BeginLook()
 {
 	bIsLooking = true;
-	// Hide the cursor while orbiting so mouse motion drives the camera (and feels like a grab).
+	// Hide the cursor while turning so the mouse only moves the camera.
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
 		PC->bShowMouseCursor = false;
@@ -266,7 +265,7 @@ void AHeroCharacter::BeginLook()
 void AHeroCharacter::EndLook()
 {
 	bIsLooking = false;
-	// Restore the cursor for clicking build pads.
+	// Show the cursor again so we can click build pads.
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
 		PC->bShowMouseCursor = true;

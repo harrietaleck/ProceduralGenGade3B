@@ -1,6 +1,6 @@
 // TDMatchRewards.h
-// Meta-currency reward calculation for victory / defeat screens.
-// Reward tier is driven by the tower's remaining beam health (0-100%).
+// Works out the meta currency rewards shown on the victory and defeat screens.
+// The reward tier depends on how much beam health the tower has left.
 
 #pragma once
 
@@ -16,30 +16,30 @@ enum class EBeamHealthTier : uint8
 	Radiant UMETA(DisplayName = "Radiant (71-100%)")
 };
 
-/** Persistent forest resources earned after a match. */
+/** Forest resources earned after a match. These are kept between matches. */
 USTRUCT(BlueprintType)
 struct FMetaCurrencyRewards
 {
 	GENERATED_BODY()
 
-	/** Leaf currency — basic defenders. */
+	/** Leaf currency. Used for basic defenders. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rewards")
 	int32 ForestEssence = 0;
 
-	/** Log currency — basic defenders and upkeep. */
+	/** Log currency. Used for basic defenders and upkeep. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rewards")
 	int32 WoodenMight = 0;
 
-	/** Gem currency — elite / strong defenders. */
+	/** Gem currency. Used for elite and strong defenders. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rewards")
 	int32 GemStones = 0;
 
-	/** Lantern currency — tower beam power upgrades. */
+	/** Lantern currency. Used to upgrade the tower beam. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rewards")
 	int32 LightLanterns = 0;
 };
 
-/** Everything the end-screen needs to display after a match. */
+/** Everything the end screen needs to show after a match. */
 USTRUCT(BlueprintType)
 struct FMatchResult
 {
@@ -51,7 +51,7 @@ struct FMatchResult
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Match")
 	int32 Score = 0;
 
-	/** Tower beam health as a 0..100 percentage at match end. */
+	/** Tower beam health left at the end of the match, as a percentage from 0 to 100. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Match")
 	int32 TowerBeamHealthPercent = 0;
 
@@ -79,7 +79,7 @@ struct FMatchResult
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Match")
 	FMetaCurrencyRewards Rewards;
 
-	/** Wallet totals from the in-match HUD at the moment the match ended. */
+	/** Wallet totals from the HUD at the moment the match ended. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Match")
 	FMetaCurrencyRewards Wallet;
 };

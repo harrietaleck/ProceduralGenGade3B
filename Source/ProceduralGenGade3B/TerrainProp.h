@@ -1,6 +1,6 @@
 // TerrainProp.h
-// Lightweight decorative prop spawned by AProceduralTerrain (trees, rocks, buildings).
-// Meshes come from ProceduralTerrain scatter pools (VRS_LowPolyNatureEssentials by default).
+// A simple decoration that AProceduralTerrain spawns, like a tree, rock or building.
+// The meshes come from the terrain's scatter pools. By default these use VRS_LowPolyNatureEssentials.
 
 #pragma once
 

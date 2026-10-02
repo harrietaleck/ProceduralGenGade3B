@@ -12,7 +12,7 @@
 
 AArcherDefender::AArcherDefender()
 {
-    //Do not use the timer that is exactly like the original defender
+    //Don't use the original defender's timer, the archer has its own
     bUseDefaultAttack = false;
     DefenderName = TEXT("Archer");
 
@@ -146,7 +146,7 @@ void AArcherDefender::GatherTargetsByThreat(TArray<AEnemy*>& OutTargets) const
         }
     }
 
-    //Closest to the tower first, so the archer always deals with the most urgent threat
+    //Closest to the tower first, so the archer always deals with the biggest threat
     const ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>();
     const AActor* Tower = GameMode ? GameMode->GetTower() : nullptr;
     const FVector TowerLocation = Tower ? Tower->GetActorLocation() : Location;

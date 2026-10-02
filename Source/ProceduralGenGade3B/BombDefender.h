@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "Defender.h"
 
-//Header matches
+//The generated header has to be the last include
 #include "BombDefender.generated.h"
 
 //A lingering poison cloud left behind by a bomb
@@ -35,7 +35,7 @@ private:
     UPROPERTY()
     TObjectPtr<UStaticMesh> BombAreaMesh;
 
-    //Create radius to effect the area
+    //Radius of the area the bomb affects
     UPROPERTY(EditAnywhere, Category = "Poison Light Bomb", meta = (ClampMin = "50.0"))
     float BombRadius = 300.0f;
 
@@ -47,7 +47,7 @@ private:
     UPROPERTY(EditAnywhere, Category = "Poison Light Bomb", meta = (ClampMin = "0.1"))
     float BombCooldown = 2.5f;
 
-    //Set a time for the lighted area of the bomb
+    //How long the bomb's light stays on
     UPROPERTY(EditAnywhere, Category = "Poison Light Bomb", meta = (ClampMin = "0.1"))
     float LightDuration = 0.8f;
 
@@ -78,12 +78,12 @@ private:
     //Show the blast light and area marker
     void SpawnBlastVisuals(const FVector& AreaLocation);
 
-    //Damage the enemies in the area, returns how many were hit (poison ticks also mark them poisoned)
+    //Damage the enemies in the area and return how many were hit. Poison ticks also mark them as poisoned
     int32 DamageEnemiesInArea(const FVector& AreaLocation, float Damage, bool bPoison = false);
 
     //Apply one poison tick to every active cloud
     void TickPoisonClouds();
 
-    //Find the enemy whose surroundings contain the most enemies (the densest cluster)
+    //Find the spot with the most enemies packed close together
     bool FindBestClusterCentre(FVector& OutCentre) const;
 };

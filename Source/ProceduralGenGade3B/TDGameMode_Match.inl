@@ -1,4 +1,5 @@
-﻿// TDGameMode_Match.inl — included by the parent .cpp (not compiled alone).
+﻿// TDGameMode_Match.inl - economy, meta currency and match results.
+// This file is included by TDGameMode.cpp and is not compiled on its own.
 
 void ATDGameMode::AddResources(int32 Amount)
 {

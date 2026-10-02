@@ -1,15 +1,6 @@
 // TDCameraPawn.h
-// The player's "camera" for the tower-defence view. There is no walking character — in a
-// tower defence the player is really just a floating camera looking down over the map,
-// placing defenders with the mouse. This pawn gives that an RTS feel:
-//
-//   * WASD / arrow keys  -> pan across the map
-//   * Q / E              -> rotate the view left / right
-//   * Mouse wheel        -> zoom in / out
-//
-// The mouse is deliberately left free (the player controller shows the cursor) so clicking
-// build pads keeps working while the camera moves. Movement is polled from the possessing
-// controller each tick, so it needs no project-wide input mappings to be set up.
+// RTS style floating camera for the tower defence view. WASD or arrows pan, Q and E rotate,
+// the mouse wheel zooms. Keys are read every tick, so no project input mappings are needed.
 
 #pragma once
 
@@ -28,44 +19,44 @@ class PROCEDURALGENGADE3B_API ATDCameraPawn : public APawn
 public:
 	ATDCameraPawn();
 
-	/** Horizontal pan speed in Unreal units per second. */
+	/** How fast the camera pans, in Unreal units per second. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0"))
 	float PanSpeed = 2500.0f;
 
-	/** Rotation speed in degrees per second (Q/E keys). */
+	/** How fast Q and E turn the camera, in degrees per second. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0"))
 	float RotateSpeed = 90.0f;
 
-	/** Degrees of rotation per pixel of mouse movement while middle-mouse dragging. */
+	/** How many degrees the camera turns per pixel of mouse movement while holding the middle mouse button. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.0"))
 	float MouseRotateSpeed = 0.35f;
 
-	/** How far one mouse-wheel notch changes the zoom (spring-arm length), in uu. */
+	/** How much one click of the mouse wheel changes the spring arm length, in Unreal units. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "1.0"))
 	float ZoomStep = 350.0f;
 
-	/** Closest the camera can zoom in (min spring-arm length, uu). */
+	/** The closest the camera can zoom in. This is the shortest spring arm length. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "100.0"))
 	float MinZoom = 900.0f;
 
-	/** Furthest the camera can zoom out (max spring-arm length, uu). */
+	/** The furthest the camera can zoom out. This is the longest spring arm length. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "100.0"))
 	float MaxZoom = 6000.0f;
 
-	/** How quickly the zoom eases toward its target (higher = snappier). */
+	/** How quickly the zoom catches up to its target. Higher is faster. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.1"))
 	float ZoomInterpSpeed = 10.0f;
 
-	/** Starting downward tilt of the camera, in degrees. -40 gives an angled 3/4 strategic
-	 *  view (more of the battlefield's "side" is visible) rather than a steep top-down look. */
+	/** How far the camera tilts down at the start, in degrees.
+	 *  -40 gives an angled view instead of a steep top down look. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "-89.0", ClampMax = "0.0"))
 	float CameraPitch = -40.0f;
 
-	/** Shallowest tilt allowed while drag-tilting (closest to level). */
+	/** The flattest tilt allowed when dragging with the mouse. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "-89.0", ClampMax = "0.0"))
 	float MinPitch = -25.0f;
 
-	/** Steepest tilt allowed while drag-tilting (closest to straight down). */
+	/** The steepest tilt allowed when dragging, closest to looking straight down. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "-89.0", ClampMax = "0.0"))
 	float MaxPitch = -70.0f;
 
@@ -74,35 +65,35 @@ protected:
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
-	/** Mouse-wheel handlers: nudge the target zoom in or out (clamped). */
+	/** Mouse wheel handlers. They move the target zoom in or out, within the limits. */
 	void ZoomIn();
 	void ZoomOut();
 
-	/** Middle-mouse press/release: begin/end free drag-rotation of the view. */
+	/** Pressing and releasing the middle mouse button starts and stops drag rotation. */
 	void BeginDragRotate();
 	void EndDragRotate();
 
 private:
-	/** Boom that holds the camera up and back from the pivot; also drives zoom via its length. */
+	/** Holds the camera up and back from the pivot. Its length is how we zoom. */
 	UPROPERTY(VisibleAnywhere, Category = "Camera", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USpringArmComponent> SpringArm;
 
-	/** The actual view camera. */
+	/** The camera we actually see through. */
 	UPROPERTY(VisibleAnywhere, Category = "Camera", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UCameraComponent> Camera;
 
-	/** The zoom distance we're easing toward (spring-arm target length). */
+	/** The spring arm length we are moving towards. */
 	float TargetArmLength = 3000.0f;
 
-	/** True while the middle mouse button is held (free-rotate mode). */
+	/** True while the middle mouse button is held down. */
 	bool bIsDragging = false;
 
-	/** Live tilt, adjusted by vertical drag and kept within [MaxPitch, MinPitch]. */
+	/** The current tilt. Dragging up and down changes it, and it stays between MaxPitch and MinPitch. */
 	float CurrentPitch = -40.0f;
 
-	/** Reads WASD/arrows/Q/E from the controller and applies pan + rotation this frame. */
+	/** Reads WASD, the arrows, Q and E, then pans and turns the camera for this frame. */
 	void UpdateMovement(float DeltaSeconds);
 
-	/** While dragging, turn mouse motion into yaw (horizontal) and pitch (vertical) changes. */
+	/** While dragging, sideways mouse movement turns the camera and up and down movement tilts it. */
 	void UpdateDragRotation();
 };

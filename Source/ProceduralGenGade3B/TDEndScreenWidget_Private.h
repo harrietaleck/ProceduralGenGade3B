@@ -1,4 +1,4 @@
-// Shared helpers for TDEndScreenWidget implementation units.
+// Helper functions shared by the end screen .cpp and .inl files.
 #pragma once
 
 #include "Components/Border.h"

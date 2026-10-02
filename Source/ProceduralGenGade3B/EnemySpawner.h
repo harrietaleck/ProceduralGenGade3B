@@ -1,5 +1,5 @@
 // EnemySpawner.h
-// Spawns Basic, Bear and Wolf enemies in sequence.
+// Spawns Basic, Bear and Wolf enemies in turn.
 
 #pragma once
 
@@ -51,15 +51,15 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Spawner")
     void StopSpawning();
 
-    // Spawn one enemy (cycles Basic, Bear, Wolf and the lanes in order).
+    // Spawns one enemy. It takes turns between Basic, Bear and Wolf, and between the lanes.
     UFUNCTION(BlueprintCallable, Category = "Spawner")
     AEnemy* SpawnSingleEnemy();
 
-    // Spawn a specific enemy type on a specific lane (used by the wave director).
+    // Spawns a chosen enemy type on a chosen lane. The wave director uses this.
     UFUNCTION(BlueprintCallable, Category = "Spawner")
     AEnemy* SpawnEnemyOfType(EEnemyType Type, int32 PathIndex);
 
-    // Walking distance of a lane from its spawn point to the tower.
+    // How far an enemy has to walk on a lane from its spawn point to the tower.
     UFUNCTION(BlueprintPure, Category = "Spawner")
     float GetPathLength(int32 PathIndex) const;
 

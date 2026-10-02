@@ -1,4 +1,5 @@
-// Defender.cpp — see Defender.h for the overview.
+// Defender.cpp
+// Basic defender that shoots the nearest enemy. See Defender.h for more.
 #include "Defender.h"
 
 #include "HealthComponent.h"
@@ -15,25 +16,25 @@
 
 ADefender::ADefender()
 {
-    // Firing is timer-driven, so no per-frame tick.
+    // Shooting runs on a timer, so we don't need Tick.
     PrimaryActorTick.bCanEverTick = false;
 
-    // Visual body + root: a cube scaled into a small turret block.
+    // The mesh is the body and the root of the actor.
     MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DefenderMesh"));
     SetRootComponent(MeshComponent);
 
-    // *** CHANGED: Use a cylinder instead of the original cube for the Basic Defender.
+    // The Basic Defender uses a cylinder instead of a cube.
     static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(
         TEXT("/Engine/BasicShapes/Cylinder.Cylinder")
     );
 
-    // *** CHANGED: Assign the cylinder mesh when the asset is found.
+    // Use the cylinder mesh if it was found.
     if (CylinderMesh.Succeeded())
     {
         MeshComponent->SetStaticMesh(CylinderMesh.Object);
     }
 
-    // *** CHANGED: Scale the cylinder into a small tower-like defender shape.
+    // Scale the cylinder so it looks like a small tower.
     MeshComponent->SetRelativeScale3D(FVector(0.9f, 0.9f, 1.2f));
 
     MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
@@ -71,13 +72,13 @@ void ADefender::BeginPlay()
         }
     }
 
-    // Remove ourselves when destroyed by enemies.
+    // Remove the defender when enemies kill it.
     HealthComponent->OnDeath.AddDynamic(this, &ADefender::HandleDeath);
 
-    //Make the origin defender have its original firing system but make the archer and bomb defenders have its own behaviour
+    //The basic defender keeps the original firing, but the archer and bomb defenders use their own behaviour
     if (bUseDefaultAttack)
     {
-        // Begin firing on a fixed interval.
+        // Start shooting on a fixed interval.
         GetWorldTimerManager().SetTimer(
             FireTimerHandle,
             this,
@@ -103,7 +104,7 @@ void ADefender::FireAtNearestEnemy()
 
     const FVector MuzzleLocation = GetActorLocation() + MuzzleOffset;
 
-    // Preferred path: launch a projectile that flies to the enemy and applies damage on impact.
+    // Normally we fire a projectile that flies to the enemy and does damage when it hits.
     if (ProjectileClass)
     {
         FActorSpawnParameters SpawnParams;
@@ -125,7 +126,7 @@ void ADefender::FireAtNearestEnemy()
         return;
     }
 
-    // Fallback (no projectile class set): instant hitscan damage.
+    // If no projectile class is set, just do the damage straight away.
     if (UHealthComponent* TargetHealth =
         Target->FindComponentByClass<UHealthComponent>())
     {
@@ -169,16 +170,16 @@ AEnemy* ADefender::FindNearestEnemyInRange() const
 
 void ADefender::HandleDeath(AActor* Killer)
 {
-    // Stop firing and remove the actor. Freeing its build slot happens in EndPlay, which fires
-    // for every destruction path (not just this one), so occupancy can never go stale.
+    // Stop shooting and remove the actor. The build pad is freed in EndPlay,
+    // because EndPlay runs no matter how the defender gets destroyed.
     GetWorldTimerManager().ClearTimer(FireTimerHandle);
     Destroy();
 }
 
 void ADefender::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-    // Free the build slot this defender occupied, however it's being destroyed (death, level
-    // teardown, etc.), so the terrain's persisted occupancy state never goes stale.
+    // Free the build pad this defender was on, whether it died or the level is closing.
+    // This stops the terrain from thinking the pad is still taken.
     if (bHasOccupiedSlot)
     {
         if (ATDGameMode* GameMode =

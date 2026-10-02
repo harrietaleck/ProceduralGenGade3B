@@ -1,4 +1,5 @@
-// StrongDefender.cpp — see StrongDefender.h
+// StrongDefender.cpp
+// The strong defender that stuns enemies. See StrongDefender.h for more.
 
 #include "StrongDefender.h"
 #include "Enemy.h"
@@ -30,7 +31,7 @@ AStrongDefender::AStrongDefender()
 
 float AStrongDefender::GetThreatRating() const
 {
-	// The stun keeps enemies inside every other defender's range, so it counts for more than raw damage.
+	// The stun keeps enemies in range of the other defenders for longer, so it counts for more than just damage.
 	return Super::GetThreatRating() * 1.5f;
 }
 

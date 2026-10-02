@@ -1,5 +1,6 @@
 // TDMetaProgressionSubsystem.h
-// Banks meta-currency between matches (defenders, beam upgrades, elite units).
+// Keeps the meta currency between matches. The player spends it on defenders,
+// elite units and beam upgrades.
 
 #pragma once
 

@@ -1,10 +1,6 @@
 // TDHUD.h
-// A lightweight, code-only heads-up display. It reads live values from the game mode each
-// frame and draws them straight onto the screen with the Canvas: defender/enemy health bars,
-// and a readable info panel (defenders, cost, seed, controls).
-//
-// Match HUD values (loot, waves, tower health) and end-of-match screens are handled by UMG
-// widgets (UTDHUDWidget / UTDEndScreenWidget) created by the game mode.
+// Simple Canvas HUD that draws health bars and the info panel every frame.
+// Loot, waves, tower health and the end screens are done in UMG widgets instead.
 
 #pragma once
 
@@ -22,7 +18,7 @@ class PROCEDURALGENGADE3B_API ATDHUD : public AHUD
 	GENERATED_BODY()
 
 public:
-	/** Called every frame by the engine to paint the HUD. */
+	/** The engine calls this every frame to draw the HUD. */
 	virtual void DrawHUD() override;
 
 	/** Show or hide the wave director graph (G). It also appears automatically when the match ends. */
@@ -31,29 +27,29 @@ public:
 private:
 	bool bShowDirectorGraph = false;
 
-	/** Lane forecast, refreshed on real time so it keeps updating while the game is paused. */
+	/** Lane forecast. It refreshes on real time so it still updates while the game is paused. */
 	TArray<FLaneForecast> CachedForecast;
 	double LastForecastRefresh = -1.0;
 
-	/** Between waves: next wave summary plus a marker over every lane's spawn point. */
+	/** Between waves, shows what the next wave has and puts a marker over each lane's spawn point. */
 	void DrawWaveForecast(ATDGameMode* GameMode, AWaveManager* WaveManager);
 
-	/** Difficulty rating and wave score per wave, with the 65% target band. */
+	/** Graph of the difficulty and score for each wave, with the 65% target line. */
 	void DrawDirectorGraph(const UWaveDirector* Director);
 
-	/** Draw pause overlay and the readable info panel (defenders, cost, seed, controls). */
+	/** Draws the info panel with defenders, cost, seed and controls, plus the pause overlay. */
 	void DrawInfoPanel(ATDGameMode* GameMode);
 
-	/** Draw a line of HUD text on top of the info panel with consistent sizing. */
+	/** Draws one line of text on the info panel. */
 	void DrawPanelText(const FString& Text, const FLinearColor& Color, float X, float Y, UFont* Font, float Scale);
 
-	/** Draw a small floating health bar over every living defender. */
+	/** Draws a small health bar above every defender that is still alive. */
 	void DrawDefenderHealthBars();
 
-	/** Draw a small floating health bar over every living enemy. */
+	/** Draws a small health bar above every enemy that is still alive. */
 	void DrawEnemyHealthBars();
 
-	/** Projects a world location to screen space and draws a background + health-coloured
-	 *  fill bar there. Shared by defender (and future enemy/tower) health bars. */
+	/** Turns a world position into a screen position and draws a health bar there.
+	 *  Both the defender and enemy bars use this. */
 	void DrawWorldHealthBar(const FVector& WorldLocation, float HealthPercent, float BarWidth, float BarHeight);
 };

@@ -1,4 +1,5 @@
-// Projectile.cpp — see Projectile.h for the overview.
+// Projectile.cpp
+// Moves the projectile to its target and does damage on hit. See Projectile.h for more.
 
 #include "Projectile.h"
 #include "HealthComponent.h"
@@ -12,7 +13,7 @@ AProjectile::AProjectile()
 	// Projectiles move every frame.
 	PrimaryActorTick.bCanEverTick = true;
 
-	// Small sphere body + root. Purely cosmetic; movement is done in code, not physics.
+	// Small sphere for the body and root. It is only for looks, the movement is done in code and not with physics.
 	MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ProjectileMesh"));
 	SetRootComponent(MeshComponent);
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
@@ -85,7 +86,7 @@ void AProjectile::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 
-	// Track a living, homing target; otherwise fly to the last spot we saw it.
+	// Follow the target if homing is on and it is still there. Otherwise fly to the last spot we saw it.
 	if (bHoming && Target)
 	{
 		CachedTargetLocation = Target->GetActorLocation();
@@ -96,14 +97,14 @@ void AProjectile::Tick(float DeltaSeconds)
 	const float Distance = ToTarget.Size();
 	const float Step = Speed * DeltaSeconds;
 
-	// Close enough (or we'd overshoot this frame) => impact.
+	// If we are close enough, or would fly past it this frame, count it as a hit.
 	if (Distance <= FMath::Max(Step, HitRadius))
 	{
 		HitTargetAndDie();
 		return;
 	}
 
-	// Advance toward the target and face the direction of travel.
+	// Move towards the target and face the way we are flying.
 	const FVector Direction = ToTarget / Distance;
 	SetActorLocation(Location + Direction * Step);
 	SetActorRotation(Direction.Rotation());

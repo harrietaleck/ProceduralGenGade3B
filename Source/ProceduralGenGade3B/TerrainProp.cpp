@@ -1,4 +1,4 @@
-// TerrainProp.cpp — see TerrainProp.h
+// TerrainProp.cpp - the overview is in TerrainProp.h.
 
 #include "TerrainProp.h"
 #include "Components/SceneComponent.h"

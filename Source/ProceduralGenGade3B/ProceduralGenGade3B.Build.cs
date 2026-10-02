@@ -1,34 +1,32 @@
-// Module build rules for the ProceduralGenGade3B primary game module.
-// This lists the engine modules our C++ code is allowed to #include and link against.
+// Build rules for the main ProceduralGenGade3B game module.
+// It lists the engine modules our C++ code can include and link to.
 using UnrealBuildTool;
 
 public class ProceduralGenGade3B : ModuleRules
 {
 	public ProceduralGenGade3B(ReadOnlyTargetRules Target) : base(Target)
 	{
-		// Use shared/explicit precompiled headers (the modern, faster default).
+		// Use shared precompiled headers. This is the faster default.
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		// Modules whose public headers we can include from anywhere in this module.
-		//   Core / CoreUObject / Engine : the fundamental gameplay framework.
-		//   InputCore                   : key/axis input types.
-		// (ProceduralMeshComponent, EnhancedInput and UMG will be added when the
-		//  gameplay classes that need them are introduced.)
+		// Modules we can include from anywhere in this module.
+		// Core, CoreUObject and Engine are the basic gameplay framework.
+		// InputCore has the key and axis input types.
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
 			"Core",
 			"CoreUObject",
 			"Engine",
 			"InputCore",
-			"ProceduralMeshComponent", // Runtime-generated terrain mesh (UProceduralMeshComponent).
-			"EnhancedInput",           // Modern input system for the player controller (defender placement).
-			"UMG",                     // Runtime UI (health bars, resources, game-over) driven from C++.
+			"ProceduralMeshComponent", // For the terrain mesh we build at runtime.
+			"EnhancedInput",           // Input system used by the player controller for placing defenders.
+			"UMG",                     // UI made in C++, like health bars, resources and the game over screen.
 			"Slate",
 			"SlateCore",
-			"NavigationSystem"         // Rebuilding the NavMesh after each procedural terrain generation.
+			"NavigationSystem"         // So we can rebuild the NavMesh every time the terrain is generated.
 		});
 
-		// Modules used only by this module's private .cpp implementation files.
+		// Modules that only this module's private .cpp files use.
 		PrivateDependencyModuleNames.AddRange(new string[] { });
 	}
 }

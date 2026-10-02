@@ -1,4 +1,5 @@
-﻿// TDEndScreenWidget_Theme.inl — included by the parent .cpp (not compiled alone).
+﻿// TDEndScreenWidget_Theme.inl
+// Colours, art and text for the end screen. It is included in TDEndScreenWidget.cpp and not compiled on its own.
 
 void UTDEndScreenWidget::EnsureThemeArt()
 {

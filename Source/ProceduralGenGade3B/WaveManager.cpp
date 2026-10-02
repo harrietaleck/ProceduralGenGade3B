@@ -1,4 +1,5 @@
-// WaveManager.cpp — see WaveManager.h for the overview.
+// WaveManager.cpp
+// The overview of how this works is at the top of WaveManager.h.
 
 #include "WaveManager.h"
 #include "EnemySpawner.h"
@@ -8,7 +9,7 @@
 
 AWaveManager::AWaveManager()
 {
-	// All pacing is timer-driven, so no per-frame tick is needed.
+	// Everything runs on timers, so we don't need Tick.
 	PrimaryActorTick.bCanEverTick = false;
 
 	Director = CreateDefaultSubobject<UWaveDirector>(TEXT("WaveDirector"));
@@ -18,7 +19,7 @@ AWaveManager::AWaveManager()
 
 void AWaveManager::EnsureDefaultWaveTable()
 {
-	// Fallback table used only when the adaptive director is switched off.
+	// Backup table that is only used when the adaptive director is turned off.
 	if (Waves.Num() > 0)
 	{
 		return;
@@ -62,7 +63,7 @@ void AWaveManager::StartWaves()
 		return;
 	}
 
-	// Calling this again after waves began acts as a no-op resume rather than restarting wave 1.
+	// If the waves already started, calling this again does nothing instead of restarting wave 1.
 	if (CurrentWaveIndex < 0)
 	{
 		BeginNextWave();
@@ -106,7 +107,7 @@ void AWaveManager::RetryCurrentWave()
 	GetWorldTimerManager().ClearTimer(BreakTimerHandle);
 	GetWorldTimerManager().ClearTimer(MonitorTimerHandle);
 
-	// Final victory calls StopWaves; explicitly reopen the manager for this replay.
+	// Winning the game calls StopWaves, so we have to turn the manager back on for the replay.
 	bStopped = false;
 	OnEnemiesRemainingChanged.Broadcast(0);
 
@@ -133,14 +134,14 @@ void AWaveManager::BeginNextWave()
 
 	++CurrentWaveIndex;
 
-	// No more waves -> the player has survived everything. Win condition.
+	// No waves left means the player survived them all, so they win.
 	if (CurrentWaveIndex >= GetTotalWaves())
 	{
 		TriggerVictory();
 		return;
 	}
 
-	// The plan is normally made as soon as the previous wave ends, so the forecast can show it.
+	// Usually the plan is already made when the last wave ended, so the forecast could show it.
 	if (PreparedWaveIndex != CurrentWaveIndex)
 	{
 		PrepareWave(CurrentWaveIndex);
@@ -187,7 +188,7 @@ void AWaveManager::StartCountdown()
 
 	if (CountdownSecondsRemaining <= 0)
 	{
-		// A zero-length countdown is valid configuration -> skip straight to spawning.
+		// A countdown of zero is allowed, so just go straight to spawning.
 		CountdownTick();
 		return;
 	}
@@ -210,7 +211,7 @@ void AWaveManager::CountdownTick()
 		return;
 	}
 
-	// Countdown finished -> the wave is now live.
+	// The countdown is done, so the wave starts now.
 	GetWorldTimerManager().ClearTimer(CountdownTimerHandle);
 	State = EWaveState::Active;
 
@@ -223,7 +224,7 @@ void AWaveManager::CountdownTick()
 	OnWaveStarted.Broadcast(GetCurrentWave());
 	OnEnemiesRemainingChanged.Broadcast(ActiveEnemyCount);
 
-	// Spawn the first enemy immediately, then continue on the planned delays.
+	// Spawn the first enemy straight away, then use the planned delays for the rest.
 	SpawnTick();
 }
 
@@ -242,7 +243,7 @@ void AWaveManager::SpawnTick()
 	}
 	else
 	{
-		// Every enemy has been sent; now we just wait for them to die.
+		// Every enemy has been sent. Now we just wait for them to die.
 		GetWorldTimerManager().ClearTimer(SpawnTimerHandle);
 		CheckWaveCompletion();
 	}
@@ -257,7 +258,7 @@ float AWaveManager::SpawnNextEnemy()
 
 	if (bUseAdaptiveDirector && Director && SpawnQueue.IsValidIndex(EnemiesSpawnedThisWave))
 	{
-		// Director-planned spawn: type from the plan, lane chosen from live lane coverage.
+		// The director planned this spawn. The type comes from the plan and the lane is picked from the current defences.
 		const FPlannedSpawn& Planned = SpawnQueue[EnemiesSpawnedThisWave];
 		Lane = (Planned.bPackFollower && PackLane != INDEX_NONE)
 			? PackLane
@@ -282,17 +283,17 @@ float AWaveManager::SpawnNextEnemy()
 
 	if (NewEnemy)
 	{
-		// Scale this enemy's own type stats by the wave's multipliers.
+		// Scale this enemy's stats by the wave's multipliers.
 		if (UHealthComponent* Health = NewEnemy->HealthComponent)
 		{
 			Health->MaxHealth *= ActiveWave.HealthMultiplier;
-			Health->Heal(Health->MaxHealth); // Top current health up to the new (scaled) max.
+			Health->Heal(Health->MaxHealth); // Fill health up to the new scaled max.
 		}
 		NewEnemy->AttackDamage *= ActiveWave.DamageMultiplier;
 		NewEnemy->MoveSpeed *= ActiveWave.SpeedMultiplier;
 		NewEnemy->ResourceReward = FMath::RoundToInt(NewEnemy->ResourceReward * ActiveWave.RewardMultiplier);
 
-		// Elite modifiers stack on top of the wave scaling.
+		// Elite modifiers are added on top of the wave scaling.
 		NewEnemy->MakeElite(Elite);
 
 		float ExpectedTravelTime = 30.0f;
@@ -334,7 +335,7 @@ void AWaveManager::HandleEnemySplit(AEnemy* Parent, AEnemy* Child)
 		return;
 	}
 
-	// Children inherit the parent's clock, so how far the split got still counts for the score.
+	// Children use the parent's spawn time, so the distance the parent already walked still counts for the score.
 	float SpawnTime = GetWorld()->GetTimeSeconds();
 	float ExpectedTravelTime = 30.0f;
 	for (const FTrackedEnemy& Tracked : TrackedEnemies)
@@ -362,7 +363,7 @@ void AWaveManager::MonitorWave()
 	FTimerManager& Timers = GetWorldTimerManager();
 	const bool bSpawnsRemaining = EnemiesSpawnedThisWave < ActiveWave.EnemyCount;
 
-	// Relief: the tower is taking a beating this wave, so stretch out the remaining spawns.
+	// Relief. The tower is getting hit hard this wave, so space out the spawns that are left.
 	if (!bReliefActive && Director->ShouldGrantRelief(GetWorld()))
 	{
 		bReliefActive = true;
@@ -376,7 +377,7 @@ void AWaveManager::MonitorWave()
 		return;
 	}
 
-	// Pressure: the player wiped the board, so don't leave them waiting for the next enemy.
+	// Pressure. The player killed everything, so don't make them wait for the next enemy.
 	if (!bReliefActive && bSpawnsRemaining && ActiveEnemyCount == 0
 		&& Timers.IsTimerActive(SpawnTimerHandle)
 		&& Timers.GetTimerRemaining(SpawnTimerHandle) > PressureEarlySpawnThreshold)
@@ -436,7 +437,7 @@ void AWaveManager::HandleTrackedEnemyDeath(AActor* Killer)
 	ActiveEnemyCount = FMath::Max(0, ActiveEnemyCount - 1);
 	OnEnemiesRemainingChanged.Broadcast(ActiveEnemyCount);
 
-	// Next tick, so a Splitting elite's children are counted before the wave can end.
+	// Wait one tick so the children of a Splitting elite get counted before the wave can end.
 	GetWorldTimerManager().SetTimerForNextTick(this, &AWaveManager::CheckWaveCompletion);
 }
 
@@ -450,7 +451,7 @@ void AWaveManager::CheckWaveCompletion()
 	const bool bAllSpawned = EnemiesSpawnedThisWave >= ActiveWave.EnemyCount;
 	if (!bAllSpawned || ActiveEnemyCount > 0)
 	{
-		return; // Still enemies left to spawn or still enemies alive -> not complete yet.
+		return; // Enemies are still left to spawn or still alive, so the wave is not done yet.
 	}
 
 	GetWorldTimerManager().ClearTimer(MonitorTimerHandle);
@@ -464,21 +465,21 @@ void AWaveManager::CheckWaveCompletion()
 	State = EWaveState::Complete;
 	OnWaveComplete.Broadcast(GetCurrentWave());
 
-	// Plan the next wave now (after the game mode has grown the map) so the forecast can show
-	// it during the break. Lanes are still chosen live at spawn time.
+	// Plan the next wave now, after the game mode has made the map bigger, so the forecast can
+	// show it during the break. Lanes are still picked when each enemy spawns.
 	if (bUseAdaptiveDirector && Director && !bStopped && State == EWaveState::Complete
 		&& CurrentWaveIndex + 1 < GetTotalWaves())
 	{
 		PrepareWave(CurrentWaveIndex + 1);
 	}
 
-	// Do not auto-start the next wave — GameMode shows the results screen and calls
+	// Don't start the next wave here. GameMode shows the results screen and calls
 	// ContinueToNextWave() when the player is ready.
 }
 
 void AWaveManager::TriggerVictory()
 {
 	State = EWaveState::Victory;
-	StopWaves(); // No further countdowns/spawns/breaks once every wave is cleared.
+	StopWaves(); // No more countdowns, spawns or breaks once every wave is cleared.
 	OnVictory.Broadcast();
 }

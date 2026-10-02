@@ -1,4 +1,4 @@
-// TowerDebrisPiece.cpp — see TowerDebrisPiece.h
+// TowerDebrisPiece.cpp - the overview is in TowerDebrisPiece.h.
 
 #include "TowerDebrisPiece.h"
 #include "Components/StaticMeshComponent.h"

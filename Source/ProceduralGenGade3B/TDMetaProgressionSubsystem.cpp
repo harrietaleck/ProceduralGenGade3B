@@ -1,4 +1,4 @@
-// TDMetaProgressionSubsystem.cpp — see TDMetaProgressionSubsystem.h
+// TDMetaProgressionSubsystem.cpp - the overview is in TDMetaProgressionSubsystem.h.
 
 #include "TDMetaProgressionSubsystem.h"
 
