@@ -55,6 +55,42 @@ void AEnemySpawner::SpawnEnemy()
 
 AEnemy* AEnemySpawner::SpawnSingleEnemy()
 {
+    if (!Terrain || Terrain->GetEnemyPaths().Num() == 0)
+    {
+        return nullptr;
+    }
+
+    // Choose the next path.
+    const int32 PathIndex = NextPathIndex % Terrain->GetEnemyPaths().Num();
+    NextPathIndex = PathIndex + 1;
+
+    // Choose Basic, Bear or Wolf in turn.
+    const EEnemyType EnemyType = static_cast<EEnemyType>(SpawnedEnemyTypeIndex);
+    SpawnedEnemyTypeIndex = (SpawnedEnemyTypeIndex + 1) % 3;
+
+    return SpawnEnemyOfType(EnemyType, PathIndex);
+}
+
+float AEnemySpawner::GetPathLength(int32 PathIndex) const
+{
+    if (!Terrain || !Terrain->GetEnemyPaths().IsValidIndex(PathIndex))
+    {
+        return 0.0f;
+    }
+
+    const FEnemyPath& Path = Terrain->GetEnemyPaths()[PathIndex];
+    float Length = 0.0f;
+    FVector Previous = Path.SpawnPoint;
+    for (const FVector& Point : Path.Waypoints)
+    {
+        Length += FVector::Dist2D(Previous, Point);
+        Previous = Point;
+    }
+    return Length;
+}
+
+AEnemy* AEnemySpawner::SpawnEnemyOfType(EEnemyType EnemyType, int32 PathIndex)
+{
     // We need terrain.
     if (!Terrain)
     {
@@ -76,24 +112,8 @@ AEnemy* AEnemySpawner::SpawnSingleEnemy()
         return nullptr;
     }
 
-    // Choose the next path.
-    const int32 PathIndex =
-        NextPathIndex % Paths.Num();
-
-    NextPathIndex =
-        (NextPathIndex + 1) % Paths.Num();
-
     const FEnemyPath& Path =
-        Paths[PathIndex];
-
-    // Choose Basic, Bear or Wolf.
-    EEnemyType EnemyType =
-        static_cast<EEnemyType>(
-            SpawnedEnemyTypeIndex);
-
-    // Move to the next enemy type.
-    SpawnedEnemyTypeIndex =
-        (SpawnedEnemyTypeIndex + 1) % 3;
+        Paths[FMath::Clamp(PathIndex, 0, Paths.Num() - 1)];
 
     // Create the spawn location.
     const FVector SpawnLocation =

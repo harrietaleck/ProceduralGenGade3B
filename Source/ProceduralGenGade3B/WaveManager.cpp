@@ -4,42 +4,35 @@
 #include "EnemySpawner.h"
 #include "Enemy.h"
 #include "HealthComponent.h"
+#include "TimerManager.h"
 
 AWaveManager::AWaveManager()
 {
 	// All pacing is timer-driven, so no per-frame tick is needed.
 	PrimaryActorTick.bCanEverTick = false;
 
+	Director = CreateDefaultSubobject<UWaveDirector>(TEXT("WaveDirector"));
+
 	EnsureDefaultWaveTable();
 }
 
 void AWaveManager::EnsureDefaultWaveTable()
 {
-	// Only fill in the default Part 1 progression if nothing was configured — an instance
-	// (or a Blueprint child) that already set up its own Waves array is left untouched.
+	// Fallback table used only when the adaptive director is switched off.
 	if (Waves.Num() > 0)
 	{
 		return;
 	}
 
-	// Multipliers here are derived directly from the Basic Enemy's own base stats (100 HP,
-	// 10 damage, 25 Loot) against the assignment's exact per-wave target numbers, e.g. Wave 2's
-	// 120 HP / 100 base HP = 1.2x. Storing multipliers rather than absolute numbers means the
-	// wave table automatically stays correct if the Basic Enemy's base stats are ever retuned.
 	FWaveData Wave1;
 	Wave1.EnemyCount = 5;
 	Wave1.SpawnDelay = 2.0f;
-	Wave1.HealthMultiplier = 1.0f;
-	Wave1.DamageMultiplier = 1.0f;
-	Wave1.SpeedMultiplier = 1.0f;
-	Wave1.RewardMultiplier = 1.0f;
 
 	FWaveData Wave2;
 	Wave2.EnemyCount = 8;
 	Wave2.SpawnDelay = 1.8f;
 	Wave2.HealthMultiplier = 1.2f;
 	Wave2.DamageMultiplier = 1.2f;
-	Wave2.SpeedMultiplier = 1.0f;
 	Wave2.RewardMultiplier = 1.2f;
 
 	FWaveData Wave3;
@@ -47,10 +40,8 @@ void AWaveManager::EnsureDefaultWaveTable()
 	Wave3.SpawnDelay = 1.5f;
 	Wave3.HealthMultiplier = 1.4f;
 	Wave3.DamageMultiplier = 1.4f;
-	Wave3.SpeedMultiplier = 1.0f;
 	Wave3.RewardMultiplier = 1.4f;
 
-	// Part 1 victory after wave 3 — keeps the demo shorter while still showing escalation.
 	Waves = { Wave1, Wave2, Wave3 };
 }
 
@@ -71,8 +62,7 @@ void AWaveManager::StartWaves()
 		return;
 	}
 
-	// Only (re)start from scratch if nothing has begun yet — matches the old contract where
-	// calling this again acts as a no-op resume rather than restarting wave 1.
+	// Calling this again after waves began acts as a no-op resume rather than restarting wave 1.
 	if (CurrentWaveIndex < 0)
 	{
 		BeginNextWave();
@@ -85,6 +75,7 @@ void AWaveManager::StopWaves()
 	GetWorldTimerManager().ClearTimer(CountdownTimerHandle);
 	GetWorldTimerManager().ClearTimer(SpawnTimerHandle);
 	GetWorldTimerManager().ClearTimer(BreakTimerHandle);
+	GetWorldTimerManager().ClearTimer(MonitorTimerHandle);
 }
 
 void AWaveManager::HoldForResultsScreen()
@@ -105,7 +96,7 @@ void AWaveManager::ContinueToNextWave()
 
 void AWaveManager::RetryCurrentWave()
 {
-	if (!Spawner || !Waves.IsValidIndex(CurrentWaveIndex))
+	if (!Spawner || CurrentWaveIndex < 0 || CurrentWaveIndex >= GetTotalWaves())
 	{
 		return;
 	}
@@ -113,25 +104,14 @@ void AWaveManager::RetryCurrentWave()
 	GetWorldTimerManager().ClearTimer(CountdownTimerHandle);
 	GetWorldTimerManager().ClearTimer(SpawnTimerHandle);
 	GetWorldTimerManager().ClearTimer(BreakTimerHandle);
+	GetWorldTimerManager().ClearTimer(MonitorTimerHandle);
 
 	// Final victory calls StopWaves; explicitly reopen the manager for this replay.
 	bStopped = false;
-	EnemiesSpawnedThisWave = 0;
-	ActiveEnemyCount = 0;
-	State = EWaveState::CountingDown;
-	CountdownSecondsRemaining = CountdownSeconds;
-
 	OnEnemiesRemainingChanged.Broadcast(0);
-	OnWaveCountdownTick.Broadcast(CountdownSecondsRemaining);
 
-	if (CountdownSecondsRemaining <= 0)
-	{
-		CountdownTick();
-		return;
-	}
-
-	GetWorldTimerManager().SetTimer(
-		CountdownTimerHandle, this, &AWaveManager::CountdownTick, 1.0f, /*bLoop=*/true);
+	PrepareCurrentWave();
+	StartCountdown();
 }
 
 void AWaveManager::DeclareVictory()
@@ -153,18 +133,51 @@ void AWaveManager::BeginNextWave()
 
 	++CurrentWaveIndex;
 
-	// No more configured waves -> the player has cleared everything. Win condition.
-	if (CurrentWaveIndex >= Waves.Num())
+	// No more waves -> the player has survived everything. Win condition.
+	if (CurrentWaveIndex >= GetTotalWaves())
 	{
 		TriggerVictory();
 		return;
 	}
 
+	PrepareCurrentWave();
+	StartCountdown();
+}
+
+void AWaveManager::PrepareCurrentWave()
+{
+	SpawnQueue.Reset();
+
+	if (bUseAdaptiveDirector && Director)
+	{
+		const FWavePlan Plan = Director->PlanWave(GetWorld(), GetCurrentWave());
+		SpawnQueue = Plan.Spawns;
+
+		ActiveWave = FWaveData();
+		ActiveWave.EnemyCount = FMath::Max(1, Plan.Spawns.Num());
+		ActiveWave.HealthMultiplier = Plan.HealthMultiplier;
+		ActiveWave.DamageMultiplier = Plan.DamageMultiplier;
+		ActiveWave.SpeedMultiplier = Plan.SpeedMultiplier;
+		ActiveWave.RewardMultiplier = Plan.RewardMultiplier;
+		return;
+	}
+
+	if (Waves.IsValidIndex(CurrentWaveIndex))
+	{
+		ActiveWave = Waves[CurrentWaveIndex];
+	}
+}
+
+void AWaveManager::StartCountdown()
+{
 	EnemiesSpawnedThisWave = 0;
 	ActiveEnemyCount = 0;
+	PackLane = INDEX_NONE;
+	bReliefActive = false;
+	TrackedEnemies.Reset();
+
 	State = EWaveState::CountingDown;
 	CountdownSecondsRemaining = CountdownSeconds;
-
 	OnWaveCountdownTick.Broadcast(CountdownSecondsRemaining);
 
 	if (CountdownSecondsRemaining <= 0)
@@ -195,49 +208,89 @@ void AWaveManager::CountdownTick()
 	// Countdown finished -> the wave is now live.
 	GetWorldTimerManager().ClearTimer(CountdownTimerHandle);
 	State = EWaveState::Active;
+
+	if (bUseAdaptiveDirector && Director)
+	{
+		Director->BeginWave(GetWorld());
+		GetWorldTimerManager().SetTimer(MonitorTimerHandle, this, &AWaveManager::MonitorWave, 0.25f, /*bLoop=*/true);
+	}
+
 	OnWaveStarted.Broadcast(GetCurrentWave());
 	OnEnemiesRemainingChanged.Broadcast(ActiveEnemyCount);
 
-	// Spawn the first enemy immediately, then continue on this wave's own spawn delay.
+	// Spawn the first enemy immediately, then continue on the planned delays.
 	SpawnTick();
 }
 
 void AWaveManager::SpawnTick()
 {
-	if (bStopped || !Spawner || !Waves.IsValidIndex(CurrentWaveIndex))
+	if (bStopped || !Spawner || State != EWaveState::Active)
 	{
 		return;
 	}
 
-	const FWaveData& WaveData = Waves[CurrentWaveIndex];
+	const float NextDelay = SpawnNextEnemy();
 
-	// Let this wave's data pick the enemy class (Part 1: always the Basic Enemy). The spawner
-	// itself is untouched — we simply set which class it should hand out next.
-	if (WaveData.EnemyType)
+	if (EnemiesSpawnedThisWave < ActiveWave.EnemyCount)
 	{
-		Spawner->EnemyClass = WaveData.EnemyType;
+		GetWorldTimerManager().SetTimer(SpawnTimerHandle, this, &AWaveManager::SpawnTick, NextDelay, /*bLoop=*/false);
+	}
+	else
+	{
+		// Every enemy has been sent; now we just wait for them to die.
+		GetWorldTimerManager().ClearTimer(SpawnTimerHandle);
+		CheckWaveCompletion();
+	}
+}
+
+float AWaveManager::SpawnNextEnemy()
+{
+	AEnemy* NewEnemy = nullptr;
+	float Delay = ActiveWave.SpawnDelay;
+	int32 Lane = INDEX_NONE;
+
+	if (bUseAdaptiveDirector && Director && SpawnQueue.IsValidIndex(EnemiesSpawnedThisWave))
+	{
+		// Director-planned spawn: type from the plan, lane chosen from live lane coverage.
+		const FPlannedSpawn& Planned = SpawnQueue[EnemiesSpawnedThisWave];
+		Lane = (Planned.bPackFollower && PackLane != INDEX_NONE)
+			? PackLane
+			: Director->ChooseLane(GetWorld(), Planned.Type);
+		PackLane = Lane;
+		Delay = Planned.DelayAfter;
+		NewEnemy = Spawner->SpawnEnemyOfType(Planned.Type, Lane);
+	}
+	else
+	{
+		if (ActiveWave.EnemyType)
+		{
+			Spawner->EnemyClass = ActiveWave.EnemyType;
+		}
+		NewEnemy = Spawner->SpawnSingleEnemy();
 	}
 
-	if (AEnemy* NewEnemy = Spawner->SpawnSingleEnemy())
+	if (NewEnemy)
 	{
-		// Scale this enemy's stats from its own class defaults using the wave's multipliers,
-		// rather than hardcoding base numbers here — the Basic Enemy stays the single source
-		// of truth for what "100% difficulty" means.
+		// Scale this enemy's own type stats by the wave's multipliers.
 		if (UHealthComponent* Health = NewEnemy->HealthComponent)
 		{
-			Health->MaxHealth *= WaveData.HealthMultiplier;
+			Health->MaxHealth *= ActiveWave.HealthMultiplier;
 			Health->Heal(Health->MaxHealth); // Top current health up to the new (scaled) max.
+			Health->OnDeath.AddDynamic(this, &AWaveManager::HandleTrackedEnemyDeath);
 		}
-		NewEnemy->AttackDamage *= WaveData.DamageMultiplier;
-		NewEnemy->MoveSpeed *= WaveData.SpeedMultiplier;
-		NewEnemy->ResourceReward = FMath::RoundToInt(NewEnemy->ResourceReward * WaveData.RewardMultiplier);
+		NewEnemy->AttackDamage *= ActiveWave.DamageMultiplier;
+		NewEnemy->MoveSpeed *= ActiveWave.SpeedMultiplier;
+		NewEnemy->ResourceReward = FMath::RoundToInt(NewEnemy->ResourceReward * ActiveWave.RewardMultiplier);
 
-		// Track this specific enemy so we know the instant it dies (event-driven — no per-
-		// frame polling or GetAllActorsOfClass scans needed to know when the wave is clear).
-		if (NewEnemy->HealthComponent)
+		FTrackedEnemy Tracked;
+		Tracked.Enemy = NewEnemy;
+		Tracked.SpawnTime = GetWorld()->GetTimeSeconds();
+		const float PathLength = Lane != INDEX_NONE ? Spawner->GetPathLength(Lane) : 0.0f;
+		if (PathLength > 0.0f && NewEnemy->MoveSpeed > 0.0f)
 		{
-			NewEnemy->HealthComponent->OnDeath.AddDynamic(this, &AWaveManager::HandleTrackedEnemyDeath);
+			Tracked.ExpectedTravelTime = PathLength / NewEnemy->MoveSpeed;
 		}
+		TrackedEnemies.Add(Tracked);
 
 		++ActiveEnemyCount;
 		OnEnemiesRemainingChanged.Broadcast(ActiveEnemyCount);
@@ -245,16 +298,83 @@ void AWaveManager::SpawnTick()
 
 	++EnemiesSpawnedThisWave;
 
-	if (EnemiesSpawnedThisWave < WaveData.EnemyCount)
+	return bReliefActive ? Delay * ReliefDelayScale : Delay;
+}
+
+void AWaveManager::MonitorWave()
+{
+	if (bStopped || State != EWaveState::Active || !Director)
 	{
-		GetWorldTimerManager().SetTimer(SpawnTimerHandle, this, &AWaveManager::SpawnTick, WaveData.SpawnDelay, /*bLoop=*/false);
+		return;
 	}
-	else
+
+	ResolveTrackedEnemies();
+
+	FTimerManager& Timers = GetWorldTimerManager();
+	const bool bSpawnsRemaining = EnemiesSpawnedThisWave < ActiveWave.EnemyCount;
+
+	// Relief: the tower is taking a beating this wave, so stretch out the remaining spawns.
+	if (!bReliefActive && Director->ShouldGrantRelief(GetWorld()))
 	{
-		// All of this wave's enemies have been scheduled; now we just wait for them to die.
-		GetWorldTimerManager().ClearTimer(SpawnTimerHandle);
-		CheckWaveCompletion();
+		bReliefActive = true;
+		SetDirectorEvent(TEXT("Relief: tower under heavy attack - spawns slowed"));
+
+		if (bSpawnsRemaining && Timers.IsTimerActive(SpawnTimerHandle))
+		{
+			const float Remaining = Timers.GetTimerRemaining(SpawnTimerHandle);
+			Timers.SetTimer(SpawnTimerHandle, this, &AWaveManager::SpawnTick, Remaining * ReliefDelayScale, false);
+		}
+		return;
 	}
+
+	// Pressure: the player wiped the board, so don't leave them waiting for the next enemy.
+	if (!bReliefActive && bSpawnsRemaining && ActiveEnemyCount == 0
+		&& Timers.IsTimerActive(SpawnTimerHandle)
+		&& Timers.GetTimerRemaining(SpawnTimerHandle) > PressureEarlySpawnThreshold)
+	{
+		Timers.ClearTimer(SpawnTimerHandle);
+		SetDirectorEvent(TEXT("Pressure: board cleared - next enemy sent early"));
+		SpawnTick();
+	}
+}
+
+void AWaveManager::ResolveTrackedEnemies()
+{
+	const float Now = GetWorld()->GetTimeSeconds();
+
+	for (FTrackedEnemy& Tracked : TrackedEnemies)
+	{
+		if (Tracked.bResolved)
+		{
+			continue;
+		}
+
+		const AEnemy* Enemy = Tracked.Enemy.Get();
+		const bool bDead = !Enemy || !Enemy->HealthComponent || Enemy->HealthComponent->IsDead();
+
+		if (!bDead)
+		{
+			if (!Tracked.bLeaked && Enemy->HasReachedTower())
+			{
+				Tracked.bLeaked = true;
+			}
+			continue;
+		}
+
+		Tracked.bResolved = true;
+		if (Director)
+		{
+			const float Progress = (Now - Tracked.SpawnTime) / FMath::Max(1.0f, Tracked.ExpectedTravelTime);
+			Director->RecordEnemyOutcome(Progress, Tracked.bLeaked);
+		}
+	}
+}
+
+void AWaveManager::SetDirectorEvent(const FString& Message)
+{
+	LastDirectorEvent = Message;
+	LastDirectorEventTime = GetWorld()->GetTimeSeconds();
+	UE_LOG(LogTemp, Display, TEXT("WaveDirector: wave %d - %s"), GetCurrentWave(), *Message);
 }
 
 void AWaveManager::HandleTrackedEnemyDeath(AActor* Killer)
@@ -272,15 +392,23 @@ void AWaveManager::HandleTrackedEnemyDeath(AActor* Killer)
 
 void AWaveManager::CheckWaveCompletion()
 {
-	if (bStopped || State != EWaveState::Active || !Waves.IsValidIndex(CurrentWaveIndex))
+	if (bStopped || State != EWaveState::Active)
 	{
 		return;
 	}
 
-	const bool bAllSpawned = EnemiesSpawnedThisWave >= Waves[CurrentWaveIndex].EnemyCount;
+	const bool bAllSpawned = EnemiesSpawnedThisWave >= ActiveWave.EnemyCount;
 	if (!bAllSpawned || ActiveEnemyCount > 0)
 	{
 		return; // Still enemies left to spawn or still enemies alive -> not complete yet.
+	}
+
+	GetWorldTimerManager().ClearTimer(MonitorTimerHandle);
+
+	if (bUseAdaptiveDirector && Director)
+	{
+		ResolveTrackedEnemies();
+		Director->EvaluateWave(GetWorld());
 	}
 
 	State = EWaveState::Complete;
