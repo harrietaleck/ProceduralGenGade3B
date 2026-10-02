@@ -55,6 +55,16 @@ void UHealthComponent::ApplyDamage(float Amount, AActor* Killer)
         }
     }
 
+    //Elite shields and defender combos
+    if (AEnemy* EnemyOwner = Cast<AEnemy>(GetOwner()))
+    {
+        Amount = EnemyOwner->ModifyIncomingDamage(Amount, Killer);
+        if (Amount <= 0.0f)
+        {
+            return;
+        }
+    }
+
     CurrentHealth =
         FMath::Clamp(CurrentHealth - Amount, 0.0f, MaxHealth);
 

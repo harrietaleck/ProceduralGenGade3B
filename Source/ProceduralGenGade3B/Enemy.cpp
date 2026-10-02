@@ -7,7 +7,10 @@
 #include "HealthComponent.h"
 #include "DamageFlashComponent.h"
 #include "Defender.h"
+#include "ArcherDefender.h"
+#include "ProceduralTerrain.h"
 #include "TDGameMode.h"
+#include "WaveManager.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -64,6 +67,148 @@ FString AEnemy::GetTypeName(EEnemyType Type)
     case EEnemyType::Bear: return TEXT("Bear");
     case EEnemyType::Wolf: return TEXT("Wolf");
     default:               return TEXT("Basic");
+    }
+}
+
+FString AEnemy::GetEliteName(EEliteModifier Modifier)
+{
+    switch (Modifier)
+    {
+    case EEliteModifier::Shielded:     return TEXT("Shielded");
+    case EEliteModifier::Regenerating: return TEXT("Regenerating");
+    case EEliteModifier::Swift:        return TEXT("Swift");
+    case EEliteModifier::Splitting:    return TEXT("Splitting");
+    default:                           return TEXT("None");
+    }
+}
+
+void AEnemy::MakeElite(EEliteModifier Modifier)
+{
+    if (Modifier == EEliteModifier::None || !HealthComponent)
+    {
+        return;
+    }
+
+    EliteModifier = Modifier;
+
+    HealthComponent->MaxHealth *= EliteHealthMultiplier;
+    HealthComponent->Heal(HealthComponent->MaxHealth);
+    ResourceReward = FMath::RoundToInt(ResourceReward * 1.6f);
+
+    //Elites are a size up so they stand out in a crowd
+    SpawnTargetScale *= 1.25f;
+    if (SpawnEffectElapsed >= SpawnEffectDuration)
+    {
+        MeshComponent->SetRelativeScale3D(SpawnTargetScale);
+    }
+
+    switch (Modifier)
+    {
+    case EEliteModifier::Shielded:
+        ShieldHitsRemaining = ShieldHits;
+        break;
+    case EEliteModifier::Swift:
+        MoveSpeed *= SwiftSpeedMultiplier;
+        Acceleration *= 1.5f;
+        break;
+    default:
+        break;
+    }
+
+    ShowCombatText(FString::Printf(TEXT("ELITE: %s"), *GetEliteName(Modifier)), FColor(255, 210, 60));
+}
+
+void AEnemy::ApplyPoison(float DamagePerSecond, float Duration, AActor* Source)
+{
+    if (!HealthComponent || HealthComponent->IsDead() || Duration <= 0.0f)
+    {
+        return;
+    }
+
+    if (PoisonTimeRemaining <= 0.0f || DamagePerSecond >= PoisonDamagePerSecond)
+    {
+        PoisonDamagePerSecond = DamagePerSecond;
+        PoisonSource = Source;
+    }
+    PoisonTimeRemaining = FMath::Max(PoisonTimeRemaining, Duration);
+}
+
+float AEnemy::ModifyIncomingDamage(float Amount, AActor* Source)
+{
+    //Own poison ticks skip shields and combos so they cannot chain
+    if (bApplyingStatusDamage)
+    {
+        return Amount;
+    }
+
+    const ADefender* Defender = Cast<ADefender>(Source);
+    if (!Defender)
+    {
+        return Amount;
+    }
+
+    if (EliteModifier == EEliteModifier::Shielded && ShieldHitsRemaining > 0)
+    {
+        --ShieldHitsRemaining;
+        ShowCombatText(ShieldHitsRemaining > 0 ? TEXT("BLOCKED") : TEXT("SHIELD BROKEN"), FColor(90, 170, 255));
+        return 0.0f;
+    }
+
+    ATDGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ATDGameMode>() : nullptr;
+
+    //Shatter: area damage hits a stunned enemy much harder (Strong + Bomb)
+    if (IsStunned() && Defender->IsAreaAttacker())
+    {
+        Amount *= ShatterMultiplier;
+        ShowCombatText(TEXT("SHATTER"), FColor(200, 120, 255));
+        if (GameMode)
+        {
+            GameMode->NotifyCombo();
+        }
+    }
+
+    //Venom spread: an arrow bursts the poison onto every enemy nearby (Bomb + Archer)
+    if (IsPoisoned() && Defender->IsA<AArcherDefender>())
+    {
+        SpreadVenom(const_cast<ADefender*>(Defender));
+        if (GameMode)
+        {
+            GameMode->NotifyCombo();
+        }
+    }
+
+    return Amount;
+}
+
+void AEnemy::SpreadVenom(AActor* Source)
+{
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return;
+    }
+
+    const FVector Origin = GetActorLocation();
+    for (TActorIterator<AEnemy> It(World); It; ++It)
+    {
+        AEnemy* Other = *It;
+        if (Other && Other->HealthComponent && !Other->HealthComponent->IsDead()
+            && FVector::DistSquared2D(Origin, Other->GetActorLocation()) <= FMath::Square(VenomSpreadRadius))
+        {
+            Other->ApplyPoison(VenomDamagePerSecond, VenomDuration, Source);
+        }
+    }
+
+    ShowCombatText(TEXT("VENOM SPREAD"), FColor(90, 255, 120));
+    DrawDebugCircle(World, Origin, VenomSpreadRadius, 32, FColor(90, 255, 120), false, 0.6f, 0, 5.0f,
+        FVector(1, 0, 0), FVector(0, 1, 0), false);
+}
+
+void AEnemy::ShowCombatText(const FString& Text, const FColor& Color) const
+{
+    if (UWorld* World = GetWorld())
+    {
+        DrawDebugString(World, FVector(0.0f, 0.0f, 130.0f), Text, const_cast<AEnemy*>(this), Color, 1.0f, true, 1.3f);
     }
 }
 
@@ -217,6 +362,13 @@ void AEnemy::Tick(float DeltaSeconds)
     //Play the enemy spawn animation
     UpdateSpawnEffect(DeltaSeconds);
 
+    //Poison and regeneration keep running while stunned
+    TickStatusEffects(DeltaSeconds);
+    if (!HealthComponent || HealthComponent->IsDead())
+    {
+        return;
+    }
+
     if (StunTimeRemaining > 0.0f)
     {
         StunTimeRemaining -= DeltaSeconds;
@@ -225,6 +377,16 @@ void AEnemy::Tick(float DeltaSeconds)
     }
 
     AttackTimer -= DeltaSeconds;
+
+    if (bCanReroute)
+    {
+        RerouteTimer -= DeltaSeconds;
+        if (RerouteTimer <= 0.0f)
+        {
+            RerouteTimer = RerouteCheckInterval;
+            TryReroute();
+        }
+    }
 
     switch (EnemyType)
     {
@@ -372,9 +534,235 @@ void AEnemy::UpdateSpawnEffect(float DeltaSeconds)
         SpawnGlow->SetIntensity(SpawnGlowIntensity * (1.0f - Alpha));
         if (Alpha >= 1.0f)
         {
-            SpawnGlow->SetVisibility(false);
+            if (IsElite())
+            {
+                //Elites keep a gold aura for their whole life
+                SpawnGlow->SetLightColor(FLinearColor(1.0f, 0.75f, 0.15f));
+                SpawnGlow->SetIntensity(3000.0f);
+            }
+            else
+            {
+                SpawnGlow->SetVisibility(false);
+            }
         }
     }
+}
+
+void AEnemy::TickStatusEffects(float DeltaSeconds)
+{
+    UWorld* World = GetWorld();
+
+    if (PoisonTimeRemaining > 0.0f)
+    {
+        PoisonTimeRemaining -= DeltaSeconds;
+        PoisonDamageAccumulated += PoisonDamagePerSecond * DeltaSeconds;
+        PoisonTickTimer -= DeltaSeconds;
+
+        if (PoisonTickTimer <= 0.0f || PoisonTimeRemaining <= 0.0f)
+        {
+            PoisonTickTimer = 0.5f;
+            if (World)
+            {
+                DrawDebugCircle(World, GetActorLocation(), 70.0f, 16, FColor(90, 255, 120), false, 0.5f, 0, 3.0f,
+                    FVector(1, 0, 0), FVector(0, 1, 0), false);
+            }
+
+            if (PoisonDamageAccumulated > 0.0f)
+            {
+                const float Damage = PoisonDamageAccumulated;
+                PoisonDamageAccumulated = 0.0f;
+
+                TGuardValue<bool> StatusGuard(bApplyingStatusDamage, true);
+                HealthComponent->ApplyDamage(Damage, PoisonSource.Get());
+                if (HealthComponent->IsDead())
+                {
+                    return;
+                }
+            }
+        }
+
+        if (PoisonTimeRemaining <= 0.0f)
+        {
+            PoisonDamagePerSecond = 0.0f;
+            PoisonDamageAccumulated = 0.0f;
+        }
+    }
+
+    //Poison shuts regeneration off, which gives the player a counter to Regenerating elites
+    if (EliteModifier == EEliteModifier::Regenerating && !IsPoisoned())
+    {
+        HealthComponent->Heal(HealthComponent->MaxHealth * RegenFractionPerSecond * DeltaSeconds);
+    }
+
+    if (EliteModifier == EEliteModifier::Shielded && ShieldHitsRemaining > 0 && World)
+    {
+        DrawDebugSphere(World, GetActorLocation(), 85.0f * SpawnTargetScale.X + 40.0f, 12,
+            FColor(90, 170, 255), false, -1.0f, 0, 2.0f);
+    }
+}
+
+void AEnemy::TryReroute()
+{
+    if (RerouteCount >= MaxReroutes || HasReachedTower() || Waypoints.Num() == 0)
+    {
+        return;
+    }
+
+    ATDGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ATDGameMode>() : nullptr;
+    const AProceduralTerrain* Terrain = GameMode ? GameMode->GetTerrain() : nullptr;
+    if (!Terrain)
+    {
+        return;
+    }
+
+    //Snapshot every living defender's coverage once for this evaluation
+    struct FThreatSource
+    {
+        FVector Location;
+        float RangeSq;
+        float Threat;
+    };
+    TArray<FThreatSource> Threats;
+    for (TActorIterator<ADefender> It(GetWorld()); It; ++It)
+    {
+        const ADefender* Defender = *It;
+        if (Defender && Defender->HealthComponent && !Defender->HealthComponent->IsDead())
+        {
+            Threats.Add({ Defender->GetActorLocation(), FMath::Square(Defender->AttackRange), Defender->GetThreatRating() });
+        }
+    }
+    if (Threats.Num() == 0)
+    {
+        return;
+    }
+
+    const float Weight = DangerCostWeight;
+    auto CellCost = [&Threats, Weight](const FVector& Point)
+    {
+        float Danger = 0.0f;
+        for (const FThreatSource& Threat : Threats)
+        {
+            if (FVector::DistSquared2D(Point, Threat.Location) <= Threat.RangeSq)
+            {
+                Danger += Threat.Threat;
+            }
+        }
+        return 1.0f + Danger * Weight;
+    };
+
+    TArray<FVector> Remaining;
+    for (int32 i = CurrentWaypoint; i < Waypoints.Num(); ++i)
+    {
+        Remaining.Add(Waypoints[i]);
+    }
+
+    const float CurrentCost = EvaluateRouteCost(GetActorLocation(), Remaining, CellCost, Terrain->CellSize);
+
+    TArray<FVector> NewRoute;
+    float NewCost = 0.0f;
+    if (!Terrain->FindLowestCostRoute(GetActorLocation(), CellCost, NewRoute, NewCost) || NewRoute.Num() == 0)
+    {
+        return;
+    }
+
+    if (NewCost > CurrentCost * RerouteImprovementRatio)
+    {
+        return;
+    }
+
+    Waypoints = NewRoute;
+    CurrentWaypoint = 0;
+    ++RerouteCount;
+
+    //Show the new route so the player can see the enemy dodging their defence
+    const FVector Lift(0.0f, 0.0f, 30.0f);
+    FVector Previous = GetActorLocation();
+    for (const FVector& Point : Waypoints)
+    {
+        DrawDebugLine(GetWorld(), Previous + Lift, FVector(Point.X, Point.Y, Previous.Z) + Lift,
+            FColor(255, 150, 40), false, 2.5f, 0, 6.0f);
+        Previous = FVector(Point.X, Point.Y, Previous.Z);
+    }
+    ShowCombatText(TEXT("REROUTE"), FColor(255, 150, 40));
+
+    if (AWaveManager* WaveManager = GameMode->GetWaveManager())
+    {
+        WaveManager->ReportDirectorEvent(FString::Printf(TEXT("%s%s rerouted around heavy defence (route cost %.0f -> %.0f)"),
+            IsElite() ? TEXT("Elite ") : TEXT(""), *GetTypeName(EnemyType), CurrentCost, NewCost));
+    }
+}
+
+float AEnemy::EvaluateRouteCost(const FVector& Start, const TArray<FVector>& Points,
+    TFunctionRef<float(const FVector&)> CellCost, float CellSize) const
+{
+    float Cost = 0.0f;
+    FVector Previous = Start;
+    for (const FVector& Point : Points)
+    {
+        const FVector Segment(Point.X - Previous.X, Point.Y - Previous.Y, 0.0f);
+        const float Length = Segment.Size();
+        const int32 Steps = FMath::Max(1, FMath::CeilToInt(Length / CellSize));
+        for (int32 Step = 0; Step < Steps; ++Step)
+        {
+            const FVector Sample = Previous + Segment * ((Step + 0.5f) / Steps);
+            Cost += CellCost(Sample) * (Length / CellSize) / Steps;
+        }
+        Previous = FVector(Point.X, Point.Y, Previous.Z);
+    }
+    return Cost;
+}
+
+void AEnemy::SpawnSplitChildren()
+{
+    UWorld* World = GetWorld();
+    if (!World || SplitCount <= 0)
+    {
+        return;
+    }
+
+    TArray<FVector> Remaining;
+    for (int32 i = CurrentWaypoint; i < Waypoints.Num(); ++i)
+    {
+        Remaining.Add(Waypoints[i]);
+    }
+
+    const float ParentMaxHealth = HealthComponent ? HealthComponent->MaxHealth : 100.0f;
+    const FVector Side = GetActorRightVector();
+
+    for (int32 i = 0; i < SplitCount; ++i)
+    {
+        const float Offset = (i - (SplitCount - 1) * 0.5f) * 90.0f;
+        const FTransform SpawnTransform(GetActorRotation(), GetActorLocation() + Side * Offset);
+
+        AEnemy* Child = World->SpawnActorDeferred<AEnemy>(GetClass(), SpawnTransform, GetOwner(), nullptr,
+            ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+        if (!Child)
+        {
+            continue;
+        }
+
+        Child->SetEnemyType(EEnemyType::Basic);
+        Child->SetPath(Remaining);
+        Child->SetTargetTower(TargetTower);
+        Child->FinishSpawning(SpawnTransform);
+        Child->ConfigureAsSplitChild(ParentMaxHealth);
+
+        OnSplit.Broadcast(this, Child);
+    }
+
+    ShowCombatText(TEXT("SPLIT!"), FColor(255, 210, 60));
+}
+
+void AEnemy::ConfigureAsSplitChild(float ParentMaxHealth)
+{
+    HealthComponent->MaxHealth = FMath::Max(10.0f, ParentMaxHealth * SplitHealthFraction);
+    HealthComponent->Heal(HealthComponent->MaxHealth);
+    MoveSpeed *= 1.2f;
+    ResourceReward = 5;
+    SpawnTargetScale = FVector(0.38f);
+    SpawnEffectDuration = 0.3f;
+    BodyColor = FLinearColor(1.0f, 0.55f, 0.45f);
+    ApplyBodyColor();
 }
 
 //Moves the enemy through its waypoint path, attacking the tower at the end
@@ -536,6 +924,11 @@ void AEnemy::HandleDeath(AActor* Killer)
     if (ATDGameMode* GameMode = Cast<ATDGameMode>(GetWorld()->GetAuthGameMode()))
     {
         GameMode->NotifyEnemyKilled(this);
+    }
+
+    if (EliteModifier == EEliteModifier::Splitting)
+    {
+        SpawnSplitChildren();
     }
 
     Destroy();

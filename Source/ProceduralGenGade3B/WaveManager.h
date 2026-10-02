@@ -106,7 +106,7 @@ public:
 
 	/** Length of the "3, 2, 1" countdown shown before each wave starts, in seconds. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Waves", meta = (ClampMin = "0"))
-	int32 CountdownSeconds = 3;
+	int32 CountdownSeconds = 5;
 
 	/** How long the "WAVE COMPLETE" breather lasts before the next wave's countdown begins. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Waves", meta = (ClampMin = "0.0"))
@@ -195,6 +195,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Waves|Adaptive")
 	float GetLastDirectorEventTime() const { return LastDirectorEventTime; }
 
+	/** Post a message to the HUD's director event line (used by enemies, e.g. rerouting). */
+	UFUNCTION(BlueprintCallable, Category = "Waves|Adaptive")
+	void ReportDirectorEvent(const FString& Message) { SetDirectorEvent(Message); }
+
+	/** True when the upcoming wave has already been planned (forecast is meaningful). */
+	UFUNCTION(BlueprintPure, Category = "Waves|Adaptive")
+	bool HasUpcomingWavePlan() const { return PreparedWaveIndex != INDEX_NONE && PreparedWaveIndex > CurrentWaveIndex; }
+
 private:
 	/** One spawned enemy whose outcome the director still needs to hear about. */
 	struct FTrackedEnemy
@@ -212,6 +220,9 @@ private:
 
 	/** 0-based wave index for the wave in progress. */
 	int32 CurrentWaveIndex = -1;
+
+	/** Wave index whose plan already sits in ActiveWave / SpawnQueue (planned ahead for the forecast). */
+	int32 PreparedWaveIndex = INDEX_NONE;
 
 	/** Settings for the wave in progress (from the director's plan or the fixed table). */
 	FWaveData ActiveWave;
@@ -252,8 +263,15 @@ private:
 	/** Populate the fixed fallback table if nothing was configured. */
 	void EnsureDefaultWaveTable();
 
-	/** Fill ActiveWave / SpawnQueue for CurrentWaveIndex. */
-	void PrepareCurrentWave();
+	/** Fill ActiveWave / SpawnQueue for the given wave index. */
+	void PrepareWave(int32 WaveIndex);
+
+	/** Start tracking a spawned enemy (count, death, split children, director outcome). */
+	void TrackEnemy(AEnemy* Enemy, float SpawnTime, float ExpectedTravelTime);
+
+	/** A Splitting elite released a child: track it as part of this wave. */
+	UFUNCTION()
+	void HandleEnemySplit(AEnemy* Parent, AEnemy* Child);
 
 	/** Reset counters and start the countdown for the prepared wave. */
 	void StartCountdown();
