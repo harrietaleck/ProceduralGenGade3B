@@ -104,6 +104,10 @@ public:
         bHasOccupiedSlot = true;
     }
 
+    /** The build pad this defender stands on, used by save games. */
+    const FVector& GetOccupiedSlotLocation() const { return OccupiedSlotLocation; }
+    bool HasOccupiedSlot() const { return bHasOccupiedSlot; }
+
     //Lets archers and bomb defenders turn off the original single target shooting
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender")
     bool bUseDefaultAttack = true;

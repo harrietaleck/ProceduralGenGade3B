@@ -4,6 +4,8 @@
 
 #include "TDGameMode.h"
 #include "DefenderUpgradeComponent.h"
+#include "TDSaveGame.h"
+#include "TDSaveSubsystem.h"
 #include "ProceduralTerrain.h"
 #include "Tower.h"
 #include "Defender.h"
@@ -83,6 +85,12 @@ void ATDGameMode::BeginPlay()
 
 					UTDMenuFunctionLibrary::StretchOpenMenuScreens(World);
 
+					// Wire New Game / Resume / Exit on the Start Screen, and grey Resume out with no save.
+					if (UTDSaveSubsystem* Saves = World->GetGameInstance() ? World->GetGameInstance()->GetSubsystem<UTDSaveSubsystem>() : nullptr)
+					{
+						Saves->BindStartScreen(World);
+					}
+
 					TArray<UUserWidget*> MenuWidgets;
 					UWidgetBlueprintLibrary::GetAllWidgetsOfClass(
 						World, MenuWidgets, UUserWidget::StaticClass(), true);
@@ -136,6 +144,19 @@ void ATDGameMode::BeginPlay()
 		return;
 	}
 
+	// Resume: rebuild the saved map from its seed so saved defenders land on the same build pads.
+	UTDSaveGame* ResumeSave = nullptr;
+	if (UTDSaveSubsystem* Saves = GetGameInstance() ? GetGameInstance()->GetSubsystem<UTDSaveSubsystem>() : nullptr)
+	{
+		ResumeSave = Saves->ConsumeResumeRequest();
+	}
+	const bool bRandomSeedSetting = Terrain->bRandomizeSeedOnBeginPlay;
+	if (ResumeSave)
+	{
+		Terrain->bRandomizeSeedOnBeginPlay = false;
+		Terrain->Seed = ResumeSave->TerrainSeed;
+	}
+
 	const int32 MaxWorldAttempts = 5;
 	bool bWorldValid = false;
 	for (int32 WorldAttempt = 1; WorldAttempt <= MaxWorldAttempts; ++WorldAttempt)
@@ -163,11 +184,31 @@ void ATDGameMode::BeginPlay()
 		UE_LOG(LogTemp, Warning, TEXT("TDGameMode: world validation failed on attempt %d/%d."), WorldAttempt, MaxWorldAttempts);
 	}
 
+	Terrain->bRandomizeSeedOnBeginPlay = bRandomSeedSetting;
 	if (!bWorldValid)
 	{
 		UE_LOG(LogTemp, Error, TEXT("TDGameMode: failed to produce a valid world after %d attempts."), MaxWorldAttempts);
 		DestroySpawnedWorldActors();
 		return;
+	}
+
+	// If generation had to pick another seed, the saved layout no longer matches: start fresh instead.
+	if (ResumeSave && Terrain->Seed != ResumeSave->TerrainSeed)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("TDSave: saved map could not be rebuilt; starting a new game instead."));
+		ResumeSave = nullptr;
+	}
+	if (ResumeSave)
+	{
+		// Replay the expansions that followed each cleared wave before the checkpoint.
+		for (int32 Expansion = 1; Expansion < ResumeSave->WavesCleared; ++Expansion)
+		{
+			const int32 OldSlotCount = Terrain->GetDefenderSlots().Num();
+			if (Terrain->ExpandWorldAfterWave() > 0)
+			{
+				SpawnBuildPadMarkersFromIndex(OldSlotCount);
+			}
+		}
 	}
 
 	FActorSpawnParameters SpawnParams;
@@ -183,7 +224,7 @@ void ATDGameMode::BeginPlay()
 	WaveManager = GetWorld()->SpawnActor<AWaveManager>(WaveManagerClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
 	if (WaveManager && Spawner)
 	{
-		WaveManager->Initialize(Spawner, true);
+		WaveManager->Initialize(Spawner, ResumeSave == nullptr);
 		WaveManager->OnWaveComplete.AddDynamic(this, &ATDGameMode::HandleWaveComplete);
 	}
 
@@ -248,6 +289,11 @@ void ATDGameMode::BeginPlay()
 		RefreshMetaHUD();
 		bPaused = false;
 		RestoreGameplayInput();
+	}
+
+	if (ResumeSave)
+	{
+		ApplyResumeSave(ResumeSave);
 	}
 }
 
@@ -337,3 +383,4 @@ void ATDGameMode::ReturnToMainMenu()
 #include "TDGameMode_UI.inl"
 #include "TDGameMode_World.inl"
 #include "TDGameMode_Match.inl"
+#include "TDGameMode_Save.inl"

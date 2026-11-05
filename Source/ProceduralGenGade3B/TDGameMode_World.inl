@@ -1,4 +1,4 @@
-﻿// TDGameMode_World.inl - spawning the tower and build pads, and wave flow.
+// TDGameMode_World.inl - spawning the tower and build pads, and wave flow.
 // This file is included by TDGameMode.cpp and is not compiled on its own.
 
 AProceduralTerrain* ATDGameMode::FindTerrain() const
@@ -114,6 +114,16 @@ void ATDGameMode::HandleWaveComplete(int32 WaveNumber)
 
 	FinalizeMatchResult(true, WaveNumber);
 	ShowEndScreen(true);
+
+	// Autosave once the wave's rewards are banked. A won match has nothing left to resume.
+	if (bFinalWave)
+	{
+		WriteMatchFinishedSave();
+	}
+	else
+	{
+		WriteCheckpoint(WaveNumber);
+	}
 
 	if (bFinalWave && WaveManager)
 	{

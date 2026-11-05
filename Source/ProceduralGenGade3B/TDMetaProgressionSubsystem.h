@@ -32,6 +32,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Meta")
 	bool CanAfford(const FMetaCurrencyRewards& Cost) const;
 
+	/** Replaces the whole wallet. Used when a save is loaded. */
+	void SetWallet(const FMetaCurrencyRewards& NewWallet);
+
 private:
 	UPROPERTY()
 	FMetaCurrencyRewards Wallet;

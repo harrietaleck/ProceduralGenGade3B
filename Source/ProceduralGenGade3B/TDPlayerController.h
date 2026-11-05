@@ -88,6 +88,9 @@ protected:
     /** B key: open or close the Defenders upgrade screen during a match. */
     void OnToggleDefenderUpgrades();
 
+    /** F5: write the latest wave checkpoint to the save slot. */
+    void OnQuickSave();
+
 public:
     // *** Development-only test command (type in the ~ console): GrantUpgradeTestResources.
     // *** Adds exactly one round of upgrade costs through the existing AddRewards/AddResources, so a

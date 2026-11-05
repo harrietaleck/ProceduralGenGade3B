@@ -52,17 +52,18 @@ namespace
 			: EUpgrade::Basic;
 	}
 
-	/** Basic, Archer, Poison and Strong are paid in meta currency; the Tower is paid in Loot. */
+	/** *** All five are paid in meta currency: leaf unlocks Strong and Tower, wood unlocks Basic. */
 	FMetaCurrencyRewards MetaCostOf(EUpgrade Upgrade)
 	{
 		FMetaCurrencyRewards Cost;
 		const int32 Amount = ConfigOf(Upgrade).Cost;
 		switch (Upgrade)
 		{
-		case EUpgrade::Basic:  Cost.ForestEssence = Amount; break;
-		case EUpgrade::Archer: Cost.GemStones = Amount; break;
-		case EUpgrade::Poison: Cost.LightLanterns = Amount; break;
-		case EUpgrade::Strong: Cost.ForestEssence = Amount; break;
+		case EUpgrade::Basic:  Cost.WoodenMight = Amount; break;   // *** wood
+		case EUpgrade::Archer: Cost.GemStones = Amount; break;     // gem
+		case EUpgrade::Poison: Cost.LightLanterns = Amount; break; // sun
+		case EUpgrade::Strong: Cost.ForestEssence = Amount; break; // leaf
+		case EUpgrade::Tower:  Cost.ForestEssence = Amount; break; // *** leaf (was Loot)
 		default: break;
 		}
 		return Cost;
@@ -256,18 +257,14 @@ void UDefenderUpgradeComponent::GatherTargets(EUpgrade Upgrade, TArray<AActor*>&
 bool UDefenderUpgradeComponent::CanAfford(EUpgrade Upgrade) const
 {
 	const ATDGameMode* GameMode = GetGameMode();
-	return GameMode && (Upgrade == EUpgrade::Tower
-		? GameMode->GetResources() >= ConfigOf(Upgrade).Cost
-		: GameMode->CanAffordMeta(MetaCostOf(Upgrade)));
+	return GameMode && GameMode->CanAffordMeta(MetaCostOf(Upgrade)); // *** same wallet for all five
 }
 
 bool UDefenderUpgradeComponent::Spend(EUpgrade Upgrade) const
 {
-	// Both calls check the balance first and update the HUD, so nothing can go negative.
+	// TrySpendMeta checks the balance first and updates the HUD, so nothing can go negative.
 	ATDGameMode* GameMode = GetGameMode();
-	return GameMode && (Upgrade == EUpgrade::Tower
-		? GameMode->TrySpendResources(ConfigOf(Upgrade).Cost)
-		: GameMode->TrySpendMeta(MetaCostOf(Upgrade)));
+	return GameMode && GameMode->TrySpendMeta(MetaCostOf(Upgrade)); // ***
 }
 
 void UDefenderUpgradeComponent::TryActivate(EUpgrade Upgrade)
@@ -282,6 +279,7 @@ void UDefenderUpgradeComponent::TryActivate(EUpgrade Upgrade)
 	if (Targets.Num() == 0)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Defender upgrade %s refused: no living target in this level (place one in a match first)."), ConfigOf(Upgrade).ButtonName); // ***
+		Slot.NoTargetUntil = GetWorld()->GetTimeSeconds() + 2.0; // *** show "No units" on the button; nothing is charged
 		RefreshButtons();
 		return;
 	}
@@ -464,14 +462,10 @@ void UDefenderUpgradeComponent::RefreshButtons()
 		UButton* Button = Slot.Button.Get();
 		if (!Button) { continue; }
 
-		bool bUsable = false;
-		if (Slot.Phase == EPhase::Ready && CanAfford(Upgrade))
-		{
-			TArray<AActor*> Targets;
-			GatherTargets(Upgrade, Targets);
-			bUsable = Targets.Num() > 0;
-		}
-		Button->SetBackgroundColor(bUsable || Slot.Phase == EPhase::Active ? ReadyColor : GreyColor);
+		// *** Unlocked purely by resources: enough of its currency = clickable and transparent, otherwise locked grey.
+		const bool bUnlocked = Slot.Phase == EPhase::Ready && CanAfford(Upgrade); // ***
+		Button->SetIsEnabled(bUnlocked || Slot.Phase == EPhase::Active);           // ***
+		Button->SetBackgroundColor(bUnlocked || Slot.Phase == EPhase::Active ? ReadyColor : GreyColor);
 
 		if (UTextBlock* Stats = Slot.StatsLabel.Get()) // *** refreshed every 0.25 s, so activation/expiry show at once
 		{
@@ -483,7 +477,10 @@ void UDefenderUpgradeComponent::RefreshButtons()
 		if (!Label) { continue; }
 		if (Slot.Phase == EPhase::Ready)
 		{
-			Label->SetVisibility(ESlateVisibility::Collapsed);
+			const bool bShowNoTarget = GetWorld()->GetTimeSeconds() < Slot.NoTargetUntil; // ***
+			Label->SetText(FText::FromString(TEXT("No units")));                          // ***
+			Label->SetColorAndOpacity(FLinearColor(1.0f, 0.6f, 0.4f));                    // ***
+			Label->SetVisibility(bShowNoTarget ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); // ***
 			continue;
 		}
 

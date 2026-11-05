@@ -95,6 +95,11 @@ void AWaveManager::ContinueToNextWave()
 	BeginNextWave();
 }
 
+void AWaveManager::SetCompletedWaves(int32 Count)
+{
+	CurrentWaveIndex = FMath::Clamp(Count, 0, GetTotalWaves()) - 1;
+}
+
 void AWaveManager::RetryCurrentWave()
 {
 	if (!Spawner || CurrentWaveIndex < 0 || CurrentWaveIndex >= GetTotalWaves())

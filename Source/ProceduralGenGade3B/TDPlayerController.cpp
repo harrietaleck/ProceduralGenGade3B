@@ -143,6 +143,19 @@ void ATDPlayerController::SetupInputComponent()
 
     //Press B to open the Defenders screen and buy temporary upgrades
     InputComponent->BindKey(EKeys::B, IE_Pressed, this, &ATDPlayerController::OnToggleDefenderUpgrades);
+
+    //Press F5 to save. This also works on the paused results screen
+    FInputKeyBinding& SaveBinding =
+        InputComponent->BindKey(EKeys::F5, IE_Pressed, this, &ATDPlayerController::OnQuickSave);
+    SaveBinding.bExecuteWhenPaused = true;
+}
+
+void ATDPlayerController::OnQuickSave()
+{
+    if (ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>())
+    {
+        GameMode->SaveGameNow();
+    }
 }
 
 // *** Grants: 100 Forest Essence (Basic + Strong), 65 Gem Stones (Archer), 50 Light Lanterns (Poison)
@@ -158,13 +171,13 @@ void ATDPlayerController::GrantUpgradeTestResources()
     }
 
     FMetaCurrencyRewards TestRewards; // ***
-    TestRewards.ForestEssence = 100;
-    TestRewards.GemStones = 65;
-    TestRewards.LightLanterns = 50;
+    TestRewards.ForestEssence = 800;  // *** Strong 50 + Tower 750 (leaf)
+    TestRewards.WoodenMight = 50;     // *** Basic (wood)
+    TestRewards.GemStones = 65;       // Archer (gem)
+    TestRewards.LightLanterns = 50;   // Poison (sun)
     Meta->AddRewards(TestRewards);  // *** existing meta wallet
-    GameMode->AddResources(750);    // *** existing Loot
     GameMode->RefreshMetaHUD();     // *** HUD shows the new balance immediately
-    UE_LOG(LogTemp, Display, TEXT("GrantUpgradeTestResources: +100 Forest Essence, +65 Gem Stones, +50 Light Lanterns, +750 Loot."));
+    UE_LOG(LogTemp, Display, TEXT("GrantUpgradeTestResources: +800 Forest Essence, +50 Wooden Might, +65 Gem Stones, +50 Light Lanterns."));
 #endif
 }
 

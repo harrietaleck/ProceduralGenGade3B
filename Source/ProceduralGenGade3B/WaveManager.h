@@ -156,6 +156,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Waves")
 	void RetryCurrentWave();
 
+	/** Marks the first Count waves as done, so the next ContinueToNextWave starts wave Count + 1. Used when loading a save. */
+	void SetCompletedWaves(int32 Count);
+
 	/** Marks the match as won without firing OnWaveComplete again. Used after the last wave's results. */
 	UFUNCTION(BlueprintCallable, Category = "Waves")
 	void DeclareVictory();

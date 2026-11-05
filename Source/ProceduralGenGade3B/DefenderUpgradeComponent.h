@@ -40,6 +40,7 @@ namespace DefenderUpgrades
 		TWeakObjectPtr<UButton> Button;
 		TWeakObjectPtr<UTextBlock> Label;
 		TWeakObjectPtr<UTextBlock> StatsLabel; // *** current and upgraded stats shown under the button
+		double NoTargetUntil = 0.0;            // *** world time until which "No units" is shown
 	};
 }
 
@@ -59,6 +60,12 @@ public:
 
 	/** Gives a newly placed defender any upgrade that is active for its type. */
 	void HandleDefenderSpawned(ADefender* Defender);
+
+	/** Phase (0 Ready, 1 Active, 2 Cooldown) and seconds left of each upgrade, for save games. */
+	void GetSaveState(TArray<uint8>& OutPhases, TArray<float>& OutSecondsLeft) const;
+
+	/** Restores saved phases and timers; active boosts are re-applied without charging again. */
+	void RestoreSaveState(const TArray<uint8>& Phases, const TArray<float>& SecondsLeft);
 
 protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;

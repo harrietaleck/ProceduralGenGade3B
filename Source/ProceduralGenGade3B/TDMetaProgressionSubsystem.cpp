@@ -11,6 +11,15 @@ void UTDMetaProgressionSubsystem::AddRewards(const FMetaCurrencyRewards& Rewards
 	OnMetaCurrencyChanged.Broadcast();
 }
 
+void UTDMetaProgressionSubsystem::SetWallet(const FMetaCurrencyRewards& NewWallet)
+{
+	Wallet.ForestEssence = FMath::Max(0, NewWallet.ForestEssence);
+	Wallet.WoodenMight = FMath::Max(0, NewWallet.WoodenMight);
+	Wallet.GemStones = FMath::Max(0, NewWallet.GemStones);
+	Wallet.LightLanterns = FMath::Max(0, NewWallet.LightLanterns);
+	OnMetaCurrencyChanged.Broadcast();
+}
+
 bool UTDMetaProgressionSubsystem::CanAfford(const FMetaCurrencyRewards& Cost) const
 {
 	return Wallet.ForestEssence >= Cost.ForestEssence

@@ -23,6 +23,7 @@ public class ProceduralGenGade3B : ModuleRules
 			"UMG",                     // UI made in C++, like health bars, resources and the game over screen.
 			"Slate",
 			"SlateCore",
+			"Niagara",                 // *** Niagara effects for attacks, projectiles, enemies, upgrades and match events.
 			"NavigationSystem"         // So we can rebuild the NavMesh every time the terrain is generated.
 		});
 

@@ -21,6 +21,7 @@ class UTDWarningBannerWidget;
 class UUserWidget;
 class UButton;
 class UDefenderUpgradeComponent;
+class UTDSaveGame;
 
 // Fires whenever the player's resources change. The UI listens to this.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnResourcesChanged, int32, NewAmount);
@@ -180,6 +181,10 @@ public:
 	/** Timed upgrades bought from the Defenders screen. */
 	UDefenderUpgradeComponent* GetDefenderUpgrades() const { return DefenderUpgrades; }
 
+	/** Writes the latest wave checkpoint to the save slot (F5). Saves are taken at wave ends. */
+	UFUNCTION(BlueprintCallable, Category = "Rules|Save")
+	void SaveGameNow();
+
 	/** The wave manager that runs the enemy waves. Can be null before BeginPlay is done. */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	AWaveManager* GetWaveManager() const { return WaveManager; }
@@ -293,6 +298,15 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Rules")
 	TObjectPtr<UDefenderUpgradeComponent> DefenderUpgrades;
+
+	/** State at the end of the last cleared wave; what Save and Resume use. */
+	UPROPERTY()
+	TObjectPtr<UTDSaveGame> LastCheckpoint;
+
+	UTDSaveGame* CaptureCheckpoint(int32 WavesCleared) const;
+	void WriteCheckpoint(int32 WavesCleared);
+	void WriteMatchFinishedSave();
+	void ApplyResumeSave(UTDSaveGame* Save);
 
 	FTimerHandle MenuStretchTimerHandle;
 
