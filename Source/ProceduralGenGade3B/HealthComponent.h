@@ -52,6 +52,13 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Health")
     void Heal(float Amount);
 
+    /**
+     * Raises or lowers MaxHealth and moves current health by the same amount, so damage already
+     * taken is kept. Lowering never kills: a living actor keeps at least 1 health.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Health")
+    void AdjustMaxHealth(float Delta);
+
     /** Current hit points. */
     UFUNCTION(BlueprintPure, Category = "Health")
     float GetCurrentHealth() const

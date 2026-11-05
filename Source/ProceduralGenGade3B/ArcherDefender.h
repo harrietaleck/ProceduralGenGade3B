@@ -28,6 +28,7 @@ public:
     float WolfDamageMultiplier = 1.5f;
 
     virtual float GetThreatRating() const override;
+    virtual void SetAttackInterval(float NewInterval) override;
 
 protected:
     virtual void BeginPlay() override;

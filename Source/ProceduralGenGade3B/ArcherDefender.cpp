@@ -74,6 +74,15 @@ void AArcherDefender::BeginPlay()
     );
 }
 
+void AArcherDefender::SetAttackInterval(float NewInterval)
+{
+    Super::SetAttackInterval(NewInterval);
+    if (GetWorldTimerManager().IsTimerActive(ArcherFireTimerHandle))
+    {
+        GetWorldTimerManager().SetTimer(ArcherFireTimerHandle, this, &AArcherDefender::FireArrow, FireInterval, true);
+    }
+}
+
 void AArcherDefender::FireArrow()
 {
     if (!HealthComponent || HealthComponent->IsDead())
@@ -113,6 +122,7 @@ void AArcherDefender::ShootAt(AEnemy* Target)
         if (AProjectile* Arrow = GetWorld()->SpawnActor<AProjectile>(
                 ProjectileClass, GetActorLocation() + MuzzleOffset, GetActorRotation(), SpawnParams))
         {
+            Arrow->Speed += ProjectileSpeedBonus;
             Arrow->InitProjectile(Target, Damage, this);
             Arrow->ConfigureVisuals(DefenderBallScale, DefenderBallColor);
         }

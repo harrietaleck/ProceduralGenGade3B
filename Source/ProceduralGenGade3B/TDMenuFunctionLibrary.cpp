@@ -249,3 +249,65 @@ void UTDMenuFunctionLibrary::StretchOpenMenuScreens(UObject* WorldContextObject)
 		Widget->SetIsEnabled(bWasEnabled);
 	}
 }
+
+// *** Root cause of shifted menu elements: the background art is stretched to the whole viewport
+// *** (StretchImagesRecursive), but buttons/text keep fixed designer pixel anchors. UMG's DPI curve
+// *** scales those pixels by screen height only, so on any aspect ratio other than the designer's
+// *** 16:9 canvas they drift sideways from the art. Re-anchoring each element proportionally to the
+// *** designer canvas makes it scale exactly like the stretched background, keeping the original layout.
+void UTDMenuFunctionLibrary::PinCanvasLayoutToDesignSize(UUserWidget* Widget, FVector2D DesignSize)
+{
+	UCanvasPanel* Canvas = Widget ? Cast<UCanvasPanel>(Widget->GetRootWidget()) : nullptr; // ***
+	if (!Canvas || DesignSize.X <= 0.0f || DesignSize.Y <= 0.0f)
+	{
+		return;
+	}
+
+	for (UPanelSlot* PanelSlot : Canvas->GetSlots()) // ***
+	{
+		UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(PanelSlot);
+		UWidget* Child = CanvasSlot ? CanvasSlot->Content : nullptr;
+		const FString ChildName = Child ? Child->GetName() : FString();
+		if (!Child || ChildName.EndsWith(TEXT("_Timer")) || ChildName.EndsWith(TEXT("_Stats"))) // *** runtime labels place themselves
+		{
+			continue;
+		}
+
+		const FAnchors Anchors = CanvasSlot->GetAnchors();
+		const FMargin Offsets = CanvasSlot->GetOffsets();
+		const FVector2D AnchorMin = Anchors.Minimum * DesignSize; // *** anchor rect in designer pixels
+		const FVector2D AnchorMax = Anchors.Maximum * DesignSize;
+		if ((Anchors.Maximum - Anchors.Minimum).GetMin() > 0.9f) // *** already full-screen (the background art)
+		{
+			continue;
+		}
+
+		if (CanvasSlot->GetAutoSize() || Anchors.Minimum != Anchors.Maximum)
+		{
+			if (Anchors.Minimum != Anchors.Maximum) // *** stretched element: convert its margins into a proportional rect
+			{
+				const FVector2D TopLeft = AnchorMin + FVector2D(Offsets.Left, Offsets.Top);
+				const FVector2D BottomRight = AnchorMax - FVector2D(Offsets.Right, Offsets.Bottom);
+				CanvasSlot->SetAnchors(FAnchors(TopLeft.X / DesignSize.X, TopLeft.Y / DesignSize.Y,
+					BottomRight.X / DesignSize.X, BottomRight.Y / DesignSize.Y));
+				CanvasSlot->SetOffsets(FMargin(0.0f));
+				continue;
+			}
+
+			// *** Size-to-content element: keep its own size, only pin its alignment point proportionally.
+			const FVector2D Pivot = (AnchorMin + FVector2D(Offsets.Left, Offsets.Top)) / DesignSize;
+			CanvasSlot->SetAnchors(FAnchors(Pivot.X, Pivot.Y));
+			CanvasSlot->SetPosition(FVector2D::ZeroVector);
+			continue;
+		}
+
+		// *** Fixed-size element: its designer rect becomes proportional anchors, so it scales with the art.
+		const FVector2D Size(Offsets.Right, Offsets.Bottom);
+		const FVector2D TopLeft = AnchorMin + FVector2D(Offsets.Left, Offsets.Top) - CanvasSlot->GetAlignment() * Size;
+		const FVector2D BottomRight = TopLeft + Size;
+		CanvasSlot->SetAnchors(FAnchors(TopLeft.X / DesignSize.X, TopLeft.Y / DesignSize.Y,
+			BottomRight.X / DesignSize.X, BottomRight.Y / DesignSize.Y));
+		CanvasSlot->SetAlignment(FVector2D::ZeroVector);
+		CanvasSlot->SetOffsets(FMargin(0.0f));
+	}
+}

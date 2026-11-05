@@ -80,6 +80,15 @@ void APoisonLightBombDefender::BeginPlay()
     );
 }
 
+void APoisonLightBombDefender::SetAttackInterval(float NewInterval)
+{
+    BombCooldown = FMath::Max(0.1f, NewInterval);
+    if (GetWorldTimerManager().IsTimerActive(BombTimerHandle))
+    {
+        GetWorldTimerManager().SetTimer(BombTimerHandle, this, &APoisonLightBombDefender::DetonateBomb, BombCooldown, true);
+    }
+}
+
 void APoisonLightBombDefender::DetonateBomb()
 {
     if (!HealthComponent || HealthComponent->IsDead())

@@ -21,6 +21,7 @@ public:
 	float StunDuration = 0.9f;
 
 	virtual float GetThreatRating() const override;
+	virtual void SetAttackInterval(float NewInterval) override;
 
 protected:
 	virtual void BeginPlay() override;

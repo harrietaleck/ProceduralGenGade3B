@@ -60,6 +60,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower")
 	TObjectPtr<UHealthComponent> HealthComponent;
 
+	/** Changes the time between shots and restarts the fire timer to match. */
+	void SetFireInterval(float NewInterval);
+
 protected:
 	virtual void BeginPlay() override;
 

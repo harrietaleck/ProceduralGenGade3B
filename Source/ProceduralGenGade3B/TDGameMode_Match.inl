@@ -138,7 +138,8 @@ bool ATDGameMode::TryUpgradeTowerBeam()
 	}
 
 	++BeamUpgradeLevel;
-	Tower->AttackDamage = BaseTowerAttackDamage + BeamUpgradeLevel * BeamUpgradeDamageBonus;
+	// Add rather than assign, so a running temporary tower upgrade is not overwritten.
+	Tower->AttackDamage += BeamUpgradeDamageBonus;
 	RefreshMetaHUD();
 	return true;
 }

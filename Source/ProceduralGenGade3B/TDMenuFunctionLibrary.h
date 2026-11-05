@@ -26,4 +26,9 @@ public:
 	/** Stretches any Start, Settings, Upgrades or Defenders store screens that are open right now. */
 	UFUNCTION(BlueprintCallable, Category = "Menu", meta = (WorldContext = "WorldContextObject"))
 	static void StretchOpenMenuScreens(UObject* WorldContextObject);
+
+	// *** Anchors every root-canvas child proportionally to the designer canvas size, so text and
+	// *** buttons stay on the same spot of a full-screen background image at any resolution/aspect.
+	UFUNCTION(BlueprintCallable, Category = "Menu")
+	static void PinCanvasLayoutToDesignSize(UUserWidget* Widget, FVector2D DesignSize = FVector2D(1920.0f, 1080.0f));
 };

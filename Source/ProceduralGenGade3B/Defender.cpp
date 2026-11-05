@@ -8,6 +8,7 @@
 #include "Projectile.h"
 #include "ProceduralTerrain.h"
 #include "TDGameMode.h"
+#include "DefenderUpgradeComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -86,6 +87,24 @@ void ADefender::BeginPlay()
             FireInterval,
             true
         );
+    }
+
+    // Pick up any temporary upgrade that is already running for this defender type.
+    if (ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>())
+    {
+        if (UDefenderUpgradeComponent* Upgrades = GameMode->GetDefenderUpgrades())
+        {
+            Upgrades->HandleDefenderSpawned(this);
+        }
+    }
+}
+
+void ADefender::SetAttackInterval(float NewInterval)
+{
+    FireInterval = FMath::Max(0.05f, NewInterval);
+    if (bUseDefaultAttack && GetWorldTimerManager().IsTimerActive(FireTimerHandle))
+    {
+        GetWorldTimerManager().SetTimer(FireTimerHandle, this, &ADefender::FireAtNearestEnemy, FireInterval, true);
     }
 }
 

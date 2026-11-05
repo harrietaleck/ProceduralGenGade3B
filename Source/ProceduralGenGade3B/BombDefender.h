@@ -27,6 +27,12 @@ public:
     virtual float GetThreatRating() const override;
     virtual bool IsAreaAttacker() const override { return true; }
 
+    //The bomb's own cooldown and impact damage are its attack speed and damage
+    virtual float GetAttackInterval() const override { return BombCooldown; }
+    virtual void SetAttackInterval(float NewInterval) override;
+    virtual float GetAttackDamage() const override { return BombDamage; }
+    virtual void SetAttackDamage(float NewDamage) override { BombDamage = NewDamage; }
+
 protected:
     virtual void BeginPlay() override;
 

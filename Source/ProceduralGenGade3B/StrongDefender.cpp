@@ -42,6 +42,15 @@ void AStrongDefender::BeginPlay()
 	GetWorldTimerManager().SetTimer(BoltTimerHandle, this, &AStrongDefender::FireStunBolt, FireInterval, true);
 }
 
+void AStrongDefender::SetAttackInterval(float NewInterval)
+{
+	Super::SetAttackInterval(NewInterval);
+	if (GetWorldTimerManager().IsTimerActive(BoltTimerHandle))
+	{
+		GetWorldTimerManager().SetTimer(BoltTimerHandle, this, &AStrongDefender::FireStunBolt, FireInterval, true);
+	}
+}
+
 void AStrongDefender::FireStunBolt()
 {
 	if (!HealthComponent || HealthComponent->IsDead())

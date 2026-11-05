@@ -45,6 +45,15 @@ void ATower::BeginPlay()
 	GetWorldTimerManager().SetTimer(FireTimerHandle, this, &ATower::FireAtNearestEnemy, FireInterval, /*bLoop=*/true);
 }
 
+void ATower::SetFireInterval(float NewInterval)
+{
+	FireInterval = FMath::Max(0.05f, NewInterval);
+	if (GetWorldTimerManager().IsTimerActive(FireTimerHandle))
+	{
+		GetWorldTimerManager().SetTimer(FireTimerHandle, this, &ATower::FireAtNearestEnemy, FireInterval, true);
+	}
+}
+
 void ATower::FireAtNearestEnemy()
 {
 	if (HealthComponent->IsDead())

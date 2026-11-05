@@ -16,6 +16,8 @@
 #include "ProceduralTerrain.h"
 
 #include "TDGameMode.h"
+#include "DefenderUpgradeComponent.h"
+#include "TDMetaProgressionSubsystem.h" // *** used by the GrantUpgradeTestResources dev command
 
 #include "TDHUDWidget.h"
 #include "TDHUD.h"
@@ -138,6 +140,43 @@ void ATDPlayerController::SetupInputComponent()
     FInputKeyBinding& GraphBinding =
         InputComponent->BindKey(EKeys::G, IE_Pressed, this, &ATDPlayerController::OnToggleDirectorGraph);
     GraphBinding.bExecuteWhenPaused = true;
+
+    //Press B to open the Defenders screen and buy temporary upgrades
+    InputComponent->BindKey(EKeys::B, IE_Pressed, this, &ATDPlayerController::OnToggleDefenderUpgrades);
+}
+
+// *** Grants: 100 Forest Essence (Basic + Strong), 65 Gem Stones (Archer), 50 Light Lanterns (Poison)
+// *** and 750 Loot (Tower), using the same wallet and Loot the HUD shows.
+void ATDPlayerController::GrantUpgradeTestResources()
+{
+#if !UE_BUILD_SHIPPING
+    ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>();
+    UTDMetaProgressionSubsystem* Meta = GetGameInstance() ? GetGameInstance()->GetSubsystem<UTDMetaProgressionSubsystem>() : nullptr;
+    if (!GameMode || !Meta)
+    {
+        return;
+    }
+
+    FMetaCurrencyRewards TestRewards; // ***
+    TestRewards.ForestEssence = 100;
+    TestRewards.GemStones = 65;
+    TestRewards.LightLanterns = 50;
+    Meta->AddRewards(TestRewards);  // *** existing meta wallet
+    GameMode->AddResources(750);    // *** existing Loot
+    GameMode->RefreshMetaHUD();     // *** HUD shows the new balance immediately
+    UE_LOG(LogTemp, Display, TEXT("GrantUpgradeTestResources: +100 Forest Essence, +65 Gem Stones, +50 Light Lanterns, +750 Loot."));
+#endif
+}
+
+void ATDPlayerController::OnToggleDefenderUpgrades()
+{
+    if (ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>())
+    {
+        if (UDefenderUpgradeComponent* Upgrades = GameMode->GetDefenderUpgrades())
+        {
+            Upgrades->ToggleScreen();
+        }
+    }
 }
 
 void ATDPlayerController::OnToggleDirectorGraph()

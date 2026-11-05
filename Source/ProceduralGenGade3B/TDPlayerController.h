@@ -85,6 +85,18 @@ protected:
     /** G shows or hides the wave director graph. */
     void OnToggleDirectorGraph();
 
+    /** B key: open or close the Defenders upgrade screen during a match. */
+    void OnToggleDefenderUpgrades();
+
+public:
+    // *** Development-only test command (type in the ~ console): GrantUpgradeTestResources.
+    // *** Adds exactly one round of upgrade costs through the existing AddRewards/AddResources, so a
+    // *** real upgrade can be tested without changing resource collection or rewards. No-op in Shipping.
+    UFUNCTION(Exec)
+    void GrantUpgradeTestResources();
+
+protected:
+
 private:
 
     bool bPlacingStrongDefender = false;

@@ -102,3 +102,16 @@ void UHealthComponent::Heal(float Amount)
 
     OnHealthChanged.Broadcast(CurrentHealth,MaxHealth);
 }
+
+void UHealthComponent::AdjustMaxHealth(float Delta)
+{
+    if (bIsDead || FMath::IsNearlyZero(Delta))
+    {
+        return;
+    }
+
+    MaxHealth = FMath::Max(1.0f, MaxHealth + Delta);
+    CurrentHealth = FMath::Clamp(CurrentHealth + Delta, 1.0f, MaxHealth);
+
+    OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
+}

@@ -77,6 +77,19 @@ public:
     /** True if this defender hits an area instead of a single enemy. */
     virtual bool IsAreaAttacker() const { return false; }
 
+    /** Seconds between this defender's attacks, whichever attack it uses. */
+    virtual float GetAttackInterval() const { return FireInterval; }
+
+    /** Changes the attack interval and restarts the running attack timer to match. */
+    virtual void SetAttackInterval(float NewInterval);
+
+    /** Damage of this defender's main attack. */
+    virtual float GetAttackDamage() const { return AttackDamage; }
+    virtual void SetAttackDamage(float NewDamage) { AttackDamage = NewDamage; }
+
+    /** Extra speed added to projectiles this defender fires. Used by temporary upgrades. */
+    float ProjectileSpeedBonus = 0.0f;
+
     /** Shared component that handles health, damage and death. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Defender")
     TObjectPtr<UHealthComponent> HealthComponent;

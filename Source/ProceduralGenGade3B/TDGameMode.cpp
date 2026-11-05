@@ -3,6 +3,7 @@
 // which Live Coding needs after a file split.
 
 #include "TDGameMode.h"
+#include "DefenderUpgradeComponent.h"
 #include "ProceduralTerrain.h"
 #include "Tower.h"
 #include "Defender.h"
@@ -45,6 +46,7 @@ ATDGameMode::ATDGameMode()
 	WaveManagerClass = AWaveManager::StaticClass();
 	BuildPadMarkerClass = ABuildPadMarker::StaticClass();
 	EndScreenWidgetClass = UTDEndScreenWidget::StaticClass();
+	DefenderUpgrades = CreateDefaultSubobject<UDefenderUpgradeComponent>(TEXT("DefenderUpgrades"));
 
 	StartingMetaWallet.ForestEssence = 40;
 	StartingMetaWallet.WoodenMight = 30;
@@ -254,6 +256,10 @@ void ATDGameMode::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	UTDMenuFunctionLibrary::StretchOpenMenuScreens(this);
 	BindSettingsButtons();
+	if (DefenderUpgrades)
+	{
+		DefenderUpgrades->BindOpenScreen();
+	}
 }
 
 int32 ATDGameMode::GetCurrentWave() const

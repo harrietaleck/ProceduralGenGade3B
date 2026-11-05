@@ -20,6 +20,7 @@ class UTDEndScreenWidget;
 class UTDWarningBannerWidget;
 class UUserWidget;
 class UButton;
+class UDefenderUpgradeComponent;
 
 // Fires whenever the player's resources change. The UI listens to this.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnResourcesChanged, int32, NewAmount);
@@ -176,6 +177,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	ATower* GetTower() const { return Tower; }
 
+	/** Timed upgrades bought from the Defenders screen. */
+	UDefenderUpgradeComponent* GetDefenderUpgrades() const { return DefenderUpgrades; }
+
 	/** The wave manager that runs the enemy waves. Can be null before BeginPlay is done. */
 	UFUNCTION(BlueprintPure, Category = "Rules")
 	AWaveManager* GetWaveManager() const { return WaveManager; }
@@ -286,6 +290,9 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UTDWarningBannerWidget> WarningBannerWidget;
+
+	UPROPERTY(VisibleAnywhere, Category = "Rules")
+	TObjectPtr<UDefenderUpgradeComponent> DefenderUpgrades;
 
 	FTimerHandle MenuStretchTimerHandle;
 
