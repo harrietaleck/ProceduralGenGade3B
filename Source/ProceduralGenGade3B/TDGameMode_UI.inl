@@ -22,6 +22,14 @@ void ATDGameMode::BindSettingsButtons()
 
 	for (UUserWidget* Screen : SettingsScreens)
 	{
+		// Each settings widget only needs its handlers attached once. Without this check the Tick
+		// below re-attached every handler and logged a line on every frame (about 100 a second).
+		if (!Screen || BoundSettingsScreens.Contains(Screen))
+		{
+			continue;
+		}
+		BoundSettingsScreens.Add(Screen);
+
 		if (UButton* ResumeBtn = Cast<UButton>(Screen->GetWidgetFromName(TEXT("ResumeBTN"))))
 		{
 			ResumeBtn->OnClicked.RemoveAll(this);

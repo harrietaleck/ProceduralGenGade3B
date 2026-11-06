@@ -342,7 +342,14 @@ void ATDGameMode::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	UTDMenuFunctionLibrary::StretchOpenMenuScreens(this);
-	BindSettingsButtons();
+
+	// Look for a newly opened settings widget twice a second instead of scanning every widget each frame.
+	SettingsBindTimer += DeltaSeconds;
+	if (SettingsBindTimer >= 0.5f)
+	{
+		SettingsBindTimer = 0.0f;
+		BindSettingsButtons();
+	}
 	if (DefenderUpgrades)
 	{
 		DefenderUpgrades->BindOpenScreen();

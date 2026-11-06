@@ -370,6 +370,13 @@ private:
 	void HideEndScreens();
 	void RestoreGameplayInput();
 	void BindSettingsButtons();
+
+	/** Settings widgets that already have their button and slider handlers attached. */
+	TSet<TWeakObjectPtr<UUserWidget>> BoundSettingsScreens;
+
+	/** Counts up in Tick so we only look for newly opened settings widgets a couple of times a second. */
+	float SettingsBindTimer = 0.0f;
+
 	void BindVictoryScreenButtons();
 	void PresentVictoryScreen();
 
