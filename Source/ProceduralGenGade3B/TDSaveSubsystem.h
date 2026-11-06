@@ -22,6 +22,10 @@ public:
     /** Writes the save slot to disk. */
     bool WriteSave(UTDSaveGame* Save) const;
 
+    // *** Store music volume in the existing save slot, not a second settings system.
+    float GetMusicVolume() const;
+    bool SaveMusicVolume(float NewVolume);
+
     /** True if the slot holds a match that can be resumed. */
     UFUNCTION(BlueprintPure, Category = "Save")
     bool HasResumableSave() const;
@@ -37,6 +41,7 @@ public:
     void BindStartScreen(UWorld* World);
 
 private:
+    float MusicVolume = 0.5f;
     bool bResumePending = false;
     TWeakObjectPtr<UUserWidget> BoundStartScreen;
 

@@ -264,6 +264,10 @@ void ATDGameMode::HandleMatchVictory()
 		return;
 	}
 
+	if (ATDMusicManager* MusicManager = ATDMusicManager::GetOrCreate(this))
+	{
+		MusicManager->PlayVictoryMusic();
+	}
 	FinalizeMatchResult(true);
 	ShowEndScreen(true);
 	PlayMatchVFX(VictoryVFX, TDVFX::Gold, 4.0f); // *** victory celebration
@@ -286,6 +290,10 @@ void ATDGameMode::NotifyTowerDestroyed()
 		Spawner->StopSpawning();
 	}
 
+	if (ATDMusicManager* MusicManager = ATDMusicManager::GetOrCreate(this))
+	{
+		MusicManager->PlayDefeatMusic();
+	}
 	OnGameOver.Broadcast();
 	FinalizeMatchResult(false);
 	ShowEndScreen(false);

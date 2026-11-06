@@ -41,6 +41,10 @@ public:
 	UPROPERTY()
 	FDateTime SavedAt;
 
+	// *** Shared music volume saved alongside the existing match checkpoint.
+	UPROPERTY()
+	float MusicVolume = 0.5f;
+
 	/** Meta currencies (leaf, wood, gem and sun icons). Kept between matches and app restarts. */
 	UPROPERTY()
 	FMetaCurrencyRewards Wallet;

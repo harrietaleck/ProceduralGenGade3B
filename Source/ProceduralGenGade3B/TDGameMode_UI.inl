@@ -42,6 +42,32 @@ void ATDGameMode::BindSettingsButtons()
 			MenuBtn->OnClicked.RemoveAll(this);
 			MenuBtn->OnClicked.AddDynamic(this, &ATDGameMode::ReturnToMainMenu);
 		}
+
+		if (Screen->WidgetTree)
+		{
+			if (ATDMusicManager* MusicManager = ATDMusicManager::GetOrCreate(this))
+			{
+				USlider* VolumeSlider = Cast<USlider>(Screen->GetWidgetFromName(TEXT("MusicSlider")));
+				if (VolumeSlider)
+				{
+					// *** Keep the Blueprint range normalized to SetMusicVolume's 0-1 contract.
+					VolumeSlider->SetMinValue(0.0f);
+					VolumeSlider->SetMaxValue(1.0f);
+					VolumeSlider->SetValue(MusicManager->GetMusicVolume());
+					VolumeSlider->OnValueChanged.RemoveAll(MusicManager);
+					VolumeSlider->OnValueChanged.AddUniqueDynamic(MusicManager, &ATDMusicManager::SetMusicVolume);
+					VolumeSlider->OnMouseCaptureEnd.RemoveAll(MusicManager);
+					VolumeSlider->OnMouseCaptureEnd.AddUniqueDynamic(MusicManager, &ATDMusicManager::PersistMusicVolume);
+					VolumeSlider->OnControllerCaptureEnd.RemoveAll(MusicManager);
+					VolumeSlider->OnControllerCaptureEnd.AddUniqueDynamic(MusicManager, &ATDMusicManager::PersistMusicVolume);
+					UE_LOG(LogTemp, Display, TEXT("TDMusicManager: bound SettingScreen.MusicSlider to SetMusicVolume."));
+				}
+				else
+				{
+					UE_LOG(LogTemp, Warning, TEXT("TDMusicManager: SettingScreen.MusicSlider was not found."));
+				}
+			}
+		}
 	}
 }
 
@@ -216,6 +242,11 @@ void ATDGameMode::ResumeFromSettings()
 {
 	bPaused = false;
 	UGameplayStatics::SetGamePaused(this, false);
+	if (ATDMusicManager* MusicManager = ATDMusicManager::GetOrCreate(this))
+	{
+		// *** Persist the last selected value without restarting the music on resume.
+		MusicManager->PersistMusicVolume();
+	}
 
 	TArray<UUserWidget*> OpenWidgets;
 	UWidgetBlueprintLibrary::GetAllWidgetsOfClass(

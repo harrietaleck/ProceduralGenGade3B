@@ -25,11 +25,14 @@
 #include "TDMatchRewards.h"
 #include "TDMetaProgressionSubsystem.h"
 #include "TDMenuFunctionLibrary.h"
+#include "TDMusicManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
+#include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/Slider.h"
 #include "Components/TextBlock.h"
 #include "Widgets/Layout/Anchors.h"
 #include "EngineUtils.h"
@@ -69,6 +72,7 @@ void ATDGameMode::BeginPlay()
 	Super::BeginPlay();
 
 	const FString LevelName = UGameplayStatics::GetCurrentLevelName(this, true);
+	ATDMusicManager::GetOrCreate(this);
 	if (LevelName.Contains(TEXT("StartScreen")))
 	{
 		if (APlayerController* PC = GetWorld()->GetFirstPlayerController())

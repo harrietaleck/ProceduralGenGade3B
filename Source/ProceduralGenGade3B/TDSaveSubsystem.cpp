@@ -22,6 +22,8 @@ void UTDSaveSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     // Bring the meta currencies back after the application was closed.
     if (const UTDSaveGame* Save = LoadSave())
     {
+        // *** Restore the shared music level from the existing persistent save slot.
+        MusicVolume = FMath::Clamp(Save->MusicVolume, 0.0f, 1.0f);
         if (UTDMetaProgressionSubsystem* Meta = GetGameInstance()->GetSubsystem<UTDMetaProgressionSubsystem>())
         {
             Meta->SetWallet(Save->Wallet);
@@ -57,6 +59,8 @@ bool UTDSaveSubsystem::WriteSave(UTDSaveGame* Save) const
 
     Save->SaveVersion = UTDSaveGame::CurrentVersion;
     Save->SavedAt = FDateTime::Now();
+    // *** Carry the selected volume through every match checkpoint and wallet save.
+    Save->MusicVolume = MusicVolume;
 
     const bool bSaved = UGameplayStatics::SaveGameToSlot(Save, SaveSlotName, SaveUserIndex);
 
@@ -64,6 +68,29 @@ bool UTDSaveSubsystem::WriteSave(UTDSaveGame* Save) const
         bSaved ? TEXT("wrote") : TEXT("FAILED to write"), SaveSlotName, Save->WavesCleared);
 
     return bSaved;
+}
+
+// *** Return the persisted shared volume, defaulting to the manager's initial value.
+float UTDSaveSubsystem::GetMusicVolume() const
+{
+    return MusicVolume;
+}
+
+// *** Reuse the current save object so a volume change cannot discard match progress.
+bool UTDSaveSubsystem::SaveMusicVolume(float NewVolume)
+{
+    MusicVolume = FMath::Clamp(NewVolume, 0.0f, 1.0f);
+    UTDSaveGame* Save = LoadSave();
+    if (!Save)
+    {
+        Save = NewObject<UTDSaveGame>(this);
+        if (UTDMetaProgressionSubsystem* Meta = GetGameInstance()->GetSubsystem<UTDMetaProgressionSubsystem>())
+        {
+            Save->Wallet = Meta->GetWallet();
+        }
+    }
+
+    return WriteSave(Save);
 }
 
 bool UTDSaveSubsystem::HasResumableSave() const

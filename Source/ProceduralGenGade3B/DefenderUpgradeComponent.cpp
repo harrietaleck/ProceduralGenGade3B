@@ -433,7 +433,8 @@ void UDefenderUpgradeComponent::RefreshButtons()
 		if (UTextBlock* Stats = Slot.StatsLabel.Get()) // *** refreshed every 0.25 s, so activation/expiry show at once
 		{
 			Stats->SetText(FText::FromString(DescribeStats(Upgrade))); // ***
-			Stats->SetVisibility(ESlateVisibility::HitTestInvisible);   // *** never blocks button clicks
+			// *** Keep generated stats hidden below the buttons; button labels and purchase logic remain unchanged.
+			Stats->SetVisibility(ESlateVisibility::Collapsed);          // *** never blocks button clicks
 		}
 
 		UTextBlock* Label = Slot.Label.Get();

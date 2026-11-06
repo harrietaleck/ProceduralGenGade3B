@@ -158,6 +158,10 @@ void ATDGameMode::ContinueToNextWave()
 	bWaveResultsVisible = false;
 	UGameplayStatics::SetGamePaused(this, false);
 	RestoreGameplayInput();
+	if (ATDMusicManager* MusicManager = ATDMusicManager::GetOrCreate(this))
+	{
+		MusicManager->PlayGameplayMusic();
+	}
 
 	if (WaveManager)
 	{
@@ -177,6 +181,10 @@ void ATDGameMode::RetryCurrentWave()
 	bWaveResultsVisible = false;
 	UGameplayStatics::SetGamePaused(this, false);
 	RestoreGameplayInput();
+	if (ATDMusicManager* MusicManager = ATDMusicManager::GetOrCreate(this))
+	{
+		MusicManager->PlayGameplayMusic();
+	}
 	WaveManager->RetryCurrentWave();
 	RefreshMetaHUD();
 }
