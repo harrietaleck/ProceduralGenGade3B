@@ -7,6 +7,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Engine/TimerHandle.h"
 #include "Styling/SlateTypes.h"
 #include "DefenderUpgradeComponent.generated.h"
 
@@ -41,6 +42,8 @@ namespace DefenderUpgrades
 
 		EPhase Phase = EPhase::Ready;
 		TArray<FBoost> Boosts;
+		int32 CooldownSecondsRemaining = 0;
+		FTimerHandle CooldownTimer;
 		TWeakObjectPtr<UButton> Button;
 		FButtonStyle OriginalButtonStyle;
 		TArray<FTextColor> OriginalTextColors;
@@ -120,6 +123,8 @@ private:
 		FVector2D Pivot, FVector2D Alignment, FVector2D PixelOffset) const;
 	FString DescribeStats(DefenderUpgrades::EUpgrade Upgrade) const; //  live stats, or class defaults if none spawned
 	void TryActivate(DefenderUpgrades::EUpgrade Upgrade);
+	void StartCooldown(DefenderUpgrades::EUpgrade Upgrade);
+	void TickUpgradeCooldown(int32 UpgradeIndex);
 	void ApplyBoost(DefenderUpgrades::EUpgrade Upgrade, AActor* Target);
 	void RemoveBoosts(DefenderUpgrades::EUpgrade Upgrade);
 	void GatherTargets(DefenderUpgrades::EUpgrade Upgrade, TArray<AActor*>& OutTargets) const;

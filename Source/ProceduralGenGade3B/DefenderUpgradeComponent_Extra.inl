@@ -25,6 +25,7 @@ void UDefenderUpgradeComponent::StartActive(EUpgrade Upgrade, const TArray<AActo
 	UE_LOG(LogTemp, Display, TEXT("Defender upgrade %s activated on %d target(s)."), ConfigOf(Upgrade).ButtonName, Targets.Num());
 	FSlot& Slot = Slots[(int32)Upgrade];
 	Slot.Phase = EPhase::Active;
+	StartCooldown(Upgrade);
 	for (AActor* Target : Targets)
 	{
 		ApplyBoost(Upgrade, Target);
@@ -40,7 +41,9 @@ void UDefenderUpgradeComponent::ActivatePendingUpgrades()
 	for (int32 Index = 0; Meta && Index < (int32)EUpgrade::Count; ++Index)
 	{
 		const EUpgrade Upgrade = (EUpgrade)Index;
-		if (Slots[Index].Phase != EPhase::Ready || !Meta->IsUpgradePending(Index))
+		if (Slots[Index].Phase == EPhase::DisabledAfterWave
+			|| Slots[Index].CooldownSecondsRemaining > 0
+			|| !Meta->IsUpgradePending(Index))
 		{
 			continue;
 		}

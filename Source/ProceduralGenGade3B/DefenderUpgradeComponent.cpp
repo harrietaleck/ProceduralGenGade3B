@@ -22,6 +22,7 @@
 #include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
 #include "EngineUtils.h"
+#include "TimerManager.h"
 #include "TDHUDWidget.h"                 //  HUD upgrade status text
 #include "TDMetaProgressionSubsystem.h"  //  queued (already paid) upgrades
 
@@ -32,10 +33,10 @@ namespace
 	struct FUpgradeConfig { const TCHAR* ButtonName; float Health, Speed, Damage; int32 Cost; };
 
 	const FUpgradeConfig Configs[] = {
-		{ TEXT("BasicButton"),  130.0f, 4.5f, 16.0f, 50 },
+		{ TEXT("BasicButton"),  130.0f, 4.5f, 16.0f, 250 },
 		{ TEXT("ArcherButton"), 115.0f, 5.5f, 14.0f, 65 },
-		{ TEXT("PoisonButton"), 140.0f, 4.0f, 20.0f, 50 },
-		{ TEXT("StrongButton"), 250.0f, 3.0f, 28.0f, 50 },
+		{ TEXT("PoisonButton"), 140.0f, 4.0f, 20.0f, 15 },
+		{ TEXT("StrongButton"), 250.0f, 3.0f, 28.0f, 250 },
 		{ TEXT("TowerButton"),  650.0f, 1.8f, 60.0f, 750 },
 	};
 
@@ -86,6 +87,14 @@ UDefenderUpgradeComponent::UDefenderUpgradeComponent()
 
 void UDefenderUpgradeComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (UWorld* World = GetWorld())
+	{
+		for (FSlot& Slot : Slots)
+		{
+			World->GetTimerManager().ClearTimer(Slot.CooldownTimer);
+		}
+	}
+
 	if (UGameInstance* GameInstance = GetWorld() ? GetWorld()->GetGameInstance() : nullptr)
 	{
 		if (UTDMetaProgressionSubsystem* Meta = GameInstance->GetSubsystem<UTDMetaProgressionSubsystem>())
@@ -389,9 +398,12 @@ void UDefenderUpgradeComponent::TryActivate(EUpgrade Upgrade)
 	UE_LOG(LogTemp, Display, TEXT("Defender upgrade purchase requested: %s."), ConfigOf(Upgrade).ButtonName);
 	FSlot& Slot = Slots[(int32)Upgrade];
 	const ATDGameMode* GameMode = GetGameMode();
-	//  Was IsInteractionBlocked(), which is also true on the between-wave results screen and silently
-	//  ate clicks there. Only a finished match blocks purchases now. A queued upgrade can't be bought twice.
-	if (Slot.Phase != EPhase::Ready || !GameMode || GameMode->IsGameOver() || GameMode->IsVictory() || IsPending(Upgrade)) { return; }
+	// A wave-active upgrade can be purchased again when its independent cooldown expires.
+	if (Slot.Phase == EPhase::DisabledAfterWave || Slot.CooldownSecondsRemaining > 0
+		|| !GameMode || GameMode->IsGameOver() || GameMode->IsVictory() || IsPending(Upgrade))
+	{
+		return;
+	}
 
 	TArray<AActor*> Targets;
 	GatherTargets(Upgrade, Targets);
@@ -420,12 +432,61 @@ void UDefenderUpgradeComponent::TryActivate(EUpgrade Upgrade)
 	StartActive(Upgrade, Targets); //
 }
 
+void UDefenderUpgradeComponent::StartCooldown(EUpgrade Upgrade)
+{
+	FSlot& Slot = Slots[(int32)Upgrade];
+	if (Slot.CooldownSecondsRemaining > 0)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	Slot.CooldownSecondsRemaining = FMath::RandRange(10, 30);
+	const int32 UpgradeIndex = (int32)Upgrade;
+	World->GetTimerManager().SetTimer(
+		Slot.CooldownTimer,
+		FTimerDelegate::CreateWeakLambda(this, [this, UpgradeIndex]()
+		{
+			TickUpgradeCooldown(UpgradeIndex);
+		}),
+		1.0f,
+		true);
+}
+
+void UDefenderUpgradeComponent::TickUpgradeCooldown(int32 UpgradeIndex)
+{
+	if (UpgradeIndex < 0 || UpgradeIndex >= (int32)EUpgrade::Count)
+	{
+		return;
+	}
+
+	FSlot& Slot = Slots[UpgradeIndex];
+	Slot.CooldownSecondsRemaining = FMath::Max(0, Slot.CooldownSecondsRemaining - 1);
+	if (Slot.CooldownSecondsRemaining == 0)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(Slot.CooldownTimer);
+		}
+	}
+	RefreshUpgradeUI();
+}
+
 void UDefenderUpgradeComponent::HandleDefenderSpawned(ADefender* Defender)
 {
 	if (!Defender) { return; }
 	const EUpgrade Upgrade = UpgradeFor(Defender);
-	if (Slots[(int32)Upgrade].Phase == EPhase::Active) { ApplyBoost(Upgrade, Defender); }
-	else { ActivatePendingUpgrades(); }
+	const bool bWasPending = IsPending(Upgrade);
+	ActivatePendingUpgrades();
+	if (!bWasPending && Slots[(int32)Upgrade].Phase == EPhase::Active)
+	{
+		ApplyBoost(Upgrade, Defender);
+	}
 	RefreshUpgradeUI();
 }
 
@@ -589,8 +650,9 @@ void UDefenderUpgradeComponent::RefreshUpgradeUI()
 		const bool bQueued = Slot.Phase == EPhase::Ready && IsPending(Upgrade);
 		const bool bActive = Slot.Phase == EPhase::Active;
 		const bool bDisabledAfterWave = Slot.Phase == EPhase::DisabledAfterWave;
-		const bool bHasColoredState = bQueued || bActive || bDisabledAfterWave;
-		const FLinearColor StateColor = bDisabledAfterWave
+		const bool bCoolingDown = Slot.CooldownSecondsRemaining > 0;
+		const bool bHasColoredState = bQueued || bActive || bDisabledAfterWave || bCoolingDown;
+		const FLinearColor StateColor = bCoolingDown || bDisabledAfterWave
 			? FLinearColor(0.85f, 0.05f, 0.05f, 1.0f)
 			: bQueued ? FLinearColor(0.12f, 0.72f, 0.18f, 1.0f)
 			: bActive ? FLinearColor(0.12f, 0.72f, 0.18f, 1.0f)
@@ -647,10 +709,23 @@ void UDefenderUpgradeComponent::RefreshUpgradeUI()
 			continue;
 		}
 
-		if (bQueued || bActive)
+		if (bQueued || bActive || bCoolingDown)
 		{
-			Label->SetText(FText::FromString(TEXT("PURCHASED")));
-			Label->SetColorAndOpacity(FLinearColor::Black);
+			FString Status = TEXT("PURCHASED");
+			if (bActive && bCoolingDown)
+			{
+				Status = FString::Printf(TEXT("PURCHASED - %ds"), Slot.CooldownSecondsRemaining);
+			}
+			else if (bDisabledAfterWave && bCoolingDown)
+			{
+				Status = FString::Printf(TEXT("DISABLED - %ds"), Slot.CooldownSecondsRemaining);
+			}
+			else if (!bActive && !bQueued && bCoolingDown)
+			{
+				Status = FString::Printf(TEXT("%ds"), Slot.CooldownSecondsRemaining);
+			}
+			Label->SetText(FText::FromString(Status));
+			Label->SetColorAndOpacity(bCoolingDown ? FLinearColor::White : FLinearColor::Black);
 			Label->SetRenderOpacity(1.0f);
 			Label->SetVisibility(ESlateVisibility::HitTestInvisible);
 		}
