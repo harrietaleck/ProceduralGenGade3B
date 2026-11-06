@@ -551,6 +551,11 @@ void UDefenderUpgradeComponent::RefreshUpgradeUI()
 {
 	UpdateStatusText();
 
+	if (ATDGameMode* GameMode = GetGameMode())
+	{
+		GameMode->RefreshMetaHUD();
+	}
+
 	UUserWidget* Screen = BoundScreen.Get();
 	if (!Screen || !Screen->IsInViewport())
 	{
@@ -587,8 +592,8 @@ void UDefenderUpgradeComponent::RefreshUpgradeUI()
 		const bool bHasColoredState = bQueued || bActive || bDisabledAfterWave;
 		const FLinearColor StateColor = bDisabledAfterWave
 			? FLinearColor(0.85f, 0.05f, 0.05f, 1.0f)
-			: bQueued ? FLinearColor(1.0f, 0.42f, 0.05f, 1.0f)
-			: bActive ? FLinearColor(1.0f, 0.42f, 0.05f, 1.0f)
+			: bQueued ? FLinearColor(0.12f, 0.72f, 0.18f, 1.0f)
+			: bActive ? FLinearColor(0.12f, 0.72f, 0.18f, 1.0f)
 			: ReadyColor;
 
 		// Keep clicks available so the purchase handler can show why a purchase is refused.
@@ -632,15 +637,28 @@ void UDefenderUpgradeComponent::RefreshUpgradeUI()
 		}
 
 		UTextBlock* Label = Slot.Label.Get();
-		if (!Label) { continue; }
-		const TCHAR* Status = bDisabledAfterWave ? TEXT("DISABLED")
-			: bQueued ? TEXT("QUEUED")
-			: bActive ? TEXT("ENABLED")
-			: TEXT("DISABLED");
-		Label->SetText(FText::FromString(Status));
-		Label->SetColorAndOpacity(FLinearColor::Black);
-		Label->SetRenderOpacity(1.0f);
-		Label->SetVisibility(ESlateVisibility::HitTestInvisible);
+		if (!Label)
+		{
+			if (bQueued || bActive)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("DefendersScreen has no visible status label for upgrade button '%s'."),
+					Configs[Index].ButtonName);
+			}
+			continue;
+		}
+
+		if (bQueued || bActive)
+		{
+			Label->SetText(FText::FromString(TEXT("PURCHASED")));
+			Label->SetColorAndOpacity(FLinearColor::Black);
+			Label->SetRenderOpacity(1.0f);
+			Label->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else
+		{
+			Label->SetText(FText::GetEmpty());
+			Label->SetVisibility(ESlateVisibility::Collapsed);
+		}
 	}
 }
 
