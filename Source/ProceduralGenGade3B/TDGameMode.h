@@ -21,6 +21,7 @@ class UTDWarningBannerWidget;
 class UUserWidget;
 class UButton;
 class UDefenderUpgradeComponent;
+class UDangerScreenEffectComponent;
 class UTDSaveGame;
 class UNiagaraSystem; //  visual pass
 
@@ -319,6 +320,10 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Rules")
 	TObjectPtr<UDefenderUpgradeComponent> DefenderUpgrades;
+
+	/** Red vignette and colour drain that warns the player when the tower is badly hurt. */
+	UPROPERTY(VisibleAnywhere, Category = "Effects")
+	TObjectPtr<UDangerScreenEffectComponent> DangerScreenEffect;
 
 	/** State at the end of the last cleared wave; what Save and Resume use. */
 	UPROPERTY()

@@ -4,6 +4,7 @@
 
 #include "TDGameMode.h"
 #include "DefenderUpgradeComponent.h"
+#include "DangerScreenEffectComponent.h"
 #include "TDSaveGame.h"
 #include "TDSaveSubsystem.h"
 #include "TDVFX.h" //  visual pass
@@ -55,6 +56,7 @@ ATDGameMode::ATDGameMode()
 	BuildPadMarkerClass = ABuildPadMarker::StaticClass();
 	EndScreenWidgetClass = UTDEndScreenWidget::StaticClass();
 	DefenderUpgrades = CreateDefaultSubobject<UDefenderUpgradeComponent>(TEXT("DefenderUpgrades"));
+	DangerScreenEffect = CreateDefaultSubobject<UDangerScreenEffectComponent>(TEXT("DangerScreenEffect"));
 
 	//  Default visual-pass assets; all of them can be swapped in the editor.
 	WaveTransitionVFX = TDVFX::Asset(TEXT("/Game/VFX/Environment/NS_WaveTransition"));
