@@ -25,9 +25,23 @@ void UDefenderUpgradeComponent::StartActive(EUpgrade Upgrade, const TArray<AActo
 	UE_LOG(LogTemp, Display, TEXT("Defender upgrade %s activated on %d target(s)."), ConfigOf(Upgrade).ButtonName, Targets.Num());
 	FSlot& Slot = Slots[(int32)Upgrade];
 	Slot.Phase = EPhase::Active;
+	Slot.Tier = 1; // set before ApplyBoost, which reads the tier to pick the stats and the look
 	for (AActor* Target : Targets)
 	{
 		ApplyBoost(Upgrade, Target);
+		if (const ATower* Tower = Cast<ATower>(Target)) { Tower->PlayUpgradeVFX(); }
+		else if (const ADefender* Defender = Cast<ADefender>(Target)) { Defender->PlayActivationVFX(); }
+	}
+	RefreshUpgradeUI();
+}
+
+void UDefenderUpgradeComponent::StartTierTwo(EUpgrade Upgrade, const TArray<AActor*>& Targets)
+{
+	UE_LOG(LogTemp, Display, TEXT("Defender upgrade %s raised to tier II on %d target(s)."), ConfigOf(Upgrade).ButtonName, Targets.Num());
+	Slots[(int32)Upgrade].Tier = 2;
+	for (AActor* Target : Targets)
+	{
+		ApplyBoost(Upgrade, Target); // only adds the difference between tier I and tier II
 		if (const ATower* Tower = Cast<ATower>(Target)) { Tower->PlayUpgradeVFX(); }
 		else if (const ADefender* Defender = Cast<ADefender>(Target)) { Defender->PlayActivationVFX(); }
 	}
@@ -82,7 +96,7 @@ void UDefenderUpgradeComponent::UpdateStatusText()
 		const bool bDisabledAfterWave = Slot.Phase == EPhase::DisabledAfterWave;
 		const TCHAR* State = bDisabledAfterWave ? TEXT("DISABLED")
 			: bQueued ? TEXT("QUEUED")
-			: bActive ? TEXT("ENABLED")
+			: bActive ? (Slot.Tier >= 2 ? TEXT("ENABLED II") : TEXT("ENABLED I"))
 			: TEXT("DISABLED");
 		FString Status = FString::Printf(TEXT("%s: %s"), Names[Index], State);
 		StatusLines.Add(MoveTemp(Status));
@@ -136,7 +150,7 @@ FString UDefenderUpgradeComponent::DescribeStats(EUpgrade Upgrade) const
 	}
 
 	// Speed is attacks per second, the same unit used by the upgrade targets.
-	const FUpgradeConfig& Config = ConfigOf(Upgrade);
-	return FString::Printf(TEXT("HP %.0f  SPD %.1f  DMG %.0f\nUpgrade: %.0f / %.1f / %.0f"),
+	const FUpgradeConfig& Config = TierConfigOf(Upgrade, Slots[(int32)Upgrade].Tier + 1); // the next tier on offer
+	return FString::Printf(TEXT("HP %.0f  SPD %.1f  DMG %.0f\nNext: %.0f / %.1f / %.0f"),
 		Health, Interval > 0.0f ? 1.0f / Interval : 0.0f, Damage, Config.Health, Config.Speed, Config.Damage);
 }

@@ -11,6 +11,7 @@
 #include "TDMatchRewards.h"
 #include "TDMenuFunctionLibrary.h"
 #include "Tower.h"
+#include "UpgradeVisualComponent.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Blueprint/WidgetTree.h"
@@ -40,12 +41,32 @@ namespace
 		{ TEXT("TowerButton"),  650.0f, 1.8f, 60.0f, 750 },
 	};
 
+	// Tier II: bought with the same button while tier I is active. About 30% stronger than tier I
+	// for roughly 1.6 to 2 times the price, so it is a real choice and not an automatic purchase.
+	const FUpgradeConfig Tier2Configs[] = {
+		{ TEXT("BasicButton"),  165.0f, 5.5f, 22.0f, 400 },
+		{ TEXT("ArcherButton"), 150.0f, 7.0f, 20.0f, 110 },
+		{ TEXT("PoisonButton"), 175.0f, 5.0f, 28.0f, 30 },
+		{ TEXT("StrongButton"), 330.0f, 3.8f, 38.0f, 450 },
+		{ TEXT("TowerButton"),  900.0f, 2.4f, 85.0f, 1300 },
+	};
+
+	/** Every unit has two upgrade tiers: tier I first, then tier II later in the same wave. */
+	constexpr int32 MaxTier = 2;
+
 	constexpr float ArcherArrowSpeedBonus = 1000.0f;
 	const FLinearColor ReadyColor(1.0f, 1.0f, 1.0f, 0.0f);
+	const FLinearColor MaxTierColor(0.95f, 0.75f, 0.15f, 1.0f);
 
 	const FUpgradeConfig& ConfigOf(EUpgrade Upgrade)
 	{
 		return Configs[(int32)Upgrade];
+	}
+
+	/** Stats and price of a tier. Anything above tier I uses the tier II table. */
+	const FUpgradeConfig& TierConfigOf(EUpgrade Upgrade, int32 Tier)
+	{
+		return Tier >= 2 ? Tier2Configs[(int32)Upgrade] : Configs[(int32)Upgrade];
 	}
 
 	EUpgrade UpgradeFor(const ADefender* Defender)
@@ -57,10 +78,10 @@ namespace
 	}
 
 	/**  All five are paid in meta currency: leaf unlocks Strong and Tower, wood unlocks Basic. */
-	FMetaCurrencyRewards MetaCostOf(EUpgrade Upgrade)
+	FMetaCurrencyRewards MetaCostOf(EUpgrade Upgrade, int32 Tier = 1)
 	{
 		FMetaCurrencyRewards Cost;
-		const int32 Amount = ConfigOf(Upgrade).Cost;
+		const int32 Amount = TierConfigOf(Upgrade, Tier).Cost;
 		switch (Upgrade)
 		{
 		case EUpgrade::Basic:  Cost.WoodenMight = Amount; break;   //  wood
@@ -383,14 +404,15 @@ void UDefenderUpgradeComponent::GatherTargets(EUpgrade Upgrade, TArray<AActor*>&
 bool UDefenderUpgradeComponent::CanAfford(EUpgrade Upgrade) const
 {
 	const ATDGameMode* GameMode = GetGameMode();
-	return GameMode && GameMode->CanAffordMeta(MetaCostOf(Upgrade)); //  same wallet for all five
+	// The price is for the next tier: tier I when nothing is bought yet, tier II once tier I is active.
+	return GameMode && GameMode->CanAffordMeta(MetaCostOf(Upgrade, FMath::Clamp(Slots[(int32)Upgrade].Tier + 1, 1, MaxTier)));
 }
 
 bool UDefenderUpgradeComponent::Spend(EUpgrade Upgrade) const
 {
 	// TrySpendMeta checks the balance first and updates the HUD, so nothing can go negative.
 	ATDGameMode* GameMode = GetGameMode();
-	return GameMode && GameMode->TrySpendMeta(MetaCostOf(Upgrade)); //
+	return GameMode && GameMode->TrySpendMeta(MetaCostOf(Upgrade, FMath::Clamp(Slots[(int32)Upgrade].Tier + 1, 1, MaxTier)));
 }
 
 void UDefenderUpgradeComponent::TryActivate(EUpgrade Upgrade)
@@ -398,8 +420,11 @@ void UDefenderUpgradeComponent::TryActivate(EUpgrade Upgrade)
 	UE_LOG(LogTemp, Display, TEXT("Defender upgrade purchase requested: %s."), ConfigOf(Upgrade).ButtonName);
 	FSlot& Slot = Slots[(int32)Upgrade];
 	ATDGameMode* GameMode = GetGameMode();
-	// A wave-active upgrade can be purchased again when its independent cooldown expires.
-	if (Slot.Phase == EPhase::DisabledAfterWave || Slot.CooldownSecondsRemaining > 0
+	// Each upgrade has two tiers. Tier I is bought first, tier II is bought later in the same wave with the
+	// same button. Once tier II is active there is nothing left to buy until the wave ends. Before this,
+	// clicking an already-active upgrade charged again for no extra effect.
+	const int32 NextTier = Slot.Tier + 1;
+	if (NextTier > MaxTier || Slot.Phase == EPhase::DisabledAfterWave || Slot.CooldownSecondsRemaining > 0
 		|| !GameMode || GameMode->IsGameOver() || GameMode->IsVictory() || IsPending(Upgrade))
 	{
 		return;
@@ -407,6 +432,13 @@ void UDefenderUpgradeComponent::TryActivate(EUpgrade Upgrade)
 
 	TArray<AActor*> Targets;
 	GatherTargets(Upgrade, Targets);
+
+	// Tier II only makes sense for units that are on the field right now, so never take payment for it otherwise.
+	if (NextTier > 1 && Targets.Num() == 0)
+	{
+		return;
+	}
+
 	if (!Spend(Upgrade)) //  the single deduction; nothing is charged when this fails
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Defender upgrade %s refused: not enough resources."), ConfigOf(Upgrade).ButtonName); //
@@ -419,7 +451,7 @@ void UDefenderUpgradeComponent::TryActivate(EUpgrade Upgrade)
 	}
 
 	// If there is no matching unit yet, keep the already-paid upgrade queued until one is placed.
-	if (Targets.Num() == 0)
+	if (NextTier == 1 && Targets.Num() == 0)
 	{
 		if (UTDMetaProgressionSubsystem* Meta = GetWorld()->GetGameInstance()->GetSubsystem<UTDMetaProgressionSubsystem>())
 		{
@@ -430,7 +462,14 @@ void UDefenderUpgradeComponent::TryActivate(EUpgrade Upgrade)
 		RefreshUpgradeUI();
 		return;
 	}
-	StartActive(Upgrade, Targets); //
+	if (NextTier == 1)
+	{
+		StartActive(Upgrade, Targets);
+	}
+	else
+	{
+		StartTierTwo(Upgrade, Targets);
+	}
 	GameMode->SaveCurrentWaveCheckpoint();
 }
 
@@ -561,7 +600,10 @@ void UDefenderUpgradeComponent::ApplyBoost(EUpgrade Upgrade, AActor* Target)
 	if (!Health || Health->IsDead()) { return; }
 
 	// Raise each stat to its target, never lower it, and remember exactly how much was added.
-	const FUpgradeConfig& Config = ConfigOf(Upgrade);
+	// Use the stats of whichever tier is active. Calling this again for tier II only adds the difference,
+	// because every value is raised towards its target and never past it.
+	const int32 ActiveTier = FMath::Max(1, Slots[(int32)Upgrade].Tier);
+	const FUpgradeConfig& Config = TierConfigOf(Upgrade, ActiveTier);
 	const float TargetInterval = 1.0f / Config.Speed;
 	FBoost Boost;
 	Boost.Target = Target;
@@ -589,6 +631,12 @@ void UDefenderUpgradeComponent::ApplyBoost(EUpgrade Upgrade, AActor* Target)
 	}
 
 	Slots[(int32)Upgrade].Boosts.Add(Boost);
+
+	// Show the tier on the unit itself (orb, ring and a gold tint), not only as a one-off particle burst.
+	if (UUpgradeVisualComponent* Visual = Target->FindComponentByClass<UUpgradeVisualComponent>())
+	{
+		Visual->SetTier(ActiveTier);
+	}
 }
 
 void UDefenderUpgradeComponent::RemoveBoosts(EUpgrade Upgrade)
@@ -600,6 +648,7 @@ void UDefenderUpgradeComponent::RemoveBoosts(EUpgrade Upgrade)
 		if (!Target) { continue; }
 
 		if (UHealthComponent* Health = Target->FindComponentByClass<UHealthComponent>()) { Health->AdjustMaxHealth(-Boost.Health); }
+		if (UUpgradeVisualComponent* Visual = Target->FindComponentByClass<UUpgradeVisualComponent>()) { Visual->SetTier(0); }
 
 		if (ATower* Tower = Cast<ATower>(Target))
 		{
@@ -614,6 +663,7 @@ void UDefenderUpgradeComponent::RemoveBoosts(EUpgrade Upgrade)
 		}
 	}
 	Slot.Boosts.Reset();
+	Slot.Tier = 0; // upgrades last one wave, so the next wave starts again from tier I
 }
 
 //  DescribeStats moved to DefenderUpgradeComponent_Extra.inl to keep this file under 500 lines.
@@ -665,7 +715,7 @@ void UDefenderUpgradeComponent::RefreshUpgradeUI()
 		const FLinearColor StateColor = bCoolingDown || bDisabledAfterWave
 			? FLinearColor(0.85f, 0.05f, 0.05f, 1.0f)
 			: bQueued ? FLinearColor(0.12f, 0.72f, 0.18f, 1.0f)
-			: bActive ? FLinearColor(0.12f, 0.72f, 0.18f, 1.0f)
+			: bActive ? (Slot.Tier >= MaxTier ? MaxTierColor : FLinearColor(0.12f, 0.72f, 0.18f, 1.0f)) // gold once tier II is bought
 			: ReadyColor;
 
 		// Keep clicks available so the purchase handler can show why a purchase is refused.
@@ -732,7 +782,8 @@ void UDefenderUpgradeComponent::RefreshUpgradeUI()
 			}
 			else if (bActive)
 			{
-				Status = TEXT("PURCHASED - ENABLED");
+				// Tier I leaves the button live, so tell the player the same button now buys tier II.
+				Status = Slot.Tier >= MaxTier ? TEXT("TIER II - MAX") : TEXT("TIER I - CLICK FOR II");
 			}
 			else if (bDisabledAfterWave && bCoolingDown)
 			{

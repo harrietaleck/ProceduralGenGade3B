@@ -41,6 +41,7 @@ namespace DefenderUpgrades
 		};
 
 		EPhase Phase = EPhase::Ready;
+		int32 Tier = 0; // 0 = nothing bought this wave, 1 = tier I active, 2 = tier II active
 		TArray<FBoost> Boosts;
 		int32 CooldownSecondsRemaining = 0;
 		FTimerHandle CooldownTimer;
@@ -134,6 +135,8 @@ private:
 
 	//  Queued purchases and status text (DefenderUpgradeComponent_Extra.inl).
 	void StartActive(DefenderUpgrades::EUpgrade Upgrade, const TArray<AActor*>& Targets);
+	/** Buys the second tier: raises every living unit of that type to the tier II stats. */
+	void StartTierTwo(DefenderUpgrades::EUpgrade Upgrade, const TArray<AActor*>& Targets);
 	bool IsPending(DefenderUpgrades::EUpgrade Upgrade) const;
 	void UpdateStatusText();
 };
