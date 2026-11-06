@@ -31,7 +31,9 @@ enum class EEnemyType : uint8
 {
     Basic UMETA(DisplayName = "Basic"),
     Bear UMETA(DisplayName = "Bear"),
-    Wolf UMETA(DisplayName = "Wolf")
+    Wolf UMETA(DisplayName = "Wolf"),
+    Swarm UMETA(DisplayName = "Swarm"), // flocks using boid rules
+    Slime UMETA(DisplayName = "Slime")  // releases a spreading poison cloud
 };
 
 // Elite types the wave director can give an enemy to counter the player's defence.
@@ -403,6 +405,10 @@ private:
     void TickBasic(float DeltaSeconds);
     void TickWolf(float DeltaSeconds);
     void TickBear(float DeltaSeconds);
+    void TickSwarm(float DeltaSeconds); // boids: separation, alignment, cohesion on top of path following
+    void TickSlime(float DeltaSeconds); // walks the path and releases poison near defenders
+    void ReleasePoison();               // spawns a cellular-automaton poison cloud here
+    float PoisonCooldown = 0.0f;
 
     // Movement.
     void MoveAlongPath(float DeltaSeconds);

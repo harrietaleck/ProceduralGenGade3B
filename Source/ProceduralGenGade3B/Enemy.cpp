@@ -14,6 +14,7 @@
 #include "WaveManager.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "PoisonCloud.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "DrawDebugHelpers.h"
@@ -322,6 +323,38 @@ void AEnemy::ApplyEnemyType()
         ResourceType = EResourceType::ToxicMucus;
         break;
 
+    case EEnemyType::Swarm:
+        //Swarm members are small, fast and weak. They move as a flock (see TickSwarm)
+        MoveSpeed = 210.0f;
+        Acceleration = 150.0f;
+        TurnRate = 6.0f;
+        AttackDamage = 4.0f;
+        AttackInterval = 0.5f;
+        ResourceReward = 6;
+        HealthComponent->MaxHealth = 28.0f;
+        MeshPath = TEXT("/Engine/BasicShapes/Sphere.Sphere");
+        MeshComponent->SetRelativeScale3D(FVector(0.3f));
+        ImportedPath = TEXT("/Game/ImportedAssets/Animals/SM_Cat");
+        ImportedScale = 0.14f;
+        BodyColor = FLinearColor(0.95f, 0.8f, 0.2f);
+        ResourceType = EResourceType::ArcaneOrb;
+        break;
+
+    case EEnemyType::Slime:
+        //Slime is slow and tanky. It spreads poison that destroys defenders (see ReleasePoison)
+        MoveSpeed = 70.0f;
+        Acceleration = 40.0f;
+        TurnRate = 2.0f;
+        AttackDamage = 8.0f;
+        AttackInterval = 1.5f;
+        ResourceReward = 40;
+        HealthComponent->MaxHealth = 190.0f;
+        MeshPath = TEXT("/Engine/BasicShapes/Sphere.Sphere");
+        MeshComponent->SetRelativeScale3D(FVector(0.9f, 0.9f, 0.65f));
+        BodyColor = FLinearColor(0.2f, 0.95f, 0.3f);
+        ResourceType = EResourceType::ToxicMucus;
+        break;
+
     default:
         //Basic enemy is balanced
         MoveSpeed = 150.0f;
@@ -492,8 +525,101 @@ void AEnemy::Tick(float DeltaSeconds)
     {
     case EEnemyType::Wolf: TickWolf(DeltaSeconds); break;
     case EEnemyType::Bear: TickBear(DeltaSeconds); break;
+    case EEnemyType::Swarm: TickSwarm(DeltaSeconds); break;
+    case EEnemyType::Slime: TickSlime(DeltaSeconds); break;
     default:               TickBasic(DeltaSeconds); break;
     }
+}
+
+//Swarm: boids. The path gives the heading and three flocking rules bend it
+void AEnemy::TickSwarm(float DeltaSeconds)
+{
+    if (AActor* Target = FindTargetInRange())
+    {
+        FaceTowards(Target->GetActorLocation(), DeltaSeconds);
+        TryAttack(Target, DeltaSeconds);
+        return;
+    }
+    if (Waypoints.Num() == 0 || CurrentWaypoint >= Waypoints.Num())
+    {
+        MoveAlongPath(DeltaSeconds);
+        return;
+    }
+
+    const FVector Location = GetActorLocation();
+    FVector ToWaypoint = Waypoints[CurrentWaypoint] - Location;
+    ToWaypoint.Z = 0.0f;
+    if (ToWaypoint.Size() <= WaypointAcceptRadius)
+    {
+        ++CurrentWaypoint;
+        return;
+    }
+
+    FVector Separation = FVector::ZeroVector; // steer away from flock mates that are too close
+    FVector Alignment = FVector::ZeroVector;  // steer the way the neighbours are facing
+    FVector Centre = FVector::ZeroVector;     // steer towards the middle of the neighbours
+    int32 Neighbours = 0;
+    for (TActorIterator<AEnemy> It(GetWorld()); It; ++It)
+    {
+        const AEnemy* Other = *It;
+        if (!Other || Other == this || Other->EnemyType != EEnemyType::Swarm || (Other->HealthComponent && Other->HealthComponent->IsDead()))
+        {
+            continue;
+        }
+        FVector Away = Location - Other->GetActorLocation();
+        Away.Z = 0.0f;
+        const float Dist = Away.Size();
+        if (Dist < 1.0f || Dist > 450.0f)
+        {
+            continue;
+        }
+        ++Neighbours;
+        Centre += Other->GetActorLocation();
+        Alignment += Other->GetActorForwardVector();
+        if (Dist < 140.0f)
+        {
+            Separation += Away / Dist * ((140.0f - Dist) / 140.0f);
+        }
+    }
+
+    FVector Steer = ToWaypoint.GetSafeNormal() + Separation * 2.2f;
+    if (Neighbours > 0)
+    {
+        FVector ToCentre = Centre / Neighbours - Location;
+        ToCentre.Z = 0.0f;
+        Alignment.Z = 0.0f;
+        Steer += ToCentre.GetSafeNormal() * 0.45f + Alignment.GetSafeNormal() * 0.6f;
+    }
+    Steer.Z = 0.0f;
+    Steer = Steer.GetSafeNormal();
+    MoveTowardsLocation(Location + (Steer.IsNearlyZero() ? ToWaypoint.GetSafeNormal() : Steer) * 200.0f, DeltaSeconds);
+}
+
+//Slime: walks like a Basic, but when a defender is close it releases poison, then waits before doing it again
+void AEnemy::TickSlime(float DeltaSeconds)
+{
+    PoisonCooldown -= DeltaSeconds;
+    if (PoisonCooldown <= 0.0f)
+    {
+        for (TActorIterator<ADefender> It(GetWorld()); It; ++It)
+        {
+            const ADefender* Defender = *It;
+            if (Defender && Defender->HealthComponent && !Defender->HealthComponent->IsDead()
+                && FVector::Dist2D(Defender->GetActorLocation(), GetActorLocation()) < 450.0f)
+            {
+                ReleasePoison();
+                PoisonCooldown = 7.0f;
+                break;
+            }
+        }
+    }
+    TickBasic(DeltaSeconds);
+}
+
+void AEnemy::ReleasePoison()
+{
+    UE_LOG(LogTemp, Display, TEXT("Slime released poison at %s"), *GetActorLocation().ToString());
+    GetWorld()->SpawnActor<APoisonCloud>(GetActorLocation(), FRotator::ZeroRotator);
 }
 
 //Basic: hold position and fight anything in reach, otherwise keep walking
@@ -1043,6 +1169,12 @@ void AEnemy::HandleDeath(AActor* Killer)
     if (EliteModifier == EEliteModifier::Splitting)
     {
         SpawnSplitChildren();
+    }
+
+    // A dying slime bursts and leaves poison behind. Anything of yours standing close is destroyed.
+    if (EnemyType == EEnemyType::Slime)
+    {
+        ReleasePoison();
     }
 
     TDVFX::Play(this, DeathVFX, GetActorLocation(), TDVFX::Gold); //  defeat burst (pooled, one-shot)

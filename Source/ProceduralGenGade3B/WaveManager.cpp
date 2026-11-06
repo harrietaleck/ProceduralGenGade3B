@@ -187,8 +187,30 @@ void AWaveManager::PrepareWave(int32 WaveIndex)
 		const FWavePlan Plan = Director->PlanWave(GetWorld(), WaveIndex + 1);
 		SpawnQueue = Plan.Spawns;
 
+		// Procedural extras from wave 2: a boid swarm that arrives as one pack, and poison slimes.
+		if (Plan.WaveNumber >= 2)
+		{
+			const int32 SwarmSize = 3 + Plan.WaveNumber * 2;
+			for (int32 I = 0; I < SwarmSize; ++I)
+			{
+				FPlannedSpawn Boid;
+				Boid.Type = EEnemyType::Swarm;
+				Boid.DelayAfter = 0.3f;
+				Boid.bPackFollower = I > 0; // everyone follows the first boid's lane
+				SpawnQueue.Add(Boid);
+			}
+			const int32 SlimeCount = 1 + (Plan.WaveNumber - 2) / 2;
+			for (int32 I = 0; I < SlimeCount; ++I)
+			{
+				FPlannedSpawn Slime;
+				Slime.Type = EEnemyType::Slime;
+				Slime.DelayAfter = 2.5f;
+				SpawnQueue.Add(Slime);
+			}
+		}
+
 		ActiveWave = FWaveData();
-		ActiveWave.EnemyCount = FMath::Max(1, Plan.Spawns.Num());
+		ActiveWave.EnemyCount = FMath::Max(1, SpawnQueue.Num()); // includes the swarm and slimes added above
 		ActiveWave.HealthMultiplier = Plan.HealthMultiplier;
 		ActiveWave.DamageMultiplier = Plan.DamageMultiplier;
 		ActiveWave.SpeedMultiplier = Plan.SpeedMultiplier;
