@@ -39,3 +39,6 @@ Content/UI/_Deprecated/
 # Accidental editor-only temp UI levels
 Content/UI/Level/
 Content/UI/StartScreenLvl.umap
+
+# Python bytecode from the Docs generators
+__pycache__/
