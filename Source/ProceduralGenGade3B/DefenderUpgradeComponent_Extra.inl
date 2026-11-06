@@ -72,6 +72,7 @@ void UDefenderUpgradeComponent::UpdateStatusText()
 		TEXT("Tower")
 	};
 	TArray<FString> StatusLines;
+	StatusLines.Add(TEXT("UPDATE"));
 	for (int32 Index = 0; Index < (int32)EUpgrade::Count; ++Index)
 	{
 		const EUpgrade Upgrade = (EUpgrade)Index;

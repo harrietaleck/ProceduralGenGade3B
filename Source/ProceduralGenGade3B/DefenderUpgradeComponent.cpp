@@ -721,10 +721,18 @@ void UDefenderUpgradeComponent::RefreshUpgradeUI()
 
 		if (bQueued || bActive || bCoolingDown)
 		{
-			FString Status = TEXT("PURCHASED");
-			if (bActive && bCoolingDown)
+			FString Status;
+			if (bQueued)
+			{
+				Status = TEXT("PURCHASED - QUEUED");
+			}
+			else if (bActive && bCoolingDown)
 			{
 				Status = FString::Printf(TEXT("PURCHASED - %ds"), Slot.CooldownSecondsRemaining);
+			}
+			else if (bActive)
+			{
+				Status = TEXT("PURCHASED - ENABLED");
 			}
 			else if (bDisabledAfterWave && bCoolingDown)
 			{
@@ -733,6 +741,10 @@ void UDefenderUpgradeComponent::RefreshUpgradeUI()
 			else if (!bActive && !bQueued && bCoolingDown)
 			{
 				Status = FString::Printf(TEXT("%ds"), Slot.CooldownSecondsRemaining);
+			}
+			else
+			{
+				Status = TEXT("PURCHASED");
 			}
 			Label->SetText(FText::FromString(Status));
 			Label->SetColorAndOpacity(bCoolingDown ? FLinearColor::White : FLinearColor::Black);
