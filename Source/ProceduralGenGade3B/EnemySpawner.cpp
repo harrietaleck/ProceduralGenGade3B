@@ -18,6 +18,7 @@ AEnemySpawner::AEnemySpawner()
     SpawnedEnemyTypeIndex = 0;
 }
 
+// Sets the object up before first use.
 void AEnemySpawner::Initialize(
     AProceduralTerrain* InTerrain,
     AActor* InTower)
@@ -31,6 +32,7 @@ void AEnemySpawner::Initialize(
     }
 }
 
+// Start spawning.
 void AEnemySpawner::StartSpawning()
 {
     GetWorldTimerManager().SetTimer(
@@ -42,17 +44,20 @@ void AEnemySpawner::StartSpawning()
         SpawnInterval);
 }
 
+// Stop spawning.
 void AEnemySpawner::StopSpawning()
 {
     GetWorldTimerManager().ClearTimer(
         SpawnTimerHandle);
 }
 
+// Spawn enemy.
 void AEnemySpawner::SpawnEnemy()
 {
     SpawnSingleEnemy();
 }
 
+// Spawns one enemy. It takes turns between Basic, Bear and Wolf, and between the lanes.
 AEnemy* AEnemySpawner::SpawnSingleEnemy()
 {
     if (!Terrain || Terrain->GetEnemyPaths().Num() == 0)
@@ -71,6 +76,7 @@ AEnemy* AEnemySpawner::SpawnSingleEnemy()
     return SpawnEnemyOfType(EnemyType, PathIndex);
 }
 
+// How far an enemy has to walk on a lane from its spawn point to the tower.
 float AEnemySpawner::GetPathLength(int32 PathIndex) const
 {
     if (!Terrain || !Terrain->GetEnemyPaths().IsValidIndex(PathIndex))
@@ -156,6 +162,7 @@ AEnemy* AEnemySpawner::SpawnEnemyOfType(EEnemyType EnemyType, int32 PathIndex)
     return Enemy;
 }
 
+// Count living enemies.
 int32 AEnemySpawner::CountAliveEnemies() const
 {
     int32 Count = 0;

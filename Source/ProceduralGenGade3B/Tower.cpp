@@ -19,6 +19,7 @@
 #include "Materials/MaterialInterface.h" // 
 #include "Materials/MaterialInstanceDynamic.h" //  emerald beam
 
+// Constructor: sets the default components and values for Tower.
 ATower::ATower()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -162,6 +163,7 @@ void ATower::ShowBeam(const FVector& From, const FVector& To)
 	}), 0.12f, false);
 }
 
+// Runs when the object enters the world: sets up its state and event bindings.
 void ATower::BeginPlay()
 {
 	Super::BeginPlay();
@@ -170,6 +172,7 @@ void ATower::BeginPlay()
 	GetWorldTimerManager().SetTimer(FireTimerHandle, this, &ATower::FireAtNearestEnemy, FireInterval, /*bLoop=*/true);
 }
 
+// Changes the time between shots and restarts the fire timer to match.
 void ATower::SetFireInterval(float NewInterval)
 {
 	FireInterval = FMath::Max(0.05f, NewInterval);
@@ -179,6 +182,7 @@ void ATower::SetFireInterval(float NewInterval)
 	}
 }
 
+// Runs on the timer. Finds the closest enemy in range and shoots it.
 void ATower::FireAtNearestEnemy()
 {
 	if (HealthComponent->IsDead())
@@ -215,6 +219,7 @@ void ATower::FireAtNearestEnemy()
 	}
 }
 
+// Gives back the closest living enemy inside AttackRange, or null if there is none.
 AEnemy* ATower::FindNearestEnemyInRange() const
 {
 	const FVector Location = GetActorLocation();
@@ -239,6 +244,7 @@ AEnemy* ATower::FindNearestEnemyInRange() const
 	return Best;
 }
 
+// Spawns falling stones and dust when the tower is destroyed.
 void ATower::PlayDestructionEffect()
 {
 	UWorld* World = GetWorld();
@@ -311,6 +317,7 @@ void ATower::PlayDestructionEffect()
 	TDVFX::Play(this, DestructionVFX, Base, FLinearColor(0.7f, 0.6f, 0.5f), 3.0f);
 }
 
+// Called when the tower's health hits zero. This starts the game over.
 void ATower::HandleDeath(AActor* Killer)
 {
 	GetWorldTimerManager().ClearTimer(FireTimerHandle);

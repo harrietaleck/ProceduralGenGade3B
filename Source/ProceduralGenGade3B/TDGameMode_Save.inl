@@ -43,6 +43,7 @@ UTDSaveGame* ATDGameMode::CaptureCheckpoint(int32 WavesCleared, bool bResumeAtCu
 	return Save;
 }
 
+// Write checkpoint.
 void ATDGameMode::WriteCheckpoint(int32 WavesCleared, bool bResumeAtCurrentWave)
 {
 	UTDSaveSubsystem* Saves = GetGameInstance() ? GetGameInstance()->GetSubsystem<UTDSaveSubsystem>() : nullptr;
@@ -57,6 +58,7 @@ void ATDGameMode::WriteCheckpoint(int32 WavesCleared, bool bResumeAtCurrentWave)
 	}
 }
 
+// Writes a restartable checkpoint for the current wave.
 void ATDGameMode::SaveCurrentWaveCheckpoint()
 {
 	if (WaveManager)
@@ -65,11 +67,13 @@ void ATDGameMode::SaveCurrentWaveCheckpoint()
 	}
 }
 
+// Handle wave started for checkpoint.
 void ATDGameMode::HandleWaveStartedForCheckpoint(int32 WaveNumber)
 {
 	WriteCheckpoint(FMath::Max(0, WaveNumber - 1), true);
 }
 
+// Write match finished save.
 void ATDGameMode::WriteMatchFinishedSave()
 {
 	UTDSaveSubsystem* Saves = GetGameInstance() ? GetGameInstance()->GetSubsystem<UTDSaveSubsystem>() : nullptr;
@@ -85,6 +89,7 @@ void ATDGameMode::WriteMatchFinishedSave()
 	LastCheckpoint = nullptr;
 }
 
+// Writes the latest wave checkpoint to the save slot (F5).
 void ATDGameMode::SaveGameNow()
 {
 	UTDSaveSubsystem* Saves = GetGameInstance() ? GetGameInstance()->GetSubsystem<UTDSaveSubsystem>() : nullptr;
@@ -107,6 +112,7 @@ void ATDGameMode::SaveGameNow()
 	}
 }
 
+// Apply resume save.
 void ATDGameMode::ApplyResumeSave(UTDSaveGame* Save)
 {
 	if (!Save || !Terrain || !Tower || !WaveManager)
@@ -183,6 +189,7 @@ void ATDGameMode::ApplyResumeSave(UTDSaveGame* Save)
 	}
 }
 
+// Legacy save compatibility: wave-scoped upgrades are not persisted between waves.
 void UDefenderUpgradeComponent::GetSaveState(TArray<uint8>& OutPhases, TArray<float>& OutSecondsLeft) const
 {
 	for (int32 Index = 0; Index < (int32)DefenderUpgrades::EUpgrade::Count; ++Index)
@@ -195,6 +202,7 @@ void UDefenderUpgradeComponent::GetSaveState(TArray<uint8>& OutPhases, TArray<fl
 	}
 }
 
+// Legacy save compatibility: old timed upgrade states are intentionally not restored.
 void UDefenderUpgradeComponent::RestoreSaveState(const TArray<uint8>& Phases, const TArray<float>& SecondsLeft)
 {
 	UWorld* World = GetWorld();

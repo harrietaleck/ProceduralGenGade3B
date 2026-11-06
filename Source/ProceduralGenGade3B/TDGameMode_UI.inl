@@ -79,6 +79,7 @@ void ATDGameMode::BindSettingsButtons()
 	}
 }
 
+// Bind victory screen buttons.
 void ATDGameMode::BindVictoryScreenButtons()
 {
 	if (!VictoryScreenWidget)
@@ -122,6 +123,7 @@ void ATDGameMode::BindVictoryScreenButtons()
 	}
 }
 
+// Present victory screen.
 void ATDGameMode::PresentVictoryScreen()
 {
 	if (!VictoryScreenWidget)
@@ -176,6 +178,7 @@ void ATDGameMode::PresentVictoryScreen()
 	VictoryScreenWidget->SetVisibility(ESlateVisibility::Visible);
 }
 
+// Pauses or unpauses the match and shows or hides the settings widget.
 void ATDGameMode::TogglePause()
 {
 	if (bGameOver || IsVictory() || bWaveResultsVisible)
@@ -193,6 +196,7 @@ void ATDGameMode::TogglePause()
 	}
 }
 
+// Opens the settings widget and pauses the match.
 void ATDGameMode::ShowSettings()
 {
 	if (bGameOver || IsVictory() || bWaveResultsVisible)
@@ -236,6 +240,7 @@ void ATDGameMode::ShowSettings()
 	UGameplayStatics::SetGamePaused(this, true);
 }
 
+// Closes settings and carries on with the match. Call this from the Blueprint Resume buttons.
 void ATDGameMode::ResumeFromSettings()
 {
 	bPaused = false;
@@ -269,6 +274,7 @@ void ATDGameMode::ResumeFromSettings()
 	RestoreGameplayInput();
 }
 
+// True while the settings overlay is visible.
 bool ATDGameMode::IsSettingsVisible() const
 {
 	if (SettingsWidget && SettingsWidget->IsVisible())
@@ -290,6 +296,7 @@ bool ATDGameMode::IsSettingsVisible() const
 	return false;
 }
 
+// Hide end screens.
 void ATDGameMode::HideEndScreens()
 {
 	if (EndScreenWidget)
@@ -302,6 +309,7 @@ void ATDGameMode::HideEndScreens()
 	}
 }
 
+// Restore gameplay input.
 void ATDGameMode::RestoreGameplayInput()
 {
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
@@ -314,6 +322,7 @@ void ATDGameMode::RestoreGameplayInput()
 	}
 }
 
+// Loads the default HUD and end screen Widget Blueprints without using ConstructorHelpers.
 void ATDGameMode::EnsureDefaultWidgetClasses()
 {
 	if (!HUDWidgetClass)
@@ -373,6 +382,7 @@ void ATDGameMode::EnsureDefaultWidgetClasses()
 	}
 }
 
+// Show end screen.
 void ATDGameMode::ShowEndScreen(bool bVictory)
 {
 	const bool bUseDedicatedVictory = bVictory && VictoryScreenWidget;

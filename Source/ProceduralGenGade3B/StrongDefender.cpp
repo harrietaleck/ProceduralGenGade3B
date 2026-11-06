@@ -10,6 +10,7 @@
 #include "Projectile.h" //  visual spear
 #include "TDVFX.h"      // 
 
+// Constructor: sets the default components and values for StrongDefender.
 AStrongDefender::AStrongDefender()
 {
 	bStrongDefender = true;
@@ -50,6 +51,7 @@ float AStrongDefender::GetThreatRating() const
 	return Super::GetThreatRating() * 1.5f;
 }
 
+// Runs when the object enters the world: sets up its state and event bindings.
 void AStrongDefender::BeginPlay()
 {
 	Super::BeginPlay();
@@ -57,6 +59,7 @@ void AStrongDefender::BeginPlay()
 	GetWorldTimerManager().SetTimer(BoltTimerHandle, this, &AStrongDefender::FireStunBolt, FireInterval, true);
 }
 
+// Set attack interval.
 void AStrongDefender::SetAttackInterval(float NewInterval)
 {
 	Super::SetAttackInterval(NewInterval);
@@ -66,6 +69,7 @@ void AStrongDefender::SetAttackInterval(float NewInterval)
 	}
 }
 
+// Picks the enemy in range with the most health and hits it, since that gets the most out of a stun.
 void AStrongDefender::FireStunBolt()
 {
 	if (!HealthComponent || HealthComponent->IsDead())

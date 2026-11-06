@@ -11,6 +11,7 @@ void ATDGameMode::AddResources(int32 Amount)
 	OnResourcesChanged.Broadcast(Resources);
 }
 
+// Spends the resources if the player can afford it. Returns false if there isn't enough.
 bool ATDGameMode::TrySpendResources(int32 Amount)
 {
 	if (Amount < 0 || Resources < Amount)
@@ -22,6 +23,7 @@ bool ATDGameMode::TrySpendResources(int32 Amount)
 	return true;
 }
 
+// Called by an enemy when it dies. Gives the player its bounty.
 void ATDGameMode::NotifyEnemyKilled(AEnemy* DeadEnemy)
 {
 	++MatchEnemiesKilled;
@@ -32,18 +34,21 @@ void ATDGameMode::NotifyEnemyKilled(AEnemy* DeadEnemy)
 	RefreshMetaHUD();
 }
 
+// Counts a hit on an enemy from the tower, a defender or a projectile.
 void ATDGameMode::NotifyEnemyHit()
 {
 	++MatchHitsLanded;
 	RefreshMetaHUD();
 }
 
+// Counts a defender that was placed this match.
 void ATDGameMode::NotifyDefenderPlaced()
 {
 	++MatchDefendersPlaced;
 	RefreshMetaHUD();
 }
 
+// Ensure starting meta wallet.
 void ATDGameMode::EnsureStartingMetaWallet()
 {
 	if (UGameInstance* GI = GetGameInstance())
@@ -63,6 +68,7 @@ void ATDGameMode::EnsureStartingMetaWallet()
 	}
 }
 
+// The meta currency wallet that is kept between matches.
 FMetaCurrencyRewards ATDGameMode::GetMetaWallet() const
 {
 	if (UGameInstance* GI = GetGameInstance())
@@ -75,6 +81,7 @@ FMetaCurrencyRewards ATDGameMode::GetMetaWallet() const
 	return FMetaCurrencyRewards();
 }
 
+// Spends meta currency if the wallet has enough.
 bool ATDGameMode::TrySpendMeta(const FMetaCurrencyRewards& Cost)
 {
 	if (UGameInstance* GI = GetGameInstance())
@@ -91,6 +98,7 @@ bool ATDGameMode::TrySpendMeta(const FMetaCurrencyRewards& Cost)
 	return false;
 }
 
+// True when the wallet has enough for a defender or upgrade.
 bool ATDGameMode::CanAffordMeta(const FMetaCurrencyRewards& Cost) const
 {
 	if (UGameInstance* GI = GetGameInstance())
@@ -103,11 +111,13 @@ bool ATDGameMode::CanAffordMeta(const FMetaCurrencyRewards& Cost) const
 	return false;
 }
 
+// True while paused, after a loss or after a win. The player can't place or upgrade then.
 bool ATDGameMode::IsInteractionBlocked() const
 {
 	return bPaused || bGameOver || IsVictory();
 }
 
+// Spends Light Lanterns to make the tower beam stronger for the rest of this match.
 bool ATDGameMode::TryUpgradeTowerBeam()
 {
 	if (!Tower || bGameOver || IsVictory())
@@ -146,6 +156,7 @@ bool ATDGameMode::TryUpgradeTowerBeam()
 	return true;
 }
 
+// Current match score, worked out from placements, hits, kills and surviving defenders.
 int32 ATDGameMode::GetLiveMatchScore() const
 {
 	int32 SurvivingDefenders = 0;
@@ -167,6 +178,7 @@ int32 ATDGameMode::GetLiveMatchScore() const
 		+ (SurvivingDefenders * 5);
 }
 
+// Sends the current meta currency totals to the match HUD.
 void ATDGameMode::RefreshMetaHUD() const
 {
 	if (!MatchHUDWidget)
@@ -184,6 +196,7 @@ void ATDGameMode::RefreshMetaHUD() const
 	}
 }
 
+// Finalize match result.
 void ATDGameMode::FinalizeMatchResult(bool bVictory, int32 WavesClearedOverride)
 {
 	int32 WavesCleared = 0;
@@ -258,6 +271,7 @@ void ATDGameMode::FinalizeMatchResult(bool bVictory, int32 WavesClearedOverride)
 	}
 }
 
+// Runs when the final wave is won. Does nothing if the results already showed when that wave was cleared.
 void ATDGameMode::HandleMatchVictory()
 {
 	if (bGameOver)
@@ -297,6 +311,7 @@ void ATDGameMode::HandleMatchVictory()
 	PlayMatchVFX(VictoryVFX, TDVFX::Gold, 4.0f); //  victory celebration
 }
 
+// Called by the tower when it dies. Ends the game.
 void ATDGameMode::NotifyTowerDestroyed()
 {
 	if (bGameOver)

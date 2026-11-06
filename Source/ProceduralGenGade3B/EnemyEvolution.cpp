@@ -2,6 +2,7 @@
 
 #include "EnemyEvolution.h"
 
+// How well an enemy did. Path progress from 0 to 1, plus 0.5 for reaching the tower.
 float UEnemyEvolution::ComputeFitness(float Progress, bool bLeaked)
 {
 	return FMath::Clamp(Progress, 0.0f, 1.0f) + (bLeaked ? 0.5f : 0.0f);
@@ -13,6 +14,7 @@ float UEnemyEvolution::GetBiomassBudget() const
 	return FMath::Min(MaxBiomass, StartingBiomass * FMath::Pow(1.0f + BiomassGrowthPerGeneration, static_cast<float>(Generation)));
 }
 
+// Reset state.
 void UEnemyEvolution::ResetState()
 {
 	WaveResults.Reset();
@@ -24,6 +26,8 @@ void UEnemyEvolution::ResetState()
 	Generation = 0;
 }
 
+// Seeds the random numbers from the map seed. Calling it again with the same seed does nothing. A new seed
+// (a new map) starts evolution from scratch.
 void UEnemyEvolution::EnsureSeeded(int32 MapSeed)
 {
 	if (bSeeded && SeedValue == MapSeed)
@@ -38,6 +42,7 @@ void UEnemyEvolution::EnsureSeeded(int32 MapSeed)
 	Stream.Initialize(MapSeed ^ 0x5bd1e995);
 }
 
+// Make random genome.
 FEnemyGenome UEnemyEvolution::MakeRandomGenome()
 {
 	FEnemyGenome Genome;
@@ -111,6 +116,7 @@ FEnemyGenome UEnemyEvolution::NextGenome()
 	return MakeChild();
 }
 
+// Records how one enemy did. Progress is how far along its path it got (0 to 1), Leaked means it reached the tower.
 void UEnemyEvolution::RecordOutcome(const FEnemyGenome& Genome, float Progress, bool bLeaked)
 {
 	FResult Result;
@@ -119,6 +125,7 @@ void UEnemyEvolution::RecordOutcome(const FEnemyGenome& Genome, float Progress, 
 	WaveResults.Add(Result);
 }
 
+// Ends the wave: chooses the parents of the next generation and moves on. Does nothing if nothing was recorded.
 void UEnemyEvolution::EndWave()
 {
 	if (WaveResults.Num() == 0)

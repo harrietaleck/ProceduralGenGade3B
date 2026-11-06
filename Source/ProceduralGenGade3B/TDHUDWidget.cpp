@@ -13,6 +13,7 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 
+// Moves the loot readout to the bottom right so other panels cannot cover it
 void UTDHUDWidget::PlaceLootBottomRight()
 {
     if (!LootText)
@@ -62,6 +63,7 @@ void UTDHUDWidget::PlaceLootBottomRight()
     LootText->SetColorAndOpacity(DefaultLootColor);
 }
 
+// Initialize h u d.
 void UTDHUDWidget::InitializeHUD(ATDGameMode* InGameMode)
 {
     GameMode = InGameMode;
@@ -317,6 +319,7 @@ void UTDHUDWidget::HandlePoisonLightBombClicked()
     }
 }
 
+// Handle resources changed.
 void UTDHUDWidget::HandleResourcesChanged(int32 NewAmount)
 {
     if (LootText)
@@ -329,6 +332,7 @@ void UTDHUDWidget::HandleResourcesChanged(int32 NewAmount)
     }
 }
 
+// Handle tower health changed.
 void UTDHUDWidget::HandleTowerHealthChanged(
     float CurrentHealth,
     float MaxHealth)
@@ -356,6 +360,7 @@ void UTDHUDWidget::HandleTowerHealthChanged(
     UpdateTowerHealthBarColor(Percent);
 }
 
+// Update tower health bar color.
 void UTDHUDWidget::UpdateTowerHealthBarColor(
     float HealthFraction)
 {
@@ -381,6 +386,7 @@ void UTDHUDWidget::UpdateTowerHealthBarColor(
     }
 }
 
+// Handle wave countdown tick.
 void UTDHUDWidget::HandleWaveCountdownTick(
     int32 SecondsRemaining)
 {
@@ -396,6 +402,7 @@ void UTDHUDWidget::HandleWaveCountdownTick(
     RefreshWaveCounter();
 }
 
+// Handle wave started.
 void UTDHUDWidget::HandleWaveStarted(int32 WaveNumber)
 {
     if (WaveStatusText)
@@ -407,6 +414,7 @@ void UTDHUDWidget::HandleWaveStarted(int32 WaveNumber)
     RefreshWaveCounter();
 }
 
+// Handle wave complete.
 void UTDHUDWidget::HandleWaveComplete(int32 WaveNumber)
 {
     if (WaveStatusText)
@@ -418,6 +426,7 @@ void UTDHUDWidget::HandleWaveComplete(int32 WaveNumber)
     RefreshWaveCounter();
 }
 
+// Handle enemies remaining changed.
 void UTDHUDWidget::HandleEnemiesRemainingChanged(
     int32 Remaining)
 {
@@ -431,6 +440,7 @@ void UTDHUDWidget::HandleEnemiesRemainingChanged(
     }
 }
 
+// Handle victory.
 void UTDHUDWidget::HandleVictory()
 {
     if (WaveStatusText)
@@ -442,6 +452,7 @@ void UTDHUDWidget::HandleVictory()
     RefreshWaveCounter();
 }
 
+// Handle pause clicked.
 void UTDHUDWidget::HandlePauseClicked()
 {
     if (GameMode)
@@ -450,6 +461,7 @@ void UTDHUDWidget::HandlePauseClicked()
     }
 }
 
+// Handle settings clicked.
 void UTDHUDWidget::HandleSettingsClicked()
 {
     if (GameMode)
@@ -458,6 +470,7 @@ void UTDHUDWidget::HandleSettingsClicked()
     }
 }
 
+// Refresh wave counter.
 void UTDHUDWidget::RefreshWaveCounter()
 {
     if (WaveText && WaveManagerRef)
@@ -471,6 +484,7 @@ void UTDHUDWidget::RefreshWaveCounter()
     }
 }
 
+// Refresh match score.
 void UTDHUDWidget::RefreshMatchScore(
     int32 MatchScore)
 {
@@ -481,6 +495,7 @@ void UTDHUDWidget::RefreshMatchScore(
     }
 }
 
+// Refresh meta currency.
 void UTDHUDWidget::RefreshMetaCurrency(
     const FMetaCurrencyRewards& Wallet,
     int32 BeamLevel,
@@ -537,6 +552,7 @@ void UTDHUDWidget::RefreshMetaCurrency(
         : 0);
 }
 
+// Flash loot insufficient.
 void UTDHUDWidget::FlashLootInsufficient()
 {
     if (LootText)
@@ -546,6 +562,7 @@ void UTDHUDWidget::FlashLootInsufficient()
     }
 }
 
+// Hide loot flash.
 void UTDHUDWidget::HideLootFlash()
 {
     if (LootText)

@@ -86,6 +86,7 @@ void AArcherDefender::BeginPlay()
     );
 }
 
+// Set attack interval.
 void AArcherDefender::SetAttackInterval(float NewInterval)
 {
     Super::SetAttackInterval(NewInterval);
@@ -95,6 +96,7 @@ void AArcherDefender::SetAttackInterval(float NewInterval)
     }
 }
 
+// Fires the archer's arrows at enemies far away
 void AArcherDefender::FireArrow()
 {
     if (!HealthComponent || HealthComponent->IsDead())
@@ -120,6 +122,7 @@ void AArcherDefender::FireArrow()
     }
 }
 
+// Spawn one arrow at an enemy
 void AArcherDefender::ShootAt(AEnemy* Target)
 {
     const float Damage = Target->EnemyType == EEnemyType::Wolf
@@ -149,6 +152,7 @@ void AArcherDefender::ShootAt(AEnemy* Target)
     }
 }
 
+// Living enemies in range, sorted so the one closest to the tower comes first
 void AArcherDefender::GatherTargetsByThreat(TArray<AEnemy*>& OutTargets) const
 {
     const FVector Location = GetActorLocation();

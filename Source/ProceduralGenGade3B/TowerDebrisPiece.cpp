@@ -5,6 +5,7 @@
 #include "Engine/StaticMesh.h"
 #include "UObject/ConstructorHelpers.h"
 
+// Constructor: sets the default components and values for TowerDebrisPiece.
 ATowerDebrisPiece::ATowerDebrisPiece()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -27,6 +28,7 @@ ATowerDebrisPiece::ATowerDebrisPiece()
 	SetLifeSpan(6.0f);
 }
 
+// Sets the mesh, the size, and the push away from the tower centre.
 void ATowerDebrisPiece::InitDebris(UStaticMesh* Mesh, const FVector& Scale, const FVector& Impulse)
 {
 	if (Mesh)
@@ -37,6 +39,7 @@ void ATowerDebrisPiece::InitDebris(UStaticMesh* Mesh, const FVector& Scale, cons
 	PendingImpulse = Impulse;
 }
 
+// Runs when the object enters the world: sets up its state and event bindings.
 void ATowerDebrisPiece::BeginPlay()
 {
 	Super::BeginPlay();

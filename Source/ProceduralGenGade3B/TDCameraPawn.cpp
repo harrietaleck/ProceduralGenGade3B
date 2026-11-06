@@ -65,16 +65,19 @@ void ATDCameraPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 	PlayerInputComponent->BindKey(EKeys::MiddleMouseButton, IE_Released, this, &ATDCameraPawn::EndDragRotate);
 }
 
+// Pressing and releasing the middle mouse button starts and stops drag rotation.
 void ATDCameraPawn::BeginDragRotate()
 {
 	bIsDragging = true;
 }
 
+// End drag rotate.
 void ATDCameraPawn::EndDragRotate()
 {
 	bIsDragging = false;
 }
 
+// While dragging, sideways mouse movement turns the camera and up and down movement tilts it.
 void ATDCameraPawn::UpdateDragRotation()
 {
 	APlayerController* PC = Cast<APlayerController>(GetController());
@@ -104,6 +107,7 @@ void ATDCameraPawn::UpdateDragRotation()
 	}
 }
 
+// Runs every frame.
 void ATDCameraPawn::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
@@ -120,6 +124,7 @@ void ATDCameraPawn::Tick(float DeltaSeconds)
 	SpringArm->TargetArmLength = FMath::FInterpTo(SpringArm->TargetArmLength, TargetArmLength, DeltaSeconds, ZoomInterpSpeed);
 }
 
+// Reads WASD, the arrows, Q and E, then pans and turns the camera for this frame.
 void ATDCameraPawn::UpdateMovement(float DeltaSeconds)
 {
 	APlayerController* PC = Cast<APlayerController>(GetController());
@@ -156,11 +161,13 @@ void ATDCameraPawn::UpdateMovement(float DeltaSeconds)
 	}
 }
 
+// Mouse wheel handlers. They move the target zoom in or out, within the limits.
 void ATDCameraPawn::ZoomIn()
 {
 	TargetArmLength = FMath::Clamp(TargetArmLength - ZoomStep, MinZoom, MaxZoom);
 }
 
+// Zoom out.
 void ATDCameraPawn::ZoomOut()
 {
 	TargetArmLength = FMath::Clamp(TargetArmLength + ZoomStep, MinZoom, MaxZoom);

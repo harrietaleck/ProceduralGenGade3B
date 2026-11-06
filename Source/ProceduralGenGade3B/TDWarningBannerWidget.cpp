@@ -8,6 +8,7 @@
 #include "Components/TextBlock.h"
 #include "TimerManager.h"
 
+// Sets the object up before first use.
 bool UTDWarningBannerWidget::Initialize()
 {
 	if (!Super::Initialize())
@@ -49,6 +50,7 @@ bool UTDWarningBannerWidget::Initialize()
 	return true;
 }
 
+// Show warning.
 void UTDWarningBannerWidget::ShowWarning(const FString& Message, float DurationSeconds)
 {
 	if (MessageText)
@@ -72,6 +74,7 @@ void UTDWarningBannerWidget::ShowWarning(const FString& Message, float DurationS
 	}
 }
 
+// Hide warning.
 void UTDWarningBannerWidget::HideWarning()
 {
 	if (UWorld* World = GetWorld())
@@ -81,6 +84,7 @@ void UTDWarningBannerWidget::HideWarning()
 	HideWarningInternal();
 }
 
+// Hide warning internal.
 void UTDWarningBannerWidget::HideWarningInternal()
 {
 	if (Banner)

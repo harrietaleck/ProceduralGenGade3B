@@ -9,6 +9,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 
+// Constructor: sets the default components and values for DangerScreenEffectComponent.
 UDangerScreenEffectComponent::UDangerScreenEffectComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
@@ -17,6 +18,7 @@ UDangerScreenEffectComponent::UDangerScreenEffectComponent()
 		FSoftObjectPath(TEXT("/Game/Materials/PostProcess/PP_TowerDanger.PP_TowerDanger")));
 }
 
+// Runs when the object enters the world: sets up its state and event bindings.
 void UDangerScreenEffectComponent::BeginPlay()
 {
 	Super::BeginPlay();
@@ -46,6 +48,7 @@ void UDangerScreenEffectComponent::BeginPlay()
 	}
 }
 
+// Runs when the object leaves the world: removes bindings and cleans up.
 void UDangerScreenEffectComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	if (Volume)
@@ -57,6 +60,7 @@ void UDangerScreenEffectComponent::EndPlay(const EEndPlayReason::Type EndPlayRea
 	Super::EndPlay(EndPlayReason);
 }
 
+// Where the intensity should be this frame, from tower health, recent hits and the match state.
 float UDangerScreenEffectComponent::ComputeTargetIntensity(float DeltaTime)
 {
 	const ATDGameMode* GameMode = Cast<ATDGameMode>(GetOwner());
@@ -95,6 +99,7 @@ float UDangerScreenEffectComponent::ComputeTargetIntensity(float DeltaTime)
 	return FMath::Clamp(Danger + HitFlashRemaining, 0.0f, 1.0f);
 }
 
+// Tick component.
 void UDangerScreenEffectComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);

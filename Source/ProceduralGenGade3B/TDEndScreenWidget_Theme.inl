@@ -30,6 +30,7 @@ void UTDEndScreenWidget::EnsureThemeArt()
 	});
 }
 
+// Apply theme.
 void UTDEndScreenWidget::ApplyTheme(bool bVictory, EBeamHealthTier /*Tier*/, bool bOfferNextWave)
 {
 	EnsureThemeArt();
@@ -140,6 +141,7 @@ void UTDEndScreenWidget::ApplyTheme(bool bVictory, EBeamHealthTier /*Tier*/, boo
 	}
 }
 
+// Apply tier typography.
 void UTDEndScreenWidget::ApplyTierTypography(const FMatchResult& Result)
 {
 	const int32 ScoreSize = UTDMatchRewards::GetScoreFontSize(Result.BeamTier);

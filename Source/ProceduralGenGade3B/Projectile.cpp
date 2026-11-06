@@ -30,6 +30,7 @@ AProjectile::AProjectile()
 	GlowMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/Materials/Instances/MI_Glow_Turquoise.MI_Glow_Turquoise")));
 }
 
+// Runs when the object enters the world: sets up its state and event bindings.
 void AProjectile::BeginPlay()
 {
 	Super::BeginPlay();
@@ -37,6 +38,7 @@ void AProjectile::BeginPlay()
 	SetLifeSpan(MaxLifeSeconds);
 }
 
+// Lets each shooter change the size and colour, so tower balls can look bigger than defender ones.
 void AProjectile::ConfigureVisuals(float InVisualScale, FLinearColor InColor)
 {
 	VisualScale = InVisualScale;
@@ -110,6 +112,8 @@ void AProjectile::ConfigureShape(UStaticMesh* InMesh, const FVector& InShapeScal
 	ApplyVisuals();
 }
 
+// Sets up the projectile with its target, its damage and who fired it, so the kill is credited.
+// The shooter calls this straight after spawning it.
 void AProjectile::InitProjectile(AActor* InTarget, float InDamage, AActor* InInstigatorActor)
 {
 	Target = InTarget;

@@ -6,6 +6,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 
+// Constructor: sets the default components and values for TowerDustMote.
 ATowerDustMote::ATowerDustMote()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -31,12 +32,14 @@ ATowerDustMote::ATowerDustMote()
 	}
 }
 
+// Init mote.
 void ATowerDustMote::InitMote(const FVector& InVelocity, float Lifetime)
 {
 	Velocity = InVelocity;
 	RemainingLife = Lifetime;
 }
 
+// Runs every frame.
 void ATowerDustMote::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);

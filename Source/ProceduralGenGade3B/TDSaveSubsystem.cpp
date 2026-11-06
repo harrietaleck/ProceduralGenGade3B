@@ -14,6 +14,7 @@ namespace
     constexpr int32 SaveUserIndex = 0;
 }
 
+// Sets the object up before first use.
 void UTDSaveSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
@@ -37,6 +38,7 @@ void UTDSaveSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     }
 }
 
+// Loads the save slot. Returns null if it is missing or unreadable.
 UTDSaveGame* UTDSaveSubsystem::LoadSave() const
 {
     if (!UGameplayStatics::DoesSaveGameExist(SaveSlotName, SaveUserIndex))
@@ -65,6 +67,7 @@ UTDSaveGame* UTDSaveSubsystem::LoadSave() const
     return Save;
 }
 
+// Writes the save slot to disk.
 bool UTDSaveSubsystem::WriteSave(UTDSaveGame* Save) const
 {
     if (!Save)
@@ -86,6 +89,7 @@ bool UTDSaveSubsystem::WriteSave(UTDSaveGame* Save) const
     return bSaved;
 }
 
+// Handle meta currency changed.
 void UTDSaveSubsystem::HandleMetaCurrencyChanged()
 {
     UTDSaveGame* Save = LoadSave();
@@ -124,11 +128,13 @@ bool UTDSaveSubsystem::SaveMusicVolume(float NewVolume)
     return WriteSave(Save);
 }
 
+// Get tower max health bonus.
 int32 UTDSaveSubsystem::GetTowerMaxHealthBonus() const
 {
     return TowerMaxHealthBonus;
 }
 
+// Add tower max health bonus.
 bool UTDSaveSubsystem::AddTowerMaxHealthBonus(int32 Bonus)
 {
     if (Bonus <= 0)
@@ -150,12 +156,14 @@ bool UTDSaveSubsystem::AddTowerMaxHealthBonus(int32 Bonus)
     return WriteSave(Save);
 }
 
+// True if the slot holds a match that can be resumed.
 bool UTDSaveSubsystem::HasResumableSave() const
 {
     const UTDSaveGame* Save = LoadSave();
     return Save && Save->IsResumable();
 }
 
+// Loads the saved match level; the GameMode then restores the checkpoint.
 void UTDSaveSubsystem::ResumeGame()
 {
     const UTDSaveGame* Save = LoadSave();
@@ -170,6 +178,7 @@ void UTDSaveSubsystem::ResumeGame()
     UGameplayStatics::OpenLevel(GetGameInstance(), FName(*Save->LevelName));
 }
 
+// Returns the save to restore if Resume was pressed, and clears the request.
 UTDSaveGame* UTDSaveSubsystem::ConsumeResumeRequest()
 {
     if (!bResumePending)
@@ -183,6 +192,7 @@ UTDSaveGame* UTDSaveSubsystem::ConsumeResumeRequest()
     return Save && Save->IsResumable() ? Save : nullptr;
 }
 
+// Wires the Start Screen buttons once per Start Screen instance.
 void UTDSaveSubsystem::BindStartScreen(UWorld* World)
 {
     if (BoundStartScreen.IsValid() && BoundStartScreen->IsInViewport())
@@ -229,11 +239,13 @@ void UTDSaveSubsystem::BindStartScreen(UWorld* World)
     }
 }
 
+// On new game clicked.
 void UTDSaveSubsystem::OnNewGameClicked()
 {
     StartNewGame();
 }
 
+// Starts a clean match and resets the persistent starting wallet.
 void UTDSaveSubsystem::StartNewGame()
 {
     bResumePending = false;
@@ -268,11 +280,13 @@ void UTDSaveSubsystem::StartNewGame()
     WriteSave(Save);
 }
 
+// On resume clicked.
 void UTDSaveSubsystem::OnResumeClicked()
 {
     ResumeGame();
 }
 
+// On exit clicked.
 void UTDSaveSubsystem::OnExitClicked()
 {
     if (UWorld* World = GetGameInstance()->GetWorld())

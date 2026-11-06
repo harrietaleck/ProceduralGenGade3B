@@ -39,6 +39,7 @@ ATDPlayerController::ATDPlayerController()
 
 }
 
+// Runs when the object enters the world: sets up its state and event bindings.
 void ATDPlayerController::BeginPlay()
 
 {
@@ -155,6 +156,7 @@ void ATDPlayerController::SetupInputComponent()
     SaveBinding.bExecuteWhenPaused = true;
 }
 
+// F5: write the latest wave checkpoint to the save slot.
 void ATDPlayerController::OnQuickSave()
 {
     if (ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>())
@@ -186,6 +188,7 @@ void ATDPlayerController::GrantUpgradeTestResources()
 #endif
 }
 
+// B key: open or close the Defenders upgrade screen during a match.
 void ATDPlayerController::OnToggleDefenderUpgrades()
 {
     if (ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>())
@@ -197,6 +200,7 @@ void ATDPlayerController::OnToggleDefenderUpgrades()
     }
 }
 
+// F1 shows or hides the developer panel on the HUD.
 void ATDPlayerController::OnToggleDebugPanel()
 {
     if (ATDHUD* TDHUD = Cast<ATDHUD>(GetHUD()))
@@ -205,6 +209,7 @@ void ATDPlayerController::OnToggleDebugPanel()
     }
 }
 
+// G shows or hides the wave director graph.
 void ATDPlayerController::OnToggleDirectorGraph()
 {
     if (ATDHUD* TDHUD = Cast<ATDHUD>(GetHUD()))
@@ -223,6 +228,7 @@ void ATDPlayerController::OnToggleNavMeshDebug()
 
 }
 
+// P pauses or unpauses the match.
 void ATDPlayerController::OnPausePressed()
 
 {
@@ -239,6 +245,7 @@ void ATDPlayerController::OnPausePressed()
 
 }
 
+// R restarts the match with a new procedural map.
 void ATDPlayerController::OnRestartPressed()
 
 {
@@ -255,6 +262,7 @@ void ATDPlayerController::OnRestartPressed()
 
 }
 
+// U spends Light Lanterns to upgrade the tower beam.
 void ATDPlayerController::OnUpgradeBeamPressed()
 {
     if (ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>())
@@ -263,6 +271,7 @@ void ATDPlayerController::OnUpgradeBeamPressed()
     }
 }
 
+// Tab switches between basic and strong defender placement.
 void ATDPlayerController::OnToggleDefenderMode()
 
 {
@@ -341,6 +350,7 @@ void ATDPlayerController::SelectPoisonLightBombDefender()
 
 }
 
+// Select the Strong defender that costs gems. Press 4 or toggle with Tab
 void ATDPlayerController::SelectStrongDefender()
 {
     if (!StrongDefenderClass)
@@ -418,6 +428,7 @@ void ATDPlayerController::SelectDefenderClass(
 
 }
 
+// The defender a click would place right now. Null if nothing is selected
 TSubclassOf<ADefender> ATDPlayerController::GetActiveDefenderClass() const
 
 {
@@ -434,6 +445,7 @@ TSubclassOf<ADefender> ATDPlayerController::GetActiveDefenderClass() const
 
 }
 
+// Can afford defender.
 bool ATDPlayerController::CanAffordDefender(
 
     const ADefender* Defaults,
@@ -588,6 +600,7 @@ void ATDPlayerController::OnPlaceDefenderClicked()
 
 }
 
+// True if the terrain says a defender is already on this slot.
 bool ATDPlayerController::IsSlotOccupied(
 
     const FVector& SlotLocation) const
@@ -608,6 +621,8 @@ bool ATDPlayerController::IsSlotOccupied(
 
 }
 
+// Finds the build slot nearest the cursor, within SlotClickTolerance. The click and
+// the hover highlight both use this so they always pick the same slot.
 bool ATDPlayerController::FindNearestSlotUnderCursor(
 
     FVector& OutSlotLocation) const
@@ -702,6 +717,7 @@ bool ATDPlayerController::FindNearestSlotUnderCursor(
 
 }
 
+// Runs every frame.
 void ATDPlayerController::Tick(float DeltaSeconds)
 
 {
@@ -712,6 +728,8 @@ void ATDPlayerController::Tick(float DeltaSeconds)
 
 }
 
+// Draws a see-through patch on the build pad under the cursor every frame.
+// Green means you can place there, red means it is taken or too expensive.
 void ATDPlayerController::UpdateBuildPadHighlight() const
 
 {

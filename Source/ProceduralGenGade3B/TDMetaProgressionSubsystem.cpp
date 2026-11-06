@@ -1,6 +1,7 @@
 
 #include "TDMetaProgressionSubsystem.h"
 
+// Add rewards.
 void UTDMetaProgressionSubsystem::AddRewards(const FMetaCurrencyRewards& Rewards)
 {
     Wallet.ForestEssence += Rewards.ForestEssence;
@@ -11,6 +12,7 @@ void UTDMetaProgressionSubsystem::AddRewards(const FMetaCurrencyRewards& Rewards
     OnMetaCurrencyChanged.Broadcast();
 }
 
+// Replaces the whole wallet. Used when a save is loaded.
 void UTDMetaProgressionSubsystem::SetWallet(const FMetaCurrencyRewards& NewWallet)
 {
     Wallet.ForestEssence = FMath::Max(0, NewWallet.ForestEssence);
@@ -21,6 +23,7 @@ void UTDMetaProgressionSubsystem::SetWallet(const FMetaCurrencyRewards& NewWalle
     OnMetaCurrencyChanged.Broadcast();
 }
 
+// Can afford.
 bool UTDMetaProgressionSubsystem::CanAfford(const FMetaCurrencyRewards& Cost) const
 {
     return Wallet.ForestEssence >= Cost.ForestEssence
@@ -29,6 +32,7 @@ bool UTDMetaProgressionSubsystem::CanAfford(const FMetaCurrencyRewards& Cost) co
         && Wallet.LightLanterns >= Cost.LightLanterns;
 }
 
+// Try spend.
 bool UTDMetaProgressionSubsystem::TrySpend(const FMetaCurrencyRewards& Cost)
 {
     if (!CanAfford(Cost))

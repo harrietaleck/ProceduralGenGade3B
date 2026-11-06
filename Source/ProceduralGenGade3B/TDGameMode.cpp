@@ -49,6 +49,7 @@
 #include "Components/ExponentialHeightFogComponent.h"
 #include "TimerManager.h"
 
+// Constructor: sets the default components and values for TDGameMode.
 ATDGameMode::ATDGameMode()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -194,6 +195,7 @@ static void DecorateLanes(UWorld* World, AProceduralTerrain* Terrain)
 	}
 }
 
+// Runs when the object enters the world: sets up its state and event bindings.
 void ATDGameMode::BeginPlay()
 {
 	Super::BeginPlay();
@@ -487,16 +489,20 @@ void ATDGameMode::Tick(float DeltaSeconds)
 	}
 }
 
+// Current wave number for the HUD. Returns 0 if the waves haven't started yet.
 int32 ATDGameMode::GetCurrentWave() const
 {
 	return WaveManager ? WaveManager->GetCurrentWave() : 0;
 }
 
+// True once the last wave has been cleared. The wave manager owns this value.
+// The game mode just asks it and never keeps its own copy.
 bool ATDGameMode::IsVictory() const
 {
 	return WaveManager && WaveManager->IsVictory();
 }
 
+// Shows a warning at the bottom centre when a defender can't be placed, like when there isn't enough Loot.
 void ATDGameMode::ShowInsufficientFundsWarning()
 {
 	if (WarningBannerWidget)
@@ -509,6 +515,7 @@ void ATDGameMode::ShowInsufficientFundsWarning()
 	}
 }
 
+// Shows a warning when a defender upgrade can't be purchased from the meta wallet.
 void ATDGameMode::ShowUpgradeInsufficientFundsWarning()
 {
 	if (WarningBannerWidget)
@@ -517,6 +524,7 @@ void ATDGameMode::ShowUpgradeInsufficientFundsWarning()
 	}
 }
 
+// Reloads the level for a fresh game. This makes new terrain and resets the economy.
 void ATDGameMode::RestartGame()
 {
 	if (UTDSaveSubsystem* Saves = GetGameInstance() ? GetGameInstance()->GetSubsystem<UTDSaveSubsystem>() : nullptr)
@@ -557,6 +565,7 @@ void ATDGameMode::RestartGame()
 	UGameplayStatics::OpenLevel(this, FName(TEXT("TowerDefense")));
 }
 
+// Leaves the match and opens the start menu level.
 void ATDGameMode::ReturnToMainMenu()
 {
 	bPaused = false;

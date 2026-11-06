@@ -68,6 +68,7 @@ AEnemy::AEnemy()
     BodyMaterialBase = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/Materials/Displacement/M_CorruptionPulse.M_CorruptionPulse")));
 }
 
+// Display name for the HUD and logs.
 FString AEnemy::GetTypeName(EEnemyType Type)
 {
     switch (Type)
@@ -78,6 +79,7 @@ FString AEnemy::GetTypeName(EEnemyType Type)
     }
 }
 
+// Get elite name.
 FString AEnemy::GetEliteName(EEliteModifier Modifier)
 {
     switch (Modifier)
@@ -142,6 +144,7 @@ void AEnemy::ApplyGenome(const FEnemyGenome& InGenome)
     }
 }
 
+// Turns this enemy into an elite. Call it after spawning and wave scaling.
 void AEnemy::MakeElite(EEliteModifier Modifier)
 {
     if (Modifier == EEliteModifier::None || !HealthComponent)
@@ -178,6 +181,7 @@ void AEnemy::MakeElite(EEliteModifier Modifier)
     ShowCombatText(FString::Printf(TEXT("ELITE: %s"), *GetEliteName(Modifier)), FColor(255, 210, 60));
 }
 
+// Poisons this enemy. DamagePerSecond can be 0 to just mark it, because bomb clouds do their own damage.
 void AEnemy::ApplyPoison(float DamagePerSecond, float Duration, AActor* Source)
 {
     if (!HealthComponent || HealthComponent->IsDead() || Duration <= 0.0f)
@@ -240,6 +244,7 @@ float AEnemy::ModifyIncomingDamage(float Amount, AActor* Source)
     return Amount;
 }
 
+// Venom spread combo: poisons every enemy around this one.
 void AEnemy::SpreadVenom(AActor* Source)
 {
     UWorld* World = GetWorld();
@@ -264,6 +269,7 @@ void AEnemy::SpreadVenom(AActor* Source)
         FVector(1, 0, 0), FVector(0, 1, 0), false);
 }
 
+// Shows floating combat text above the enemy.
 void AEnemy::ShowCombatText(const FString& Text, const FColor& Color) const
 {
     if (UWorld* World = GetWorld())
@@ -390,6 +396,7 @@ void AEnemy::ApplyEnemyType()
     }
 }
 
+// Puts BodyColor onto the mesh material.
 void AEnemy::ApplyBodyColor()
 {
     if (!MeshComponent)
@@ -468,6 +475,7 @@ void AEnemy::BeginPlay()
     HealthComponent->OnDeath.AddDynamic(this, &AEnemy::HandleDeath);
 }
 
+// Stops movement and attacks for Duration seconds. Bears only take half the stun.
 void AEnemy::ApplyStun(float Duration)
 {
     const float Scaled = EnemyType == EEnemyType::Bear ? Duration * 0.5f : Duration;
@@ -616,6 +624,7 @@ void AEnemy::TickSlime(float DeltaSeconds)
     TickBasic(DeltaSeconds);
 }
 
+// Release poison.
 void AEnemy::ReleasePoison()
 {
     UE_LOG(LogTemp, Display, TEXT("Slime released poison at %s"), *GetActorLocation().ToString());
@@ -705,6 +714,7 @@ void AEnemy::TickBear(float DeltaSeconds)
     MoveAlongPath(DeltaSeconds);
 }
 
+// Bear: damage every defender within SlamRadius.
 void AEnemy::PerformGroundSlam()
 {
     UWorld* World = GetWorld();
@@ -774,6 +784,7 @@ void AEnemy::UpdateSpawnEffect(float DeltaSeconds)
     }
 }
 
+// Poison damage over time, regeneration and the elite and shield visuals.
 void AEnemy::TickStatusEffects(float DeltaSeconds)
 {
     UWorld* World = GetWorld();
@@ -827,6 +838,7 @@ void AEnemy::TickStatusEffects(float DeltaSeconds)
     }
 }
 
+// Looks for a cheaper, less defended route to the tower over the path network.
 void AEnemy::TryReroute()
 {
     if (RerouteCount >= MaxReroutes || HasReachedTower() || Waypoints.Num() == 0)
@@ -932,6 +944,7 @@ void AEnemy::TryReroute()
     }
 }
 
+// Evaluate route cost.
 float AEnemy::EvaluateRouteCost(const FVector& Start, const TArray<FVector>& Points,
     TFunctionRef<float(const FVector&)> CellCost, float CellSize) const
 {
@@ -952,6 +965,7 @@ float AEnemy::EvaluateRouteCost(const FVector& Start, const TArray<FVector>& Poi
     return Cost;
 }
 
+// Splitting elite: spawns small Basics that carry on along this enemy's route.
 void AEnemy::SpawnSplitChildren()
 {
     UWorld* World = GetWorld();
@@ -993,6 +1007,7 @@ void AEnemy::SpawnSplitChildren()
     ShowCombatText(TEXT("SPLIT!"), FColor(255, 210, 60));
 }
 
+// Makes a new split child smaller and weaker.
 void AEnemy::ConfigureAsSplitChild(float ParentMaxHealth)
 {
     HealthComponent->MaxHealth = FMath::Max(10.0f, ParentMaxHealth * SplitHealthFraction);
@@ -1024,6 +1039,7 @@ void AEnemy::MoveAlongPath(float DeltaSeconds)
     }
 }
 
+// Moves towards a point along the ground. Returns how far is left to go.
 float AEnemy::MoveTowardsLocation(const FVector& Destination, float DeltaSeconds)
 {
     const FVector CurrentLocation = GetActorLocation();
@@ -1047,6 +1063,7 @@ float AEnemy::MoveTowardsLocation(const FVector& Destination, float DeltaSeconds
     return Distance - Step;
 }
 
+// Turns to face a target while attacking.
 void AEnemy::FaceTowards(const FVector& Location, float DeltaSeconds)
 {
     FVector ToTarget = Location - GetActorLocation();
@@ -1060,6 +1077,7 @@ void AEnemy::FaceTowards(const FVector& Location, float DeltaSeconds)
     SetActorRotation(FMath::RInterpTo(GetActorRotation(), Desired, DeltaSeconds, TurnRate * 2.0f));
 }
 
+// After a wolf hunt, carry on from the closest waypoint that is left.
 void AEnemy::RejoinPath()
 {
     if (Waypoints.Num() == 0)
@@ -1109,6 +1127,7 @@ void AEnemy::TryAttack(AActor* Target, float DeltaSeconds)
     AttackTimer = AttackInterval;
 }
 
+// Closest living defender within Radius, or null if there is none.
 ADefender* AEnemy::FindClosestDefender(float Radius) const
 {
     UWorld* World = GetWorld();
@@ -1142,6 +1161,7 @@ ADefender* AEnemy::FindClosestDefender(float Radius) const
     return ClosestDefender;
 }
 
+// Basic: closest defender in attack range, or the tower if that is in range instead.
 AActor* AEnemy::FindTargetInRange() const
 {
     if (ADefender* Defender = FindClosestDefender(AttackRange))

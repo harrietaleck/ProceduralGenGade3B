@@ -101,11 +101,13 @@ namespace
 	}
 }
 
+// Constructor: sets the default components and values for DefenderUpgradeComponent.
 UDefenderUpgradeComponent::UDefenderUpgradeComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
+// Runs when the object leaves the world: removes bindings and cleans up.
 void UDefenderUpgradeComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	if (UWorld* World = GetWorld())
@@ -128,11 +130,13 @@ void UDefenderUpgradeComponent::EndPlay(const EEndPlayReason::Type EndPlayReason
 	Super::EndPlay(EndPlayReason);
 }
 
+// Get game mode.
 ATDGameMode* UDefenderUpgradeComponent::GetGameMode() const
 {
 	return Cast<ATDGameMode>(GetOwner());
 }
 
+// Wires the upgrade buttons of an open Defenders screen. Returns quickly when already bound.
 void UDefenderUpgradeComponent::BindOpenScreen()
 {
 	if (UUserWidget* Screen = BoundScreen.Get(); Screen && Screen->IsInViewport()) { return; }
@@ -208,6 +212,7 @@ void UDefenderUpgradeComponent::BindScreen(UUserWidget* Screen)
 	RefreshUpgradeUI();
 }
 
+// Clear screen bindings.
 void UDefenderUpgradeComponent::ClearScreenBindings()
 {
 	for (FSlot& Slot : Slots)
@@ -328,6 +333,7 @@ UTextBlock* UDefenderUpgradeComponent::CreateButtonLabel(UUserWidget* Screen, UB
 	return Label;
 }
 
+// Opens or closes the Defenders screen during a match.
 void UDefenderUpgradeComponent::ToggleScreen()
 {
 	const ATDGameMode* GameMode = GetGameMode();
@@ -358,6 +364,7 @@ void UDefenderUpgradeComponent::ToggleScreen()
 	}
 }
 
+// Close screen.
 void UDefenderUpgradeComponent::CloseScreen()
 {
 	if (UUserWidget* Screen = BoundScreen.Get()) { Screen->RemoveFromParent(); }
@@ -378,11 +385,13 @@ void UDefenderUpgradeComponent::OnPoisonClicked() { TryActivate(EUpgrade::Poison
 void UDefenderUpgradeComponent::OnStrongClicked() { TryActivate(EUpgrade::Strong); }
 void UDefenderUpgradeComponent::OnTowerClicked()  { TryActivate(EUpgrade::Tower); }
 
+// Handle meta currency changed.
 void UDefenderUpgradeComponent::HandleMetaCurrencyChanged()
 {
 	RefreshUpgradeUI();
 }
 
+// Gather targets.
 void UDefenderUpgradeComponent::GatherTargets(EUpgrade Upgrade, TArray<AActor*>& OutTargets) const
 {
 	const ATDGameMode* GameMode = GetGameMode();
@@ -473,6 +482,7 @@ void UDefenderUpgradeComponent::TryActivate(EUpgrade Upgrade)
 	GameMode->SaveCurrentWaveCheckpoint();
 }
 
+// Start cooldown.
 void UDefenderUpgradeComponent::StartCooldown(EUpgrade Upgrade)
 {
 	FSlot& Slot = Slots[(int32)Upgrade];
@@ -499,6 +509,7 @@ void UDefenderUpgradeComponent::StartCooldown(EUpgrade Upgrade)
 		true);
 }
 
+// Tick upgrade cooldown.
 void UDefenderUpgradeComponent::TickUpgradeCooldown(int32 UpgradeIndex)
 {
 	if (UpgradeIndex < 0 || UpgradeIndex >= (int32)EUpgrade::Count)
@@ -522,6 +533,7 @@ void UDefenderUpgradeComponent::TickUpgradeCooldown(int32 UpgradeIndex)
 	RefreshUpgradeUI();
 }
 
+// Gives a newly placed defender any upgrade that is active for its type.
 void UDefenderUpgradeComponent::HandleDefenderSpawned(ADefender* Defender)
 {
 	if (!Defender) { return; }
@@ -535,6 +547,7 @@ void UDefenderUpgradeComponent::HandleDefenderSpawned(ADefender* Defender)
 	RefreshUpgradeUI();
 }
 
+// Ends all wave-scoped upgrades and clears paid upgrades still waiting for a matching defender.
 void UDefenderUpgradeComponent::ResetTemporaryUpgradesForWaveEnd()
 {
 	UWorld* World = GetWorld();
@@ -581,6 +594,7 @@ void UDefenderUpgradeComponent::ResetTemporaryUpgradesForWaveEnd()
 	RefreshUpgradeUI();
 }
 
+// Makes upgrades available when the next wave begins.
 void UDefenderUpgradeComponent::HandleWaveStarted(int32 WaveNumber)
 {
 	for (FSlot& Slot : Slots)
@@ -639,6 +653,7 @@ void UDefenderUpgradeComponent::ApplyBoost(EUpgrade Upgrade, AActor* Target)
 	}
 }
 
+// Remove boosts.
 void UDefenderUpgradeComponent::RemoveBoosts(EUpgrade Upgrade)
 {
 	FSlot& Slot = Slots[(int32)Upgrade];

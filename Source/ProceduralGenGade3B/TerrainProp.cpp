@@ -4,6 +4,7 @@
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 
+// Constructor: sets the default components and values for TerrainProp.
 ATerrainProp::ATerrainProp()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -23,6 +24,7 @@ ATerrainProp::ATerrainProp()
 	AccentMesh->SetVisibility(false);
 }
 
+// Configure decoration.
 void ATerrainProp::ConfigureDecoration(
 	ETerrainDecorationKind InKind,
 	UStaticMesh* InBaseMesh,

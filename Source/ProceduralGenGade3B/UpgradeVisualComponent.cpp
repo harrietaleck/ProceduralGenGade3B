@@ -26,12 +26,14 @@ UUpgradeVisualComponent::UUpgradeVisualComponent()
 	RingMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/Materials/Instances/MI_Glow_Turquoise.MI_Glow_Turquoise")));
 }
 
+// The owner's main mesh (its root), used to measure where the top and bottom of the unit are.
 UStaticMeshComponent* UUpgradeVisualComponent::GetBodyMesh() const
 {
 	const AActor* Owner = GetOwner();
 	return Owner ? Cast<UStaticMeshComponent>(Owner->GetRootComponent()) : nullptr;
 }
 
+// Shows the look for a tier. 0 removes every upgrade visual and restores the original body colour.
 void UUpgradeVisualComponent::SetTier(int32 NewTier)
 {
 	NewTier = FMath::Clamp(NewTier, 0, 2);
@@ -55,6 +57,7 @@ void UUpgradeVisualComponent::SetTier(int32 NewTier)
 	ApplyBodyTint(Body);
 }
 
+// Creates the orb and ring the first time a tier above 0 is shown.
 void UUpgradeVisualComponent::EnsureMeshes(UStaticMeshComponent* Body)
 {
 	if (OrbMesh && RingMesh)

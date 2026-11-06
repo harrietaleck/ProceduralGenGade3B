@@ -20,6 +20,7 @@ AWaveManager::AWaveManager()
 	EnsureDefaultWaveTable();
 }
 
+// Runs when the object leaves the world: removes bindings and cleans up.
 void AWaveManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	StopWaves();
@@ -69,6 +70,7 @@ void AWaveManager::EnsureDefaultWaveTable()
 	Waves = { Wave1, Wave2, Wave3 };
 }
 
+// Sets the object up before first use.
 void AWaveManager::Initialize(AEnemySpawner* InSpawner, bool bStartImmediately)
 {
 	Spawner = InSpawner;
@@ -79,6 +81,7 @@ void AWaveManager::Initialize(AEnemySpawner* InSpawner, bool bStartImmediately)
 	}
 }
 
+// Start waves.
 void AWaveManager::StartWaves()
 {
 	if (!Spawner || bStopped)
@@ -93,6 +96,7 @@ void AWaveManager::StartWaves()
 	}
 }
 
+// Stop waves.
 void AWaveManager::StopWaves()
 {
 	bStopped = true;
@@ -102,11 +106,13 @@ void AWaveManager::StopWaves()
 	GetWorldTimerManager().ClearTimer(MonitorTimerHandle);
 }
 
+// Hold for results screen.
 void AWaveManager::HoldForResultsScreen()
 {
 	GetWorldTimerManager().ClearTimer(BreakTimerHandle);
 }
 
+// Continue to next wave.
 void AWaveManager::ContinueToNextWave()
 {
 	if (bStopped || State == EWaveState::Victory)
@@ -118,11 +124,13 @@ void AWaveManager::ContinueToNextWave()
 	BeginNextWave();
 }
 
+// Set completed waves.
 void AWaveManager::SetCompletedWaves(int32 Count)
 {
 	CurrentWaveIndex = FMath::Clamp(Count, 0, GetTotalWaves()) - 1;
 }
 
+// Retry current wave.
 void AWaveManager::RetryCurrentWave()
 {
 	if (!Spawner || CurrentWaveIndex < 0 || CurrentWaveIndex >= GetTotalWaves())
@@ -143,6 +151,7 @@ void AWaveManager::RetryCurrentWave()
 	StartCountdown();
 }
 
+// Declare victory.
 void AWaveManager::DeclareVictory()
 {
 	if (State == EWaveState::Victory)
@@ -153,6 +162,7 @@ void AWaveManager::DeclareVictory()
 	TriggerVictory();
 }
 
+// Begin next wave.
 void AWaveManager::BeginNextWave()
 {
 	if (bStopped)
@@ -177,6 +187,7 @@ void AWaveManager::BeginNextWave()
 	StartCountdown();
 }
 
+// Prepare wave.
 void AWaveManager::PrepareWave(int32 WaveIndex)
 {
 	SpawnQueue.Reset();
@@ -224,6 +235,7 @@ void AWaveManager::PrepareWave(int32 WaveIndex)
 	}
 }
 
+// Start countdown.
 void AWaveManager::StartCountdown()
 {
 	EnemiesSpawnedThisWave = 0;
@@ -246,6 +258,7 @@ void AWaveManager::StartCountdown()
 	GetWorldTimerManager().SetTimer(CountdownTimerHandle, this, &AWaveManager::CountdownTick, 1.0f, /*bLoop=*/true);
 }
 
+// Countdown tick.
 void AWaveManager::CountdownTick()
 {
 	if (bStopped)
@@ -278,6 +291,7 @@ void AWaveManager::CountdownTick()
 	SpawnTick();
 }
 
+// Spawn tick.
 void AWaveManager::SpawnTick()
 {
 	if (bStopped || !Spawner || State != EWaveState::Active)
@@ -299,6 +313,7 @@ void AWaveManager::SpawnTick()
 	}
 }
 
+// Spawn next enemy.
 float AWaveManager::SpawnNextEnemy()
 {
 	AEnemy* NewEnemy = nullptr;
@@ -379,6 +394,7 @@ float AWaveManager::SpawnNextEnemy()
 	return bReliefActive ? Delay * ReliefDelayScale : Delay;
 }
 
+// Track enemy.
 void AWaveManager::TrackEnemy(AEnemy* Enemy, float SpawnTime, float ExpectedTravelTime)
 {
 	if (UHealthComponent* Health = Enemy->HealthComponent)
@@ -397,6 +413,7 @@ void AWaveManager::TrackEnemy(AEnemy* Enemy, float SpawnTime, float ExpectedTrav
 	OnEnemiesRemainingChanged.Broadcast(ActiveEnemyCount);
 }
 
+// Handle enemy split.
 void AWaveManager::HandleEnemySplit(AEnemy* Parent, AEnemy* Child)
 {
 	if (bStopped || !Child)
@@ -420,6 +437,7 @@ void AWaveManager::HandleEnemySplit(AEnemy* Parent, AEnemy* Child)
 	TrackEnemy(Child, SpawnTime, ExpectedTravelTime);
 }
 
+// Monitor wave.
 void AWaveManager::MonitorWave()
 {
 	if (bStopped || State != EWaveState::Active || !Director)
@@ -457,6 +475,7 @@ void AWaveManager::MonitorWave()
 	}
 }
 
+// Resolve tracked enemies.
 void AWaveManager::ResolveTrackedEnemies()
 {
 	const float Now = GetWorld()->GetTimeSeconds();
@@ -494,6 +513,7 @@ void AWaveManager::ResolveTrackedEnemies()
 	}
 }
 
+// Set director event.
 void AWaveManager::SetDirectorEvent(const FString& Message)
 {
 	LastDirectorEvent = Message;
@@ -501,6 +521,7 @@ void AWaveManager::SetDirectorEvent(const FString& Message)
 	UE_LOG(LogTemp, Display, TEXT("WaveDirector: wave %d - %s"), GetCurrentWave(), *Message);
 }
 
+// Handle tracked enemy death.
 void AWaveManager::HandleTrackedEnemyDeath(AActor* Killer)
 {
 	if (bStopped)
@@ -515,6 +536,7 @@ void AWaveManager::HandleTrackedEnemyDeath(AActor* Killer)
 	GetWorldTimerManager().SetTimerForNextTick(this, &AWaveManager::CheckWaveCompletion);
 }
 
+// Check wave completion.
 void AWaveManager::CheckWaveCompletion()
 {
 	if (bStopped || State != EWaveState::Active)

@@ -13,6 +13,7 @@ void UDefenderUpgradeComponent::BeginPlay()
 	}
 }
 
+// Is pending.
 bool UDefenderUpgradeComponent::IsPending(EUpgrade Upgrade) const
 {
 	const UGameInstance* GameInstance = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
@@ -35,6 +36,7 @@ void UDefenderUpgradeComponent::StartActive(EUpgrade Upgrade, const TArray<AActo
 	RefreshUpgradeUI();
 }
 
+// Buys the second tier: raises every living unit of that type to the tier II stats.
 void UDefenderUpgradeComponent::StartTierTwo(EUpgrade Upgrade, const TArray<AActor*>& Targets)
 {
 	UE_LOG(LogTemp, Display, TEXT("Defender upgrade %s raised to tier II on %d target(s)."), ConfigOf(Upgrade).ButtonName, Targets.Num());
@@ -48,6 +50,7 @@ void UDefenderUpgradeComponent::StartTierTwo(EUpgrade Upgrade, const TArray<AAct
 	RefreshUpgradeUI();
 }
 
+// Starts any already-paid (queued) upgrade whose unit is now on the field, e.g. the Tower at match start.
 void UDefenderUpgradeComponent::ActivatePendingUpgrades()
 {
 	UTDMetaProgressionSubsystem* Meta = GetWorld()->GetGameInstance()->GetSubsystem<UTDMetaProgressionSubsystem>();
@@ -69,6 +72,7 @@ void UDefenderUpgradeComponent::ActivatePendingUpgrades()
 	}
 }
 
+// Update status text.
 void UDefenderUpgradeComponent::UpdateStatusText()
 {
 	const ATDGameMode* GameMode = GetGameMode();

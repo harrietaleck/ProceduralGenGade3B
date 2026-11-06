@@ -89,6 +89,7 @@ void APoisonLightBombDefender::BeginPlay()
     );
 }
 
+// Set attack interval.
 void APoisonLightBombDefender::SetAttackInterval(float NewInterval)
 {
     BombCooldown = FMath::Max(0.1f, NewInterval);
@@ -98,6 +99,7 @@ void APoisonLightBombDefender::SetAttackInterval(float NewInterval)
     }
 }
 
+// Throw a bomb at the best cluster, if any enemy is in range
 void APoisonLightBombDefender::DetonateBomb()
 {
     if (!HealthComponent || HealthComponent->IsDead())
@@ -125,6 +127,7 @@ void APoisonLightBombDefender::DetonateBomb()
     }
 }
 
+// Apply one poison tick to every active cloud
 void APoisonLightBombDefender::TickPoisonClouds()
 {
     if (!HealthComponent || HealthComponent->IsDead())
@@ -203,6 +206,7 @@ void APoisonLightBombDefender::SpawnBlastVisuals(const FVector& AreaLocation)
     }
 }
 
+// Damage the enemies in the area and return how many were hit. Poison ticks also mark them as poisoned
 int32 APoisonLightBombDefender::DamageEnemiesInArea(const FVector& AreaLocation, float Damage, bool bPoison)
 {
     if (!GetWorld())

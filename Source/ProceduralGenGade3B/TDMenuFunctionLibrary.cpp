@@ -115,6 +115,7 @@ namespace
 	}
 }
 
+// Removes all widgets and opens the gameplay map. Hook the StartScreen PlayButton up to this.
 void UTDMenuFunctionLibrary::StartGameplayFromMenu(UObject* WorldContextObject, FName GameplayLevelName)
 {
 	if (!WorldContextObject || GameplayLevelName.IsNone())
@@ -132,6 +133,7 @@ void UTDMenuFunctionLibrary::StartGameplayFromMenu(UObject* WorldContextObject, 
 	UGameplayStatics::OpenLevel(World, GameplayLevelName);
 }
 
+// Makes a menu widget fill the whole viewport and stretches its background image.
 void UTDMenuFunctionLibrary::StretchWidgetToFillScreen(UUserWidget* Widget, bool bCaptureMouseFocus)
 {
 	if (!Widget)
@@ -201,6 +203,7 @@ void UTDMenuFunctionLibrary::StretchWidgetToFillScreen(UUserWidget* Widget, bool
 	}
 }
 
+// Stretches any Start, Settings, Upgrades or Defenders store screens that are open right now.
 void UTDMenuFunctionLibrary::StretchOpenMenuScreens(UObject* WorldContextObject)
 {
 	UWorld* World = GEngine

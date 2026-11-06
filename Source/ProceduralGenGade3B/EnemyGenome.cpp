@@ -9,6 +9,7 @@ namespace
 	constexpr float MaxGene = 1.0f;
 }
 
+// Keeps every gene in range and scales the three power genes down if they use more than Budget.
 void FEnemyGenome::ClampToBudget(float Budget)
 {
 	Hardiness = FMath::Clamp(Hardiness, MinGene, MaxGene);

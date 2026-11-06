@@ -6,6 +6,7 @@
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 
+// Constructor: sets the default components and values for TDMusicManager.
 ATDMusicManager::ATDMusicManager()
 {
     PrimaryActorTick.bCanEverTick = false;
@@ -30,6 +31,7 @@ ATDMusicManager::ATDMusicManager()
     if (DefeatSoundAsset.Succeeded()) DefeatMusic = DefeatSoundAsset.Object;
 }
 
+// Get or create.
 ATDMusicManager* ATDMusicManager::GetOrCreate(const UObject* WorldContextObject)
 {
     UWorld* World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
@@ -67,6 +69,7 @@ ATDMusicManager* ATDMusicManager::GetOrCreate(const UObject* WorldContextObject)
     return World->SpawnActor<ATDMusicManager>(ATDMusicManager::StaticClass(), FTransform::Identity, SpawnParams);
 }
 
+// Runs when the object enters the world: sets up its state and event bindings.
 void ATDMusicManager::BeginPlay()
 {
     Super::BeginPlay();
@@ -116,11 +119,13 @@ void ATDMusicManager::SetMusicVolume(float NewVolume)
     }
 }
 
+// Get music volume.
 float ATDMusicManager::GetMusicVolume() const
 {
     return MusicVolume;
 }
 
+// Play the selected music track.
 void ATDMusicManager::PlayMusic()
 {
     if (MusicAudio && !MusicAudio->IsPlaying())
@@ -135,6 +140,7 @@ void ATDMusicManager::PlayTrack(USoundBase* NewTrack)
     StartTrack(NewTrack, false);
 }
 
+// Start track.
 void ATDMusicManager::StartTrack(USoundBase* NewTrack, bool bLoop)
 {
     if (!MusicAudio || !NewTrack)
@@ -150,6 +156,7 @@ void ATDMusicManager::StartTrack(USoundBase* NewTrack, bool bLoop)
     MusicAudio->Play();
 }
 
+// Stop the current music.
 void ATDMusicManager::StopMusic()
 {
     bLoopCurrentTrack = false;
@@ -159,11 +166,13 @@ void ATDMusicManager::StopMusic()
     }
 }
 
+// Play intro music.
 void ATDMusicManager::PlayIntroMusic()
 {
     StartTrack(IntroMusic, true);
 }
 
+// Play gameplay music.
 void ATDMusicManager::PlayGameplayMusic()
 {
     if (MusicAudio && MusicAudio->Sound == GameplayMusic)
@@ -175,6 +184,7 @@ void ATDMusicManager::PlayGameplayMusic()
     StartTrack(GameplayMusic, true);
 }
 
+// Play victory music.
 void ATDMusicManager::PlayVictoryMusic()
 {
     StartTrack(VictoryMusic, false);

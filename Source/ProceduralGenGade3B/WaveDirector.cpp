@@ -76,6 +76,7 @@ float UWaveDirector::MeasureUpgradeStrength(UWorld* World)
 	return Units > 0 ? static_cast<float>(TierSum) / Units : 0.0f;
 }
 
+// Build profile.
 void UWaveDirector::BuildProfile(UWorld* World)
 {
 	Profile = FPlayerProfile();
@@ -139,6 +140,7 @@ void UWaveDirector::BuildProfile(UWorld* World)
 	}
 }
 
+// Saves the tower health and defender count when a wave starts spawning.
 void UWaveDirector::BeginWave(UWorld* World)
 {
 	UHealthComponent* TowerHealth = GetTowerHealth(World);
@@ -153,6 +155,7 @@ void UWaveDirector::BeginWave(UWorld* World)
 	LeakCount = 0;
 }
 
+// Saves how far one enemy got along its path, from 0 to 1, and if it reached the tower.
 void UWaveDirector::RecordEnemyOutcome(float KillProgress, bool bLeaked)
 {
 	KillProgressSum += bLeaked ? 1.0f : FMath::Clamp(KillProgress, 0.0f, 1.0f);
@@ -163,6 +166,7 @@ void UWaveDirector::RecordEnemyOutcome(float KillProgress, bool bLeaked)
 	}
 }
 
+// True when the tower has lost so much health this wave that spawning should slow down.
 bool UWaveDirector::ShouldGrantRelief(UWorld* World) const
 {
 	const UHealthComponent* TowerHealth = GetTowerHealth(World);
@@ -233,11 +237,13 @@ void UWaveDirector::EvaluateWave(UWorld* World)
 		PreviousDifficulty, Difficulty, *GetSkillLabel(), LastWaveUpgradeStrength);
 }
 
+// Gives 0 at MinDifficulty and 1 at MaxDifficulty.
 float UWaveDirector::NormalisedDifficulty() const
 {
 	return FMath::GetRangePct(MinDifficulty, MaxDifficulty, Difficulty);
 }
 
+// Get skill label.
 FString UWaveDirector::GetSkillLabel() const
 {
 	if (Difficulty < 0.9f)
@@ -494,11 +500,13 @@ float UWaveDirector::LaneCoverage(UWorld* World, const FEnemyPath& Path) const
 	return Coverage;
 }
 
+// Picks a lane for one spawn using the enemy type and how well each lane is defended right now.
 int32 UWaveDirector::ChooseLane(UWorld* World, EEnemyType Type)
 {
 	return ChooseLaneWith(World, Type, Random, RoundRobinLane);
 }
 
+// The lane picking code that both the real spawns and the forecast use.
 int32 UWaveDirector::ChooseLaneWith(UWorld* World, EEnemyType Type, FRandomStream& Stream, int32& RoundRobin) const
 {
 	const ATDGameMode* GameMode = GetTDGameMode(World);
@@ -543,6 +551,8 @@ int32 UWaveDirector::ChooseLaneWith(UWorld* World, EEnemyType Type, FRandomStrea
 	return Weights.Num() - 1;
 }
 
+// Guesses which lane each planned enemy will use, based on the current defences. It uses a
+// copy of the random stream, so it matches the real wave if the player changes nothing.
 TArray<FLaneForecast> UWaveDirector::ForecastLanes(UWorld* World) const
 {
 	TArray<FLaneForecast> Result;

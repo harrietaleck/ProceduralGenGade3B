@@ -115,6 +115,7 @@ void AProceduralTerrain::BeginPlay()
 	// tower and build pads from old terrain data. The GameMode calls PrepareForNewGame instead.
 }
 
+// Picks a new random seed and builds the terrain again. Useful for previewing in the editor.
 void AProceduralTerrain::RandomizeAndRegenerate()
 {
 	Seed = FMath::RandRange(1, MAX_int32 - 1);
@@ -132,6 +133,9 @@ void AProceduralTerrain::PrepareForNewGame()
 	GenerateTerrain();
 }
 
+// Generates and checks the map NumIterations times, with a new random seed each time.
+// It logs a pass or fail for every run and a summary at the end, so we can test lots
+// of maps in a few seconds without starting Play each time.
 void AProceduralTerrain::RunStressTest(int32 NumIterations)
 {
 	NumIterations = FMath::Max(1, NumIterations);
@@ -299,6 +303,9 @@ bool AProceduralTerrain::ValidateGeneratedWorld() const
 	return true;
 }
 
+// Asks the NavMesh for a path from each spawn point to the tower, and from each build slot
+// to the tower, and logs how many work. The NavMesh has to be rebuilt first with
+// RebuildNavigation. It is public so other classes like TDGameMode can check it again.
 bool AProceduralTerrain::ValidatePathfinding() const
 {
 	UWorld* World = GetWorld();
@@ -349,6 +356,8 @@ bool AProceduralTerrain::ValidatePathfinding() const
 	return true;
 }
 
+// Marks the slot closest to Location as taken or free. The placement code calls this when
+// a defender is placed and again when it is removed or destroyed.
 void AProceduralTerrain::SetSlotOccupied(const FVector& Location, bool bOccupied)
 {
 	int32 BestIndex = INDEX_NONE;
@@ -368,6 +377,7 @@ void AProceduralTerrain::SetSlotOccupied(const FVector& Location, bool bOccupied
 	}
 }
 
+// Returns true if the slot closest to Location is taken.
 bool AProceduralTerrain::IsSlotOccupied(const FVector& Location) const
 {
 	int32 BestIndex = INDEX_NONE;
@@ -384,6 +394,9 @@ bool AProceduralTerrain::IsSlotOccupied(const FVector& Location) const
 	return DefenderSlots.IsValidIndex(BestIndex) && DefenderSlots[BestIndex].bOccupied;
 }
 
+// Rebuilds the NavMesh and waits until every tile is done. It is public so code that adds
+// new obstacles after generation, like TDGameMode spawning the tower, can update the
+// NavMesh before testing paths. With dynamic nav generation Unreal only queues the
 void AProceduralTerrain::RebuildNavigation()
 {
 	UWorld* World = GetWorld();
@@ -460,6 +473,7 @@ void AProceduralTerrain::PaintPathCell(int32 X, int32 Y, int32 HalfWidthOverride
 	}
 }
 
+// Rebuild enemy paths from cell lines.
 void AProceduralTerrain::RebuildEnemyPathsFromCellLines()
 {
 	EnemyPaths.Reset();
@@ -483,6 +497,7 @@ void AProceduralTerrain::RebuildEnemyPathsFromCellLines()
 	}
 }
 
+// Carve paths.
 void AProceduralTerrain::CarvePaths()
 {
 	const int32 CX = GridSize / 2;
@@ -560,6 +575,7 @@ void AProceduralTerrain::CarvePaths()
 	RebuildEnemyPathsFromCellLines();
 }
 
+// Refresh tower cell.
 void AProceduralTerrain::RefreshTowerCell()
 {
 	const int32 CX = GridSize / 2;
@@ -568,6 +584,7 @@ void AProceduralTerrain::RefreshTowerCell()
 	TowerLocation = ActorToWorld().TransformPosition(CellCenterLocal(CX, CY, PathPlaneHeight));
 }
 
+// Rebuild terrain visuals.
 void AProceduralTerrain::RebuildTerrainVisuals()
 {
 	RefreshTowerCell();
@@ -577,6 +594,7 @@ void AProceduralTerrain::RebuildTerrainVisuals()
 	RebuildEnemyPathsFromCellLines();
 }
 
+// Expand grid by one ring.
 bool AProceduralTerrain::ExpandGridByOneRing()
 {
 	if (GridRingGrowthPerWave <= 0 || GridExpansionCount >= MaxGridExpansions)
@@ -619,6 +637,7 @@ bool AProceduralTerrain::ExpandGridByOneRing()
 	return true;
 }
 
+// Extend all paths one cell outward.
 void AProceduralTerrain::ExtendAllPathsOneCellOutward()
 {
 	for (TArray<FIntPoint>& Line : PathCellLines)
@@ -650,6 +669,7 @@ void AProceduralTerrain::ExtendAllPathsOneCellOutward()
 	}
 }
 
+// Append random walk to point.
 void AProceduralTerrain::AppendRandomWalkToPoint(TArray<FIntPoint>& Line, FIntPoint Start, FIntPoint Target, int32 PaintHalfWidth)
 {
 	if (Line.Num() == 0 || Line.Last() != Start)
@@ -734,6 +754,7 @@ void AProceduralTerrain::AppendRandomWalkToPoint(TArray<FIntPoint>& Line, FIntPo
 	}
 }
 
+// Branch new paths.
 int32 AProceduralTerrain::BranchNewPaths(int32 Count)
 {
 	if (Count <= 0 || PathCellLines.Num() == 0)
@@ -813,6 +834,7 @@ int32 AProceduralTerrain::BranchNewPaths(int32 Count)
 	return Added;
 }
 
+// Grows the grid, extends the spawns outward and adds branch lanes. Called after each wave.
 int32 AProceduralTerrain::ExpandWorldAfterWave()
 {
 	if (PathCellLines.Num() == 0)
@@ -846,6 +868,7 @@ int32 AProceduralTerrain::ExpandWorldAfterWave()
 	return Changes;
 }
 
+// Append new buildable slots.
 void AProceduralTerrain::AppendNewBuildableSlots()
 {
 	if (DefenderSlots.Num() >= MaxDefenderSlots)
@@ -1138,6 +1161,7 @@ FVector AProceduralTerrain::CellCenterLocal(int32 X, int32 Y, float Height) cons
 	return FVector((X + 0.5f) * CellSize - Half, (Y + 0.5f) * CellSize - Half, Height);
 }
 
+// Position of a grid corner in the actor's local space, at the given height.
 FVector AProceduralTerrain::CornerLocal(int32 GX, int32 GY, float Height) const
 {
 	const float Half = GridSize * CellSize * 0.5f;
@@ -1211,6 +1235,7 @@ float AProceduralTerrain::FractalNoise(float X, float Y) const
 	return MaxValue > 0.0f ? Total / MaxValue : 0.0f; // Scaled back to between 0 and 1.
 }
 
+// Ensure default decoration meshes.
 void AProceduralTerrain::EnsureDefaultDecorationMeshes()
 {
 	if (!DefaultCylinderMesh)
@@ -1314,6 +1339,7 @@ void AProceduralTerrain::EnsureDefaultDecorationMeshes()
 		TreeMeshes.Num(), RockMeshes.Num(), BuildingMeshes.Num());
 }
 
+// Clear decorations.
 void AProceduralTerrain::ClearDecorations()
 {
 	for (ATerrainProp* Prop : SpawnedDecorations)
@@ -1326,6 +1352,7 @@ void AProceduralTerrain::ClearDecorations()
 	SpawnedDecorations.Reset();
 }
 
+// Sample cell surface height.
 float AProceduralTerrain::SampleCellSurfaceHeight(int32 X, int32 Y) const
 {
 	if (!InBounds(X, Y) || VertexHeights.Num() == 0)
@@ -1340,6 +1367,7 @@ float AProceduralTerrain::SampleCellSurfaceHeight(int32 X, int32 Y) const
 	return (H00 + H10 + H01 + H11) * 0.25f;
 }
 
+// Is cell eligible for decoration.
 bool AProceduralTerrain::IsCellEligibleForDecoration(int32 X, int32 Y) const
 {
 	if (!InBounds(X, Y))
@@ -1383,6 +1411,7 @@ bool AProceduralTerrain::IsCellEligibleForDecoration(int32 X, int32 Y) const
 	return true;
 }
 
+// Pick decoration mesh.
 UStaticMesh* AProceduralTerrain::PickDecorationMesh(ETerrainDecorationKind Kind)
 {
 	const TArray<TObjectPtr<UStaticMesh>>* Pool = nullptr;
@@ -1423,6 +1452,7 @@ UStaticMesh* AProceduralTerrain::PickDecorationMesh(ETerrainDecorationKind Kind)
 	}
 }
 
+// Spawn decoration at cell.
 void AProceduralTerrain::SpawnDecorationAtCell(int32 X, int32 Y, ETerrainDecorationKind Kind)
 {
 	UWorld* World = GetWorld();
@@ -1523,6 +1553,7 @@ void AProceduralTerrain::SpawnDecorationAtCell(int32 X, int32 Y, ETerrainDecorat
 	DecoratedCellKeys.Add(CellIndex(X, Y));
 }
 
+// Scatter decorations.
 void AProceduralTerrain::ScatterDecorations()
 {
 	if (!bScatterDecorations || Cells.Num() == 0)

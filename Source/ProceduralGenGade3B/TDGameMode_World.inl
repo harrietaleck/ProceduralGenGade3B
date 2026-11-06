@@ -10,6 +10,8 @@ AProceduralTerrain* ATDGameMode::FindTerrain() const
 	return nullptr;
 }
 
+// Spawns the tower at the terrain's tower location. If the spawn fails or lands in the
+// wrong place, it makes new terrain and tries again. Returns false if it runs out of tries.
 bool ATDGameMode::SpawnTowerWithRetry()
 {
 	FActorSpawnParameters SpawnParams;
@@ -51,11 +53,13 @@ bool ATDGameMode::SpawnTowerWithRetry()
 	return false;
 }
 
+// Spawns a platform on every build slot the terrain has right now.
 void ATDGameMode::SpawnBuildPadMarkers()
 {
 	SpawnBuildPadMarkersFromIndex(0);
 }
 
+// Spawns markers just for the build slots added since last time. Used after the paths grow.
 void ATDGameMode::SpawnBuildPadMarkersFromIndex(int32 StartSlotIndex)
 {
 	if (!Terrain || !BuildPadMarkerClass || StartSlotIndex < 0)
@@ -78,6 +82,7 @@ void ATDGameMode::SpawnBuildPadMarkersFromIndex(int32 StartSlotIndex)
 	}
 }
 
+// Takes upkeep for every living defender after a wave ends.
 void ATDGameMode::ApplyDefenderUpkeep()
 {
 	int32 TotalUpkeep = 0;
@@ -105,6 +110,7 @@ void ATDGameMode::ApplyDefenderUpkeep()
 	UE_LOG(LogTemp, Display, TEXT("TDGameMode: defender upkeep charged %d Loot (%d defenders)."), TotalUpkeep, DefenderCount);
 }
 
+// Runs when a wave is cleared. Grows the lanes, adds new build pads, charges upkeep and shows the results.
 void ATDGameMode::HandleWaveComplete(int32 WaveNumber)
 {
 	if (bGameOver)
@@ -148,6 +154,7 @@ void ATDGameMode::HandleWaveComplete(int32 WaveNumber)
 	UE_LOG(LogTemp, Display, TEXT("TDGameMode: wave %d/%d complete - showing results."), WaveNumber, TotalWaves);
 }
 
+// Hides the results screen between waves and starts the next wave.
 void ATDGameMode::ContinueToNextWave()
 {
 	if (bGameOver || IsVictory())
@@ -182,6 +189,7 @@ void ATDGameMode::ContinueToNextWave()
 	}
 }
 
+// Hides the victory results and plays the wave we just finished again.
 void ATDGameMode::RetryCurrentWave()
 {
 	if (bGameOver || !WaveManager)
@@ -202,6 +210,8 @@ void ATDGameMode::RetryCurrentWave()
 	RefreshMetaHUD();
 }
 
+// Destroys the tower and all build pad markers spawned so far. This way a failed world
+// check can start over clean, without old actors left behind from the last try.
 void ATDGameMode::DestroySpawnedWorldActors()
 {
 	if (Tower)
@@ -219,6 +229,8 @@ void ATDGameMode::DestroySpawnedWorldActors()
 	BuildPadMarkers.Reset();
 }
 
+// Last check before enemies and the HUD start. It looks at the terrain, tower, build pads
+// and navigation as they were really spawned, not just the terrain's own check during generation.
 bool ATDGameMode::ValidateWorldBeforeGameplay() const
 {
 	if (!Terrain || Terrain->GetEnemyPaths().Num() < 3 || Terrain->GetDefenderSlots().Num() == 0)

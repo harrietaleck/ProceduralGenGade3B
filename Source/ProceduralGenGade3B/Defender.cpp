@@ -70,6 +70,7 @@ ADefender::ADefender()
     PlacementSparksVFX = TDVFX::Asset(TEXT("/Game/VFX/Enemies/NS_EnemyDeath"));  //  radial sparks shooting outward
 }
 
+// Colour, size and shape for one of this defender's projectiles. Used by every attack that fires one.
 void ADefender::StyleProjectile(AProjectile* Shot) const
 {
     if (!Shot)
@@ -80,6 +81,7 @@ void ADefender::StyleProjectile(AProjectile* Shot) const
     Shot->ConfigureShape(ProjectileShape.LoadSynchronous(), ProjectileShapeScale, ProjectileImpactVFX);
 }
 
+// Fire burst, sparks and a brief golden/emerald glow on the pad. Called only after a successful placement.
 void ADefender::PlayPlacementVFX()
 {
     const FVector Pad = bHasOccupiedSlot ? OccupiedSlotLocation : GetActorLocation();
@@ -109,11 +111,13 @@ void ADefender::PlayActivationVFX() const
     TDVFX::Play(this, ActivationVFX, GetActorLocation(), DefenderBallColor, 1.5f); //  stops after 1.5 s
 }
 
+// Rough damage per second this defender adds to its lanes. Used by the wave director.
 float ADefender::GetThreatRating() const
 {
     return FireInterval > 0.0f ? AttackDamage / FireInterval : AttackDamage;
 }
 
+// Runs when the object enters the world: sets up its state and event bindings.
 void ADefender::BeginPlay()
 {
     Super::BeginPlay();
@@ -159,6 +163,7 @@ void ADefender::BeginPlay()
     }
 }
 
+// Changes the attack interval and restarts the running attack timer to match.
 void ADefender::SetAttackInterval(float NewInterval)
 {
     FireInterval = FMath::Max(0.05f, NewInterval);
@@ -168,6 +173,7 @@ void ADefender::SetAttackInterval(float NewInterval)
     }
 }
 
+// Called by the timer. Finds the nearest enemy in range and shoots it.
 void ADefender::FireAtNearestEnemy()
 {
     if (HealthComponent->IsDead())
@@ -214,6 +220,7 @@ void ADefender::FireAtNearestEnemy()
     }
 }
 
+// Returns the closest living enemy inside AttackRange, or null if there is none.
 AEnemy* ADefender::FindNearestEnemyInRange() const
 {
     const FVector Location = GetActorLocation();

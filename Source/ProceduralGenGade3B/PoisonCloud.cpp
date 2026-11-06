@@ -11,18 +11,21 @@
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 
+// Constructor: sets the default components and values for PoisonCloud.
 APoisonCloud::APoisonCloud()
 {
 	PrimaryActorTick.bCanEverTick = false;
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
 }
 
+// Cell world location.
 FVector APoisonCloud::CellWorldLocation(int32 X, int32 Y) const
 {
 	const float Half = (GridSize - 1) * 0.5f;
 	return GetActorLocation() + FVector((X - Half) * CellSize, (Y - Half) * CellSize, 0.0f);
 }
 
+// Runs when the object enters the world: sets up its state and event bindings.
 void APoisonCloud::BeginPlay()
 {
 	Super::BeginPlay();
@@ -80,6 +83,7 @@ void APoisonCloud::BeginPlay()
 	GetWorldTimerManager().SetTimer(StepHandle, this, &APoisonCloud::Step, StepInterval, true);
 }
 
+// Step.
 void APoisonCloud::Step()
 {
 	TArray<uint8> Next = Age;
@@ -136,6 +140,7 @@ void APoisonCloud::Step()
 	}
 }
 
+// Refresh visuals.
 void APoisonCloud::RefreshVisuals()
 {
 	for (int32 I = 0; I < Tiles.Num(); ++I)
@@ -149,6 +154,7 @@ void APoisonCloud::RefreshVisuals()
 	}
 }
 
+// Damage defenders.
 void APoisonCloud::DamageDefenders()
 {
 	for (TActorIterator<ADefender> It(GetWorld()); It; ++It)

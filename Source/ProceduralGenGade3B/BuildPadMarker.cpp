@@ -10,6 +10,7 @@
 #include "Engine/Texture2D.h"
 #include "UObject/ConstructorHelpers.h"
 
+// Native on initialized.
 void UBuildPadPortalWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
@@ -33,6 +34,7 @@ void UBuildPadPortalWidget::NativeOnInitialized()
 	}
 }
 
+// Set portal texture.
 void UBuildPadPortalWidget::SetPortalTexture(UTexture2D* Texture)
 {
 	PendingTexture = Texture;
@@ -86,6 +88,7 @@ void ABuildPadMarker::OnConstruction(const FTransform& Transform)
 	PortalWidgetComponent->SetDrawSize(FVector2D(PortalPixels, PortalPixels));
 }
 
+// Runs when the object enters the world: sets up its state and event bindings.
 void ABuildPadMarker::BeginPlay()
 {
 	Super::BeginPlay();

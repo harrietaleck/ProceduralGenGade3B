@@ -69,6 +69,7 @@ void ATDHUD::DrawHUD()
 	}
 }
 
+// Between waves, shows what the next wave has and puts a marker over each lane's spawn point.
 void ATDHUD::DrawWaveForecast(ATDGameMode* GameMode, AWaveManager* WaveManager)
 {
 	const EWaveState State = WaveManager->GetWaveState();
@@ -165,6 +166,7 @@ void ATDHUD::DrawWaveForecast(ATDGameMode* GameMode, AWaveManager* WaveManager)
 	}
 }
 
+// Graph of the difficulty and score for each wave, with the 65% target line.
 void ATDHUD::DrawDirectorGraph(const UWaveDirector* Director)
 {
 	if (!Canvas || !Director)
@@ -254,11 +256,13 @@ void ATDHUD::DrawDirectorGraph(const UWaveDirector* Director)
 	DrawText(TEXT("Wave score"), ScoreColor, X + 140.0f, Y + Height - 30.0f, Font, 1.0f);
 }
 
+// Draws one line of text on the info panel.
 void ATDHUD::DrawPanelText(const FString& Text, const FLinearColor& Color, float X, float Y, UFont* Font, float Scale)
 {
 	DrawText(Text, Color, X, Y, Font, Scale);
 }
 
+// Draws the info panel with defenders, cost, seed and controls, plus the pause overlay.
 void ATDHUD::DrawInfoPanel(ATDGameMode* GameMode)
 {
 	if (!GameMode || !Canvas)
@@ -447,12 +451,14 @@ void ATDHUD::DrawPauseOverlay(ATDGameMode* GameMode)
 	DrawCenteredText(TEXT("PAUSED"), FLinearColor(1.f, 0.95f, 0.3f), Canvas->SizeX * 0.5f, Canvas->SizeY * 0.5f - 24.0f, Font, 2.8f);
 }
 
+// Fills a rectangle and draws a thin border around it, used by every card and banner.
 void ATDHUD::DrawFramedRect(float X, float Y, float W, float H, const FLinearColor& Fill, const FLinearColor& Border, float BorderThickness)
 {
 	DrawRect(Border, X, Y, W, H);
 	DrawRect(Fill, X + BorderThickness, Y + BorderThickness, W - BorderThickness * 2.0f, H - BorderThickness * 2.0f);
 }
 
+// Draws text centred on CenterX.
 void ATDHUD::DrawCenteredText(const FString& Text, const FLinearColor& Color, float CenterX, float Y, UFont* Font, float Scale)
 {
 	float W = 0.0f, H = 0.0f;
@@ -460,6 +466,7 @@ void ATDHUD::DrawCenteredText(const FString& Text, const FLinearColor& Color, fl
 	DrawText(Text, Color, CenterX - W * 0.5f, Y, Font, Scale);
 }
 
+// Bottom-centre bar with one card per defender: hotkey, name, cost, selected and affordable states.
 void ATDHUD::DrawDefenderBar(ATDGameMode* GameMode)
 {
 	ATDPlayerController* PC = Cast<ATDPlayerController>(GetOwningPlayerController());
@@ -532,6 +539,7 @@ void ATDHUD::DrawDefenderBar(ATDGameMode* GameMode)
 		FLinearColor(0.85f, 0.85f, 0.8f, 0.85f), Canvas->SizeX * 0.5f, Y - 40.0f, Font, 0.85f);
 }
 
+// Draws a small health bar above every enemy that is still alive.
 void ATDHUD::DrawEnemyHealthBars()
 {
 	for (TActorIterator<AEnemy> It(GetWorld()); It; ++It)
@@ -577,6 +585,7 @@ void ATDHUD::DrawEnemyHealthBars()
 	}
 }
 
+// Draws a small health bar above every defender that is still alive.
 void ATDHUD::DrawDefenderHealthBars()
 {
 	for (TActorIterator<ADefender> It(GetWorld()); It; ++It)
@@ -594,6 +603,8 @@ void ATDHUD::DrawDefenderHealthBars()
 	}
 }
 
+// Turns a world position into a screen position and draws a health bar there.
+// Both the defender and enemy bars use this.
 void ATDHUD::DrawWorldHealthBar(const FVector& WorldLocation, float HealthPercent, float BarWidth, float BarHeight)
 {
 	if (!PlayerOwner)

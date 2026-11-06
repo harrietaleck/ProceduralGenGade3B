@@ -4,11 +4,13 @@
 #include "DrawDebugHelpers.h"
 #include "TimerManager.h"
 
+// Constructor: sets the default components and values for DamageFlashComponent.
 UDamageFlashComponent::UDamageFlashComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
+// Runs when the object enters the world: sets up its state and event bindings.
 void UDamageFlashComponent::BeginPlay()
 {
 	Super::BeginPlay();
@@ -27,6 +29,7 @@ void UDamageFlashComponent::BeginPlay()
 	}
 }
 
+// Runs when the object leaves the world: removes bindings and cleans up.
 void UDamageFlashComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	if (UHealthComponent* Health = HealthComponent.Get())
@@ -44,6 +47,7 @@ void UDamageFlashComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
+// On health changed.
 void UDamageFlashComponent::OnHealthChanged(float CurrentHealth, float MaxHealth)
 {
 	if (LastHealth >= 0.0f && CurrentHealth < LastHealth - KINDA_SMALL_NUMBER)
@@ -53,6 +57,7 @@ void UDamageFlashComponent::OnHealthChanged(float CurrentHealth, float MaxHealth
 	LastHealth = CurrentHealth;
 }
 
+// Play damage flash.
 void UDamageFlashComponent::PlayDamageFlash()
 {
 	if (UStaticMeshComponent* MeshComponent = Mesh.Get())
@@ -77,6 +82,7 @@ void UDamageFlashComponent::PlayDamageFlash()
 	}
 }
 
+// Reset damage flash.
 void UDamageFlashComponent::ResetDamageFlash()
 {
 	if (UStaticMeshComponent* MeshComponent = Mesh.Get())

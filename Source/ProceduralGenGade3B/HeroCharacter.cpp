@@ -67,6 +67,7 @@ AHeroCharacter::AHeroCharacter()
 	HeadMesh->SetVisibility(false);
 }
 
+// Runs when the object enters the world: sets up its state and event bindings.
 void AHeroCharacter::BeginPlay()
 {
 	Super::BeginPlay();
@@ -108,6 +109,7 @@ void AHeroCharacter::BeginPlay()
 	GetWorldTimerManager().SetTimer(ViewTimer, this, &AHeroCharacter::ForceViewToSelf, 0.4f, false);
 }
 
+// Makes the hero's camera the player's view, even if a level camera tried to take over.
 void AHeroCharacter::ForceViewToSelf()
 {
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
@@ -176,6 +178,7 @@ void AHeroCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 	PlayerInputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &AHeroCharacter::ZoomOut);
 }
 
+// Runs every frame.
 void AHeroCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
@@ -191,6 +194,7 @@ void AHeroCharacter::Tick(float DeltaSeconds)
 	CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, TargetArm, DeltaSeconds, ZoomInterpSpeed);
 }
 
+// Checks WASD and moves the hero based on which way the camera faces.
 void AHeroCharacter::UpdateWalk()
 {
 	APlayerController* PC = Cast<APlayerController>(GetController());
@@ -228,6 +232,7 @@ void AHeroCharacter::UpdateWalk()
 	AddMovementInput(Rgt, Right);
 }
 
+// While right mouse is held, mouse movement turns and tilts the camera.
 void AHeroCharacter::UpdateLook()
 {
 	APlayerController* PC = Cast<APlayerController>(GetController());
@@ -272,18 +277,21 @@ void AHeroCharacter::EndLook()
 	}
 }
 
+// Mouse wheel handlers. They move the target zoom in or out, within the limits.
 void AHeroCharacter::ZoomIn()
 {
 	RefreshZoomLimitsFromTerrain();
 	TargetArm = FMath::Clamp(TargetArm - ZoomStep, MinZoom, MaxZoom);
 }
 
+// Zoom out.
 void AHeroCharacter::ZoomOut()
 {
 	RefreshZoomLimitsFromTerrain();
 	TargetArm = FMath::Clamp(TargetArm + ZoomStep, MinZoom, MaxZoom);
 }
 
+// Works out MaxZoom again from the current map size, since the map grows after each wave.
 void AHeroCharacter::RefreshZoomLimitsFromTerrain()
 {
 	if (!GetWorld())

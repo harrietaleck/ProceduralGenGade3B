@@ -91,6 +91,7 @@ void UHealthComponent::ApplyDamage(float Amount, AActor* Killer)
     }
 }
 
+// Gives back health, up to MaxHealth. Does nothing if dead.
 void UHealthComponent::Heal(float Amount)
 {
     if (bIsDead || Amount <= 0.0f)
@@ -103,6 +104,8 @@ void UHealthComponent::Heal(float Amount)
     OnHealthChanged.Broadcast(CurrentHealth,MaxHealth);
 }
 
+// Raises or lowers MaxHealth and moves current health by the same amount, so damage already
+// taken is kept. Lowering never kills: a living actor keeps at least 1 health.
 void UHealthComponent::AdjustMaxHealth(float Delta)
 {
     if (bIsDead || FMath::IsNearlyZero(Delta))

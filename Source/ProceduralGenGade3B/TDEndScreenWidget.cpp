@@ -24,6 +24,7 @@
 
 using namespace TDEndScreenPrivate;
 
+// Runs when the widget is created: builds the layout and binds the buttons.
 void UTDEndScreenWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
@@ -35,6 +36,7 @@ void UTDEndScreenWidget::NativeConstruct()
 	SetVisibility(ESlateVisibility::Collapsed);
 }
 
+// Ensure fallback layout.
 void UTDEndScreenWidget::EnsureFallbackLayout()
 {
 	if (bBuiltFallbackLayout)
@@ -144,6 +146,7 @@ void UTDEndScreenWidget::EnsureFallbackLayout()
 	}
 }
 
+// Shows a match result on the screen. Can be called from C++ or Blueprint.
 void UTDEndScreenWidget::PresentMatchResult(bool bVictory, const FMatchResult& Result)
 {
 	EnsureFallbackLayout();
@@ -168,6 +171,7 @@ void UTDEndScreenWidget::PresentMatchResult(bool bVictory, const FMatchResult& R
 	OnMatchResultPresented(bVictory, Result);
 }
 
+// Show game over.
 void UTDEndScreenWidget::ShowGameOver()
 {
 	FMatchResult Result;
@@ -181,6 +185,7 @@ void UTDEndScreenWidget::ShowGameOver()
 	PresentMatchResult(false, Result);
 }
 
+// Show victory.
 void UTDEndScreenWidget::ShowVictory()
 {
 	FMatchResult Result;
@@ -194,6 +199,7 @@ void UTDEndScreenWidget::ShowVictory()
 	PresentMatchResult(true, Result);
 }
 
+// Hide screen.
 void UTDEndScreenWidget::HideScreen()
 {
 	bPendingNextWave = false;
@@ -201,6 +207,7 @@ void UTDEndScreenWidget::HideScreen()
 	SetVisibility(ESlateVisibility::Collapsed);
 }
 
+// On retry clicked.
 void UTDEndScreenWidget::OnRetryClicked()
 {
 	if (ATDGameMode* GameMode = Cast<ATDGameMode>(UGameplayStatics::GetGameMode(this)))
@@ -220,6 +227,7 @@ void UTDEndScreenWidget::OnRetryClicked()
 	}
 }
 
+// On next wave clicked.
 void UTDEndScreenWidget::OnNextWaveClicked()
 {
 	if (ATDGameMode* GameMode = Cast<ATDGameMode>(UGameplayStatics::GetGameMode(this)))
@@ -228,6 +236,7 @@ void UTDEndScreenWidget::OnNextWaveClicked()
 	}
 }
 
+// On main menu clicked.
 void UTDEndScreenWidget::OnMainMenuClicked()
 {
 	if (ATDGameMode* GameMode = Cast<ATDGameMode>(UGameplayStatics::GetGameMode(this)))

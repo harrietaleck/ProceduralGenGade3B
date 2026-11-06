@@ -83,6 +83,7 @@ void UTDEndScreenWidget::EnsureBlueprintLayoutFitsScreen()
 	StretchImageBrush(VictoryBackground);
 }
 
+// Resolve optional widget bindings.
 void UTDEndScreenWidget::ResolveOptionalWidgetBindings()
 {
 	if (bBuiltFallbackLayout)
@@ -150,6 +151,7 @@ void UTDEndScreenWidget::ResolveOptionalWidgetBindings()
 	ResolveButton(MainMenuButton, TEXT("MainMenuButton"), TEXT("MainMenuBTN"));
 }
 
+// Bind action buttons.
 void UTDEndScreenWidget::BindActionButtons()
 {
 	auto PrepareButton = [this](UButton* Button)
@@ -186,6 +188,7 @@ void UTDEndScreenWidget::BindActionButtons()
 	}
 }
 
+// Ensure result text widgets.
 void UTDEndScreenWidget::EnsureResultTextWidgets()
 {
 	UCanvasPanel* Canvas = RootCanvas;
@@ -227,6 +230,7 @@ void UTDEndScreenWidget::EnsureResultTextWidgets()
 	EnsureRewardNumbersUnderIcons(this, WidgetTree, Canvas, ForestEssenceText, WoodenMightText, GemStonesText, LightLanternsText);
 }
 
+// Layout defeat result widgets.
 void UTDEndScreenWidget::LayoutDefeatResultWidgets()
 {
 	CenterScoreAcrossPanel(ScoreValueText);
@@ -258,6 +262,7 @@ void UTDEndScreenWidget::LayoutDefeatResultWidgets()
 	PinUnderIcon(LightLanternsText, 0.615f, 0.625f);
 }
 
+// Apply match result to widgets.
 void UTDEndScreenWidget::ApplyMatchResultToWidgets(const FMatchResult& Result)
 {
 	FMetaCurrencyRewards Shown = Result.Rewards;

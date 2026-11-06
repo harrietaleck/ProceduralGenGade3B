@@ -22,6 +22,7 @@ namespace
 	}
 }
 
+// Get beam health tier.
 EBeamHealthTier UTDMatchRewards::GetBeamHealthTier(int32 BeamHealthPercent)
 {
 	const int32 Clamped = FMath::Clamp(BeamHealthPercent, 0, 100);
@@ -36,6 +37,7 @@ EBeamHealthTier UTDMatchRewards::GetBeamHealthTier(int32 BeamHealthPercent)
 	return EBeamHealthTier::Radiant;
 }
 
+// Get reward font size.
 int32 UTDMatchRewards::GetRewardFontSize(EBeamHealthTier Tier)
 {
 	switch (Tier)
@@ -47,6 +49,7 @@ int32 UTDMatchRewards::GetRewardFontSize(EBeamHealthTier Tier)
 	}
 }
 
+// Get score font size.
 int32 UTDMatchRewards::GetScoreFontSize(EBeamHealthTier Tier)
 {
 	switch (Tier)
@@ -58,6 +61,7 @@ int32 UTDMatchRewards::GetScoreFontSize(EBeamHealthTier Tier)
 	}
 }
 
+// Build match result.
 FMatchResult UTDMatchRewards::BuildMatchResult(
 	bool bVictory,
 	float TowerCurrentHealth,

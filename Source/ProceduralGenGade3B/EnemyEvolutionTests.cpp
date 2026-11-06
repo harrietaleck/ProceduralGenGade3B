@@ -81,6 +81,7 @@ bool FEnemyEvolutionBudgetTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEnemyEvolutionSeedTest, "ProceduralGen.EnemyEvolution.SameSeedGivesTheSameBlight",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
+// Runs this automated test and reports any failure.
 bool FEnemyEvolutionSeedTest::RunTest(const FString& Parameters)
 {
 	auto Sequence = [](int32 Seed)
@@ -137,6 +138,7 @@ bool FEnemyEvolutionSelectionTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEnemyEvolutionChampionTest, "ProceduralGen.EnemyEvolution.ChampionSurvivesUnchanged",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
+// Runs this automated test and reports any failure.
 bool FEnemyEvolutionChampionTest::RunTest(const FString& Parameters)
 {
 	UEnemyEvolution* Evolution = NewObject<UEnemyEvolution>();
