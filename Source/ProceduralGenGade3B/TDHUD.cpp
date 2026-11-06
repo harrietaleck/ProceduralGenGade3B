@@ -357,8 +357,12 @@ void ATDHUD::DrawInfoPanel(ATDGameMode* GameMode)
 		if (Plan.WaveNumber > 0)
 		{
 			const FString EliteText = Plan.EliteCount > 0 ? FString::Printf(TEXT(", %d Elite"), Plan.EliteCount) : FString();
-			AddLine(FString::Printf(TEXT("Wave %d: %d Basic, %d Wolf, %d Bear%s  (threat %.0f)"),
-				Plan.WaveNumber, Plan.BasicCount, Plan.WolfCount, Plan.BearCount, *EliteText, Plan.ThreatBudget),
+			// Say so when the player's upgrades made this wave bigger, so the extra enemies do not feel random.
+			const FString UpgradeText = Plan.UpgradeBudgetFactor > 1.005f
+				? FString::Printf(TEXT(", +%.0f%% for upgrades"), (Plan.UpgradeBudgetFactor - 1.0f) * 100.0f)
+				: FString();
+			AddLine(FString::Printf(TEXT("Wave %d: %d Basic, %d Wolf, %d Bear%s  (threat %.0f%s)"),
+				Plan.WaveNumber, Plan.BasicCount, Plan.WolfCount, Plan.BearCount, *EliteText, Plan.ThreatBudget, *UpgradeText),
 				InfoSecondaryScale, FLinearColor(0.55f, 0.9f, 1.0f));
 		}
 

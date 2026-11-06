@@ -80,6 +80,10 @@ struct FWavePlan
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	float ThreatBudget = 0.0f;
 
+	/** How much the budget was raised because the player used upgrades. 1.0 means no change. Already included in ThreatBudget. */
+	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
+	float UpgradeBudgetFactor = 1.0f;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	TArray<FPlannedSpawn> Spawns;
 
@@ -134,6 +138,10 @@ struct FPlayerProfile
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
 	FString StyleLabel = TEXT("Unknown");
+
+	/** Average upgrade tier (0 to 2) of the tower and defenders when the last wave ended. 0 means no upgrades were used. */
+	UPROPERTY(BlueprintReadOnly, Category = "Wave Director")
+	float UpgradeStrength = 0.0f;
 };
 
 /** How well the player handled the last wave. */
@@ -212,6 +220,11 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Budget")
 	float BearCost = 3.0f;
+
+	/** Upgrades make the player stronger, so the next wave's budget grows by this fraction for every average upgrade tier.
+	 *  At 0.12, a defence that is fully on tier II (average tier 2) faces a wave that is 24% bigger. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave Director|Budget", meta = (ClampMin = "0.0"))
+	float UpgradeBudgetPerTier = 0.12f;
 
 	// ---- Adaptation ----
 
@@ -353,6 +366,9 @@ private:
 	int32 DefendersAtStart = 0;
 	int32 PlacedAtStart = 0;
 
+	/** Upgrade strength measured when the last wave ended, before the upgrades were reset. Used to plan the next wave. */
+	float LastWaveUpgradeStrength = 0.0f;
+
 	// How each enemy did in the current wave
 	float KillProgressSum = 0.0f;
 	int32 OutcomeCount = 0;
@@ -369,4 +385,7 @@ private:
 	float NormalisedDifficulty() const;
 
 	static int32 CountLivingDefenders(UWorld* World);
+
+	/** Average upgrade tier (0 to 2) across the living tower and defenders. */
+	static float MeasureUpgradeStrength(UWorld* World);
 };

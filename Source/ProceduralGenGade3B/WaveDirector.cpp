@@ -8,6 +8,7 @@
 #include "ProceduralTerrain.h"
 #include "TDGameMode.h"
 #include "Tower.h"
+#include "UpgradeVisualComponent.h"
 #include "EngineUtils.h"
 
 namespace
@@ -42,9 +43,43 @@ int32 UWaveDirector::CountLivingDefenders(UWorld* World)
 	return Count;
 }
 
+float UWaveDirector::MeasureUpgradeStrength(UWorld* World)
+{
+	// Every unit's upgrade tier is shown by its UpgradeVisualComponent, so that is where we read it from.
+	// The tower counts as one unit, so a tower-only defence is still measured.
+	int32 Units = 0;
+	int32 TierSum = 0;
+
+	auto AddUnit = [&Units, &TierSum](const AActor* Unit)
+	{
+		const UHealthComponent* Health = Unit ? Unit->FindComponentByClass<UHealthComponent>() : nullptr;
+		if (!Health || Health->IsDead())
+		{
+			return;
+		}
+		++Units;
+		if (const UUpgradeVisualComponent* Visual = Unit->FindComponentByClass<UUpgradeVisualComponent>())
+		{
+			TierSum += Visual->GetTier();
+		}
+	};
+
+	if (const ATDGameMode* GameMode = GetTDGameMode(World))
+	{
+		AddUnit(GameMode->GetTower());
+	}
+	for (TActorIterator<ADefender> It(World); It; ++It)
+	{
+		AddUnit(*It);
+	}
+
+	return Units > 0 ? static_cast<float>(TierSum) / Units : 0.0f;
+}
+
 void UWaveDirector::BuildProfile(UWorld* World)
 {
 	Profile = FPlayerProfile();
+	Profile.UpgradeStrength = LastWaveUpgradeStrength;
 
 	int32 AreaCount = 0;
 	int32 ArcherCount = 0;
@@ -149,6 +184,10 @@ void UWaveDirector::EvaluateWave(UWorld* World)
 	FWavePerformance Result;
 	Result.bValid = true;
 
+	// Upgrades only last for one wave and the game mode resets them right after this function runs, so
+	// measure them now. The next wave is planned from this value.
+	LastWaveUpgradeStrength = MeasureUpgradeStrength(World);
+
 	// Tower score. Losing TowerLossForZeroScore of the max health in one wave gives zero.
 	if (const UHealthComponent* TowerHealth = GetTowerHealth(World))
 	{
@@ -189,9 +228,9 @@ void UWaveDirector::EvaluateWave(UWorld* World)
 	History.Add(Result);
 
 	UE_LOG(LogTemp, Display,
-		TEXT("WaveDirector: wave %d score %.2f (tower %.2f, kills %.2f, defenders %.2f, economy %.2f) -> difficulty %.2f -> %.2f [%s]"),
+		TEXT("WaveDirector: wave %d score %.2f (tower %.2f, kills %.2f, defenders %.2f, economy %.2f) -> difficulty %.2f -> %.2f [%s], upgrade tier %.2f"),
 		CurrentPlan.WaveNumber, Result.Score, TowerScore, KillScore, DefenderScore, EconomyScore,
-		PreviousDifficulty, Difficulty, *GetSkillLabel());
+		PreviousDifficulty, Difficulty, *GetSkillLabel(), LastWaveUpgradeStrength);
 }
 
 float UWaveDirector::NormalisedDifficulty() const
@@ -228,6 +267,12 @@ FWavePlan UWaveDirector::PlanWave(UWorld* World, int32 WaveNumber)
 	FWavePlan Plan;
 	Plan.WaveNumber = WaveNumber;
 	Plan.ThreatBudget = (BaseThreatBudget + BudgetGrowthPerWave * (WaveNumber - 1)) * Difficulty;
+
+	// A defence that used upgrades is stronger than its unit count suggests, so the wave grows to match.
+	// The difficulty rating already reacts to how well the player did, but it only moves a little each wave;
+	// this makes the budget respond to upgrades straight away.
+	Plan.UpgradeBudgetFactor = 1.0f + UpgradeBudgetPerTier * Profile.UpgradeStrength;
+	Plan.ThreatBudget *= Plan.UpgradeBudgetFactor;
 
 	// Enemy types unlock over time, then we weight them by how the player plays.
 	const float Pressure = FMath::Clamp(Profile.DefendersPerLane / 3.0f, 0.0f, 1.0f);
