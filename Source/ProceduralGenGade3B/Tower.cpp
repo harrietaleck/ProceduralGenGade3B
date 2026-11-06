@@ -42,6 +42,7 @@ ATower::ATower()
 	//  Default visual-pass assets; all of them can be swapped in the editor.
 	FireVFX = TDVFX::Asset(TEXT("/Game/VFX/Towers/NS_TowerFire"));
 	UpgradeVFX = TDVFX::Asset(TEXT("/Game/VFX/Towers/NS_TowerUpgrade"));
+	DestructionVFX = TDVFX::Asset(TEXT("/Game/VFX/Enemies/NS_EnemyDeath"));
 	BeamMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/Materials/Instances/MI_Beam_Gold.MI_Beam_Gold")));
 	for (const TCHAR* Crystal : { TEXT("MI_Glow_Turquoise"), TEXT("MI_Glow_Gold"), TEXT("MI_Glow_Green") })
 	{
@@ -276,15 +277,9 @@ void ATower::PlayDestructionEffect()
 		}
 	}
 
-	static UParticleSystem* DustBurst = nullptr;
-	if (!DustBurst)
-	{
-		DustBurst = LoadObject<UParticleSystem>(nullptr, TEXT("/Engine/EngineVFX/Blueprints/DefaultVFX/DefaultTexturedSmoke.DefaultTexturedSmoke"));
-	}
-	if (DustBurst)
-	{
-		UGameplayStatics::SpawnEmitterAtLocation(World, DustBurst, Base, FRotator::ZeroRotator, FVector(2.5f), /*bAutoDestroy=*/true, EPSCPoolMethod::None, /*bAutoActivateSystem=*/true);
-	}
+	// Dust and sparks burst where the tower falls. This used a Cascade smoke asset that no longer exists
+	// in UE 5.8 (it logged a warning and played nothing), so it now plays a Niagara system instead.
+	TDVFX::Play(this, DestructionVFX, Base, FLinearColor(0.7f, 0.6f, 0.5f), 3.0f);
 }
 
 void ATower::HandleDeath(AActor* Killer)

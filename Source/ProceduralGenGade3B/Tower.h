@@ -74,6 +74,10 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Tower|VFX")
 	TSoftObjectPtr<UNiagaraSystem> UpgradeVFX;
 
+	/** Dust and sparks burst where the tower collapses when it is destroyed. */
+	UPROPERTY(EditAnywhere, Category = "Tower|VFX")
+	TSoftObjectPtr<UNiagaraSystem> DestructionVFX;
+
 	/** Material of the short energy beam drawn to the target on each shot. */
 	UPROPERTY(EditAnywhere, Category = "Tower|VFX")
 	TSoftObjectPtr<UMaterialInterface> BeamMaterial;
