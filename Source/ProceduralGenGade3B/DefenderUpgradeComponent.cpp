@@ -174,7 +174,7 @@ void UDefenderUpgradeComponent::BindScreen(UUserWidget* Screen)
 	if (UButton* Button = Slots[(int32)EUpgrade::Tower].Button.Get())  { Button->OnClicked.AddDynamic(this, &UDefenderUpgradeComponent::OnTowerClicked); }
 
 	// The screen's own Exit loads the start menu; during a match it must only close the screen.
-	const ATDGameMode* GameMode = GetGameMode();
+	ATDGameMode* GameMode = GetGameMode();
 	if (GameMode && GameMode->GetTower())
 	{
 		if (UButton* Exit = Cast<UButton>(Screen->GetWidgetFromName(TEXT("ExitBTN"))))
@@ -397,7 +397,7 @@ void UDefenderUpgradeComponent::TryActivate(EUpgrade Upgrade)
 {
 	UE_LOG(LogTemp, Display, TEXT("Defender upgrade purchase requested: %s."), ConfigOf(Upgrade).ButtonName);
 	FSlot& Slot = Slots[(int32)Upgrade];
-	const ATDGameMode* GameMode = GetGameMode();
+	ATDGameMode* GameMode = GetGameMode();
 	// A wave-active upgrade can be purchased again when its independent cooldown expires.
 	if (Slot.Phase == EPhase::DisabledAfterWave || Slot.CooldownSecondsRemaining > 0
 		|| !GameMode || GameMode->IsGameOver() || GameMode->IsVictory() || IsPending(Upgrade))
@@ -426,10 +426,12 @@ void UDefenderUpgradeComponent::TryActivate(EUpgrade Upgrade)
 			Meta->AddPendingUpgrade((int32)Upgrade);
 		}
 		UE_LOG(LogTemp, Display, TEXT("Defender upgrade %s bought and queued until that unit is on the field."), ConfigOf(Upgrade).ButtonName);
+		GameMode->SaveCurrentWaveCheckpoint();
 		RefreshUpgradeUI();
 		return;
 	}
 	StartActive(Upgrade, Targets); //
+	GameMode->SaveCurrentWaveCheckpoint();
 }
 
 void UDefenderUpgradeComponent::StartCooldown(EUpgrade Upgrade)
@@ -472,6 +474,10 @@ void UDefenderUpgradeComponent::TickUpgradeCooldown(int32 UpgradeIndex)
 		if (UWorld* World = GetWorld())
 		{
 			World->GetTimerManager().ClearTimer(Slot.CooldownTimer);
+		}
+		if (Slot.Phase == EPhase::DisabledAfterWave)
+		{
+			Slot.Phase = EPhase::Ready;
 		}
 	}
 	RefreshUpgradeUI();
@@ -525,6 +531,10 @@ void UDefenderUpgradeComponent::ResetTemporaryUpgradesForWaveEnd()
 		{
 			// A queued purchase that never had a matching unit received no effect this wave.
 			Meta->AddRewards(MetaCostOf((EUpgrade)Index));
+		}
+		if (bWasActive)
+		{
+			StartCooldown((EUpgrade)Index);
 		}
 	}
 

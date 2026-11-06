@@ -33,7 +33,7 @@ class PROCEDURALGENGADE3B_API UTDSaveGame : public USaveGame
 	GENERATED_BODY()
 
 public:
-	static constexpr int32 CurrentVersion = 1;
+	static constexpr int32 CurrentVersion = 2;
 
 	UPROPERTY()
 	int32 SaveVersion = CurrentVersion;
@@ -66,6 +66,10 @@ public:
 	UPROPERTY()
 	int32 WavesCleared = 0;
 
+	/** True when this checkpoint was captured at the start of the wave it resumes. */
+	UPROPERTY()
+	bool bResumeAtCurrentWave = false;
+
 	/** Loot, the in-match resource. */
 	UPROPERTY()
 	int32 Loot = 0;
@@ -92,7 +96,7 @@ public:
 	UPROPERTY()
 	TArray<FTDSavedDefender> Defenders;
 
-	/** Legacy fields retained for save compatibility; wave-scoped upgrades are no longer persisted. */
+	/** Upgrade phases encode active, disabled cooldown, and queued purchases for the resumed wave. */
 	UPROPERTY()
 	TArray<uint8> UpgradePhases;
 
@@ -103,6 +107,6 @@ public:
 	bool IsResumable() const
 	{
 		return bHasMatch && SaveVersion == CurrentVersion && !LevelName.IsEmpty()
-			&& TerrainSeed != 0 && WavesCleared > 0;
+			&& TerrainSeed != 0 && WavesCleared >= 0;
 	}
 };

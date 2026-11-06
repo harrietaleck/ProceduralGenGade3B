@@ -25,7 +25,6 @@ void UDefenderUpgradeComponent::StartActive(EUpgrade Upgrade, const TArray<AActo
 	UE_LOG(LogTemp, Display, TEXT("Defender upgrade %s activated on %d target(s)."), ConfigOf(Upgrade).ButtonName, Targets.Num());
 	FSlot& Slot = Slots[(int32)Upgrade];
 	Slot.Phase = EPhase::Active;
-	StartCooldown(Upgrade);
 	for (AActor* Target : Targets)
 	{
 		ApplyBoost(Upgrade, Target);

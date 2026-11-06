@@ -37,6 +37,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Save")
     void ResumeGame();
 
+    /** Starts a clean match and resets the persistent starting wallet. */
+    void StartNewGame();
+
     /** Returns the save to restore if Resume was pressed, and clears the request. */
     UTDSaveGame* ConsumeResumeRequest();
 
@@ -48,6 +51,9 @@ private:
     int32 TowerMaxHealthBonus = 0;
     bool bResumePending = false;
     TWeakObjectPtr<UUserWidget> BoundStartScreen;
+
+    UFUNCTION()
+    void HandleMetaCurrencyChanged();
 
     UFUNCTION()
     void OnNewGameClicked();

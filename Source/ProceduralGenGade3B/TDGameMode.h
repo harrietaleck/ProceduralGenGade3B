@@ -199,7 +199,10 @@ public:
 	/** Timed upgrades bought from the Defenders screen. */
 	UDefenderUpgradeComponent* GetDefenderUpgrades() const { return DefenderUpgrades; }
 
-	/** Writes the latest wave checkpoint to the save slot (F5). Saves are taken at wave ends. */
+	/** Writes a restartable checkpoint for the current wave. */
+	void SaveCurrentWaveCheckpoint();
+
+	/** Writes the latest wave checkpoint to the save slot (F5). */
 	UFUNCTION(BlueprintCallable, Category = "Rules|Save")
 	void SaveGameNow();
 
@@ -321,10 +324,12 @@ private:
 	UPROPERTY()
 	TObjectPtr<UTDSaveGame> LastCheckpoint;
 
-	UTDSaveGame* CaptureCheckpoint(int32 WavesCleared) const;
-	void WriteCheckpoint(int32 WavesCleared);
+	UTDSaveGame* CaptureCheckpoint(int32 WavesCleared, bool bResumeAtCurrentWave) const;
+	void WriteCheckpoint(int32 WavesCleared, bool bResumeAtCurrentWave = false);
 	void WriteMatchFinishedSave();
 	void ApplyResumeSave(UTDSaveGame* Save);
+	UFUNCTION()
+	void HandleWaveStartedForCheckpoint(int32 WaveNumber);
 
 	/**  Plays a match-level effect at the tower. */
 	void PlayMatchVFX(const TSoftObjectPtr<UNiagaraSystem>& System, const FLinearColor& Color, float Lifetime) const;

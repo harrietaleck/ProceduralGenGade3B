@@ -141,6 +141,7 @@ bool ATDGameMode::TryUpgradeTowerBeam()
 	// Add rather than assign, so a running temporary tower upgrade is not overwritten.
 	Tower->AttackDamage += BeamUpgradeDamageBonus;
 	Tower->PlayUpgradeVFX(); //  beam upgrade energy
+	SaveCurrentWaveCheckpoint();
 	RefreshMetaHUD();
 	return true;
 }

@@ -1,9 +1,7 @@
 // TDGameMode_Save.inl - included by TDGameMode.cpp (not compiled alone).
-// Wave checkpoints: capture the match at the end of a wave, write it to the save slot and
-// restore it when the player presses Resume. The middle of a wave is not saved, because live
-// enemies, projectiles and poison clouds have no saveable state; resuming starts the next wave.
+// Checkpoints restart the saved wave because enemies and projectiles are not serialized.
 
-UTDSaveGame* ATDGameMode::CaptureCheckpoint(int32 WavesCleared) const
+UTDSaveGame* ATDGameMode::CaptureCheckpoint(int32 WavesCleared, bool bResumeAtCurrentWave) const
 {
 	UTDSaveGame* Save = NewObject<UTDSaveGame>(const_cast<ATDGameMode*>(this));
 	Save->Wallet = GetMetaWallet();
@@ -11,6 +9,7 @@ UTDSaveGame* ATDGameMode::CaptureCheckpoint(int32 WavesCleared) const
 	Save->LevelName = UGameplayStatics::GetCurrentLevelName(this, true);
 	Save->TerrainSeed = Terrain ? Terrain->Seed : 0;
 	Save->WavesCleared = WavesCleared;
+	Save->bResumeAtCurrentWave = bResumeAtCurrentWave;
 	Save->Loot = Resources;
 	Save->BeamUpgradeLevel = BeamUpgradeLevel;
 	Save->DefendersPlaced = MatchDefendersPlaced;
@@ -44,18 +43,31 @@ UTDSaveGame* ATDGameMode::CaptureCheckpoint(int32 WavesCleared) const
 	return Save;
 }
 
-void ATDGameMode::WriteCheckpoint(int32 WavesCleared)
+void ATDGameMode::WriteCheckpoint(int32 WavesCleared, bool bResumeAtCurrentWave)
 {
 	UTDSaveSubsystem* Saves = GetGameInstance() ? GetGameInstance()->GetSubsystem<UTDSaveSubsystem>() : nullptr;
-	if (!Saves || !Terrain || !Tower || WavesCleared <= 0)
+	if (!Saves || !Terrain || !Tower || WavesCleared < 0)
 	{
 		return;
 	}
-	LastCheckpoint = CaptureCheckpoint(WavesCleared);
+	LastCheckpoint = CaptureCheckpoint(WavesCleared, bResumeAtCurrentWave);
 	if (Saves->WriteSave(LastCheckpoint) && WarningBannerWidget)
 	{
 		WarningBannerWidget->ShowWarning(TEXT("Progress saved"));
 	}
+}
+
+void ATDGameMode::SaveCurrentWaveCheckpoint()
+{
+	if (WaveManager)
+	{
+		WriteCheckpoint(FMath::Max(0, WaveManager->GetCurrentWave() - 1), true);
+	}
+}
+
+void ATDGameMode::HandleWaveStartedForCheckpoint(int32 WaveNumber)
+{
+	WriteCheckpoint(FMath::Max(0, WaveNumber - 1), true);
 }
 
 void ATDGameMode::WriteMatchFinishedSave()
@@ -80,12 +92,12 @@ void ATDGameMode::SaveGameNow()
 	{
 		return;
 	}
-	// Mid-wave this writes the last wave-end checkpoint rather than a half-finished wave.
+	// This writes the last consistent checkpoint and restarts its wave from the beginning.
 	if (!LastCheckpoint)
 	{
 		if (WarningBannerWidget)
 		{
-			WarningBannerWidget->ShowWarning(TEXT("Clear a wave first - the game saves at the end of each wave"));
+			WarningBannerWidget->ShowWarning(TEXT("The current wave has not been saved yet"));
 		}
 		return;
 	}
@@ -105,6 +117,7 @@ void ATDGameMode::ApplyResumeSave(UTDSaveGame* Save)
 	if (UTDMetaProgressionSubsystem* Meta = GetGameInstance()->GetSubsystem<UTDMetaProgressionSubsystem>())
 	{
 		Meta->SetWallet(Save->Wallet);
+		Meta->ClearPendingUpgrades();
 	}
 	Resources = FMath::Max(0, Save->Loot);
 	OnResourcesChanged.Broadcast(Resources);
@@ -124,10 +137,10 @@ void ATDGameMode::ApplyResumeSave(UTDSaveGame* Save)
 			Health->ApplyDamage(FMath::Min(DamageTaken, Health->GetCurrentHealth() - 1.0f));
 		}
 	};
-	RestoreDamage(Tower->HealthComponent, Save->TowerDamageTaken);
-
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	TArray<TPair<UHealthComponent*, float>> SavedDamage;
+	SavedDamage.Emplace(Tower->HealthComponent, Save->TowerDamageTaken);
 	for (const FTDSavedDefender& Entry : Save->Defenders)
 	{
 		UClass* DefenderClass = Entry.DefenderClass.TryLoadClass<ADefender>();
@@ -141,7 +154,7 @@ void ATDGameMode::ApplyResumeSave(UTDSaveGame* Save)
 		{
 			Defender->SetOccupiedSlot(Entry.SlotLocation);
 			Terrain->SetSlotOccupied(Entry.SlotLocation, true);
-			RestoreDamage(Defender->HealthComponent, Entry.DamageTaken);
+			SavedDamage.Emplace(Defender->HealthComponent, Entry.DamageTaken);
 		}
 	}
 
@@ -149,26 +162,91 @@ void ATDGameMode::ApplyResumeSave(UTDSaveGame* Save)
 	{
 		DefenderUpgrades->RestoreSaveState(Save->UpgradePhases, Save->UpgradeSecondsLeft);
 	}
+	for (const TPair<UHealthComponent*, float>& Entry : SavedDamage)
+	{
+		RestoreDamage(Entry.Key, Entry.Value);
+	}
 
 	LastCheckpoint = Save;
 	RefreshMetaHUD();
 	UE_LOG(LogTemp, Display, TEXT("TDSave: resumed after wave %d with %d defenders."), Save->WavesCleared, Save->Defenders.Num());
 
-	// Same as pressing Next Wave on the results screen of the saved wave.
+	// A wave-start checkpoint restarts that wave as-is; an end-of-wave checkpoint advances once.
 	WaveManager->SetCompletedWaves(Save->WavesCleared);
-	ContinueToNextWave();
+	if (Save->bResumeAtCurrentWave)
+	{
+		WaveManager->ContinueToNextWave();
+	}
+	else
+	{
+		ContinueToNextWave();
+	}
 }
 
 void UDefenderUpgradeComponent::GetSaveState(TArray<uint8>& OutPhases, TArray<float>& OutSecondsLeft) const
 {
 	for (int32 Index = 0; Index < (int32)DefenderUpgrades::EUpgrade::Count; ++Index)
 	{
-		OutPhases.Add((uint8)DefenderUpgrades::EPhase::Ready);
-		OutSecondsLeft.Add(0.0f);
+		const DefenderUpgrades::EUpgrade Upgrade = (DefenderUpgrades::EUpgrade)Index;
+		const DefenderUpgrades::FSlot& Slot = Slots[Index];
+		const uint8 PendingBit = IsPending(Upgrade) ? 0x80 : 0;
+		OutPhases.Add((uint8)Slot.Phase | PendingBit);
+		OutSecondsLeft.Add((float)Slot.CooldownSecondsRemaining);
 	}
 }
 
-void UDefenderUpgradeComponent::RestoreSaveState(const TArray<uint8>&, const TArray<float>&)
+void UDefenderUpgradeComponent::RestoreSaveState(const TArray<uint8>& Phases, const TArray<float>& SecondsLeft)
 {
-	ResetTemporaryUpgradesForWaveEnd();
+	UWorld* World = GetWorld();
+	UTDMetaProgressionSubsystem* Meta = World && World->GetGameInstance()
+		? World->GetGameInstance()->GetSubsystem<UTDMetaProgressionSubsystem>()
+		: nullptr;
+	if (Meta)
+	{
+		Meta->ClearPendingUpgrades();
+	}
+
+	for (int32 Index = 0; Index < (int32)DefenderUpgrades::EUpgrade::Count; ++Index)
+	{
+		DefenderUpgrades::FSlot& Slot = Slots[Index];
+		if (World)
+		{
+			World->GetTimerManager().ClearTimer(Slot.CooldownTimer);
+		}
+
+		const uint8 EncodedPhase = Phases.IsValidIndex(Index) ? Phases[Index] : (uint8)DefenderUpgrades::EPhase::Ready;
+		const uint8 PhaseValue = EncodedPhase & 0x7f;
+		Slot.Phase = PhaseValue <= (uint8)DefenderUpgrades::EPhase::DisabledAfterWave
+			? (DefenderUpgrades::EPhase)PhaseValue
+			: DefenderUpgrades::EPhase::Ready;
+		Slot.CooldownSecondsRemaining = SecondsLeft.IsValidIndex(Index)
+			? FMath::Max(0, FMath::RoundToInt(SecondsLeft[Index]))
+			: 0;
+
+		if ((EncodedPhase & 0x80) != 0 && Meta)
+		{
+			Meta->AddPendingUpgrade(Index);
+		}
+
+		if (Slot.Phase == DefenderUpgrades::EPhase::Active)
+		{
+			TArray<AActor*> Targets;
+			GatherTargets((DefenderUpgrades::EUpgrade)Index, Targets);
+			StartActive((DefenderUpgrades::EUpgrade)Index, Targets);
+		}
+		else if (Slot.CooldownSecondsRemaining > 0 && World)
+		{
+			const int32 UpgradeIndex = Index;
+			World->GetTimerManager().SetTimer(
+				Slot.CooldownTimer,
+				FTimerDelegate::CreateWeakLambda(this, [this, UpgradeIndex]()
+				{
+					TickUpgradeCooldown(UpgradeIndex);
+				}),
+				1.0f,
+				true);
+		}
+	}
+	ActivatePendingUpgrades();
+	RefreshUpgradeUI();
 }

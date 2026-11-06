@@ -65,7 +65,7 @@ ATDGameMode::ATDGameMode()
 	StartingMetaWallet.ForestEssence = 40;
 	StartingMetaWallet.WoodenMight = 30;
 	StartingMetaWallet.GemStones = 12;
-	StartingMetaWallet.LightLanterns = 20;
+	StartingMetaWallet.LightLanterns = 10;
 }
 
 void ATDGameMode::BeginPlay()
@@ -213,8 +213,11 @@ void ATDGameMode::BeginPlay()
 	}
 	if (ResumeSave)
 	{
-		// Replay the expansions that followed each cleared wave before the checkpoint.
-		for (int32 Expansion = 1; Expansion < ResumeSave->WavesCleared; ++Expansion)
+		// Rebuild the world expansions that existed when this checkpoint was captured.
+		const int32 ExpansionsToRestore = ResumeSave->bResumeAtCurrentWave
+			? ResumeSave->WavesCleared
+			: FMath::Max(0, ResumeSave->WavesCleared - 1);
+		for (int32 Expansion = 0; Expansion < ExpansionsToRestore; ++Expansion)
 		{
 			const int32 OldSlotCount = Terrain->GetDefenderSlots().Num();
 			if (Terrain->ExpandWorldAfterWave() > 0)
@@ -227,7 +230,10 @@ void ATDGameMode::BeginPlay()
 	//  Visual pass: tower crystals + activation burst (after validation, so they never affect it),
 	//  and looping forest ambience if that system has been created.
 	Tower->ActivateTowerVisuals();
-	DefenderUpgrades->ActivatePendingUpgrades(); //  a Tower upgrade bought in the Start-menu shop starts now
+	if (!ResumeSave)
+	{
+		DefenderUpgrades->ActivatePendingUpgrades(); //  a Tower upgrade bought in the Start-menu shop starts now
+	}
 	if (FPackageName::DoesPackageExist(ForestAmbienceVFX.ToSoftObjectPath().GetLongPackageName()))
 	{
 		TDVFX::Play(this, ForestAmbienceVFX, Tower->GetActorLocation() + FVector(0.0f, 0.0f, 300.0f), TDVFX::Turquoise);
@@ -252,6 +258,11 @@ void ATDGameMode::BeginPlay()
 		{
 			WaveManager->OnWaveStarted.AddDynamic(DefenderUpgrades, &UDefenderUpgradeComponent::HandleWaveStarted);
 		}
+		WaveManager->OnWaveStarted.AddDynamic(this, &ATDGameMode::HandleWaveStartedForCheckpoint);
+	}
+	if (!ResumeSave && WaveManager)
+	{
+		SaveCurrentWaveCheckpoint();
 	}
 
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
@@ -370,6 +381,11 @@ void ATDGameMode::ShowUpgradeInsufficientFundsWarning()
 
 void ATDGameMode::RestartGame()
 {
+	if (UTDSaveSubsystem* Saves = GetGameInstance() ? GetGameInstance()->GetSubsystem<UTDSaveSubsystem>() : nullptr)
+	{
+		Saves->StartNewGame();
+	}
+
 	bPaused = false;
 	bGameOver = false;
 	BeamUpgradeLevel = 0;

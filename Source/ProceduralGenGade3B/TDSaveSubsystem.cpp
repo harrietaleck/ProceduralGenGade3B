@@ -19,6 +19,11 @@ void UTDSaveSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     Super::Initialize(Collection);
     Collection.InitializeDependency<UTDMetaProgressionSubsystem>();
 
+    if (UTDMetaProgressionSubsystem* Meta = GetGameInstance()->GetSubsystem<UTDMetaProgressionSubsystem>())
+    {
+        Meta->OnMetaCurrencyChanged.AddUniqueDynamic(this, &UTDSaveSubsystem::HandleMetaCurrencyChanged);
+    }
+
     // Bring the meta currencies back after the application was closed.
     if (const UTDSaveGame* Save = LoadSave())
     {
@@ -42,10 +47,19 @@ UTDSaveGame* UTDSaveSubsystem::LoadSave() const
     // A corrupted, empty or older-format file loads as null or as the wrong class.
     UTDSaveGame* Save = Cast<UTDSaveGame>(UGameplayStatics::LoadGameFromSlot(SaveSlotName, SaveUserIndex));
 
-    if (!Save || Save->SaveVersion != UTDSaveGame::CurrentVersion)
+    if (!Save || Save->SaveVersion <= 0 || Save->SaveVersion > UTDSaveGame::CurrentVersion)
     {
         UE_LOG(LogTemp, Warning, TEXT("TDSave: save slot '%s' is unreadable or outdated and was ignored."), SaveSlotName);
         return nullptr;
+    }
+
+    if (Save->SaveVersion < UTDSaveGame::CurrentVersion)
+    {
+        // Version 1 checkpoints were captured after waves and must keep that resume behavior.
+        Save->UpgradePhases.Reset();
+        Save->UpgradeSecondsLeft.Reset();
+        Save->bResumeAtCurrentWave = false;
+        Save->SaveVersion = UTDSaveGame::CurrentVersion;
     }
 
     return Save;
@@ -70,6 +84,21 @@ bool UTDSaveSubsystem::WriteSave(UTDSaveGame* Save) const
         bSaved ? TEXT("wrote") : TEXT("FAILED to write"), SaveSlotName, Save->WavesCleared);
 
     return bSaved;
+}
+
+void UTDSaveSubsystem::HandleMetaCurrencyChanged()
+{
+    UTDSaveGame* Save = LoadSave();
+    if (!Save)
+    {
+        Save = NewObject<UTDSaveGame>(this);
+    }
+
+    if (const UTDMetaProgressionSubsystem* Meta = GetGameInstance()->GetSubsystem<UTDMetaProgressionSubsystem>())
+    {
+        Save->Wallet = Meta->GetWallet();
+        WriteSave(Save);
+    }
 }
 
 //  Return the persisted shared volume, defaulting to the manager's initial value.
@@ -202,28 +231,41 @@ void UTDSaveSubsystem::BindStartScreen(UWorld* World)
 
 void UTDSaveSubsystem::OnNewGameClicked()
 {
-    //  Clear any pending Resume request.
+    StartNewGame();
+}
+
+void UTDSaveSubsystem::StartNewGame()
+{
     bResumePending = false;
 
-    //  Reset all four permanent currencies to their starting values.
+    if (UTDMetaProgressionSubsystem* Meta = GetGameInstance()->GetSubsystem<UTDMetaProgressionSubsystem>())
+    {
+        Meta->ClearPendingUpgrades();
+    }
+
     FMetaCurrencyRewards StartingWallet;
     StartingWallet.ForestEssence = 40;
     StartingWallet.WoodenMight = 30;
     StartingWallet.GemStones = 12;
-    StartingWallet.LightLanterns = 20;
+    StartingWallet.LightLanterns = 10;
 
     if (UTDMetaProgressionSubsystem* Meta = GetGameInstance()->GetSubsystem<UTDMetaProgressionSubsystem>())
     {
-        //  Reset the live wallet.
         Meta->SetWallet(StartingWallet);
-
-        //  Update the saved wallet so the previous amounts aren't restored on next launch.
-        if (UTDSaveGame* Save = LoadSave())
-        {
-            Save->Wallet = StartingWallet;
-            WriteSave(Save);
-        }
     }
+
+    UTDSaveGame* Save = LoadSave();
+    if (!Save)
+    {
+        Save = NewObject<UTDSaveGame>(this);
+    }
+    Save->Wallet = StartingWallet;
+    Save->bHasMatch = false;
+    Save->WavesCleared = 0;
+    Save->bResumeAtCurrentWave = false;
+    Save->UpgradePhases.Reset();
+    Save->UpgradeSecondsLeft.Reset();
+    WriteSave(Save);
 }
 
 void UTDSaveSubsystem::OnResumeClicked()
