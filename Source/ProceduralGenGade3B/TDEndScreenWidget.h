@@ -126,6 +126,7 @@ private:
 
 	bool bPendingNextWave = false;
 	bool bPresentedVictory = false;
+	bool bHasPresentedResult = false;
 
 	UFUNCTION()
 	void OnRetryClicked();

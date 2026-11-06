@@ -140,7 +140,7 @@ bool ATDGameMode::TryUpgradeTowerBeam()
 	++BeamUpgradeLevel;
 	// Add rather than assign, so a running temporary tower upgrade is not overwritten.
 	Tower->AttackDamage += BeamUpgradeDamageBonus;
-	Tower->PlayUpgradeVFX(); // *** beam upgrade energy
+	Tower->PlayUpgradeVFX(); //  beam upgrade energy
 	RefreshMetaHUD();
 	return true;
 }
@@ -259,7 +259,7 @@ void ATDGameMode::FinalizeMatchResult(bool bVictory, int32 WavesClearedOverride)
 
 void ATDGameMode::HandleMatchVictory()
 {
-	if (bGameOver || bWaveResultsVisible)
+	if (bGameOver)
 	{
 		return;
 	}
@@ -268,9 +268,32 @@ void ATDGameMode::HandleMatchVictory()
 	{
 		MusicManager->PlayVictoryMusic();
 	}
-	FinalizeMatchResult(true);
+	if (!bWaveResultsVisible)
+	{
+		FinalizeMatchResult(true);
+	}
+
+	if (!bVictoryHealthRewardGranted)
+	{
+		if (UTDSaveSubsystem* Saves = GetGameInstance() ? GetGameInstance()->GetSubsystem<UTDSaveSubsystem>() : nullptr)
+		{
+			const float ScaledBonus = FMath::GetMappedRangeValueClamped(
+				FVector2D(0.0f, 10000.0f), FVector2D(20.0f, 100.0f), static_cast<float>(LastMatchResult.Score));
+			const int32 HealthBonus = FMath::RoundToInt(ScaledBonus);
+			if (Saves->AddTowerMaxHealthBonus(HealthBonus))
+			{
+				bVictoryHealthRewardGranted = true;
+				UE_LOG(LogTemp, Display, TEXT("Victory health upgrade: +%d Tower max HP for score %d."), HealthBonus, LastMatchResult.Score);
+			}
+		}
+	}
+
+	if (bWaveResultsVisible)
+	{
+		return;
+	}
 	ShowEndScreen(true);
-	PlayMatchVFX(VictoryVFX, TDVFX::Gold, 4.0f); // *** victory celebration
+	PlayMatchVFX(VictoryVFX, TDVFX::Gold, 4.0f); //  victory celebration
 }
 
 void ATDGameMode::NotifyTowerDestroyed()
@@ -297,6 +320,6 @@ void ATDGameMode::NotifyTowerDestroyed()
 	OnGameOver.Broadcast();
 	FinalizeMatchResult(false);
 	ShowEndScreen(false);
-	PlayMatchVFX(DefeatVFX, TDVFX::Corruption, 4.0f); // *** subtle dark defeat particles
+	PlayMatchVFX(DefeatVFX, TDVFX::Corruption, 4.0f); //  subtle dark defeat particles
 	UE_LOG(LogTemp, Display, TEXT("TDGameMode: GAME OVER - the tower was destroyed."));
 }

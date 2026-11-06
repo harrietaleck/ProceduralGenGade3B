@@ -12,8 +12,8 @@ class UHealthComponent;
 class UStaticMeshComponent;
 class AEnemy;
 class AProjectile;
-class UNiagaraSystem; // *** visual pass
-class UStaticMesh;    // *** projectile shapes
+class UNiagaraSystem; //  visual pass
+class UStaticMesh;    //  projectile shapes
 
 UCLASS()
 class PROCEDURALGENGADE3B_API ADefender : public AActor
@@ -59,7 +59,7 @@ public:
     float DefenderBallScale = 0.35f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender")
-    FLinearColor DefenderBallColor = FLinearColor(0.2f, 0.85f, 1.0f); // *** Basic: turquoise/blue light orbs (was orange)
+    FLinearColor DefenderBallColor = FLinearColor(0.2f, 0.85f, 1.0f); //  Basic: turquoise/blue light orbs (was orange)
 
     /** Where the shots start from, measured from the middle of the defender. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender")
@@ -92,7 +92,7 @@ public:
     /** Extra speed added to projectiles this defender fires. Used by temporary upgrades. */
     float ProjectileSpeedBonus = 0.0f;
 
-    // *** Visual pass: editable effect references. Colours follow DefenderBallColor, so each type differs.
+    //  Visual pass: editable effect references. Colours follow DefenderBallColor, so each type differs.
     /** Flash played every time this defender attacks. */
     UPROPERTY(EditAnywhere, Category = "Defender|VFX")
     TSoftObjectPtr<UNiagaraSystem> FireVFX;
@@ -101,13 +101,13 @@ public:
     UPROPERTY(EditAnywhere, Category = "Defender|VFX")
     TSoftObjectPtr<UNiagaraSystem> ActivationVFX;
 
-    /** *** Plays FireVFX in this defender's colour. Called by every attack type. */
+    /**  Plays FireVFX in this defender's colour. Called by every attack type. */
     void PlayFireVFX(const FVector& Location) const;
 
-    /** *** Plays ActivationVFX around the defender (placement and upgrades). */
+    /**  Plays ActivationVFX around the defender (placement and upgrades). */
     void PlayActivationVFX() const;
 
-    // *** Final polish: recognisable projectiles and the placement effect.
+    //  Final polish: recognisable projectiles and the placement effect.
     /** Projectile shape (+Z points forward). Empty = the default glowing orb. */
     UPROPERTY(EditAnywhere, Category = "Defender|VFX")
     TSoftObjectPtr<UStaticMesh> ProjectileShape;

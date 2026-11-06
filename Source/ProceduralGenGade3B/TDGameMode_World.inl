@@ -32,6 +32,14 @@ bool ATDGameMode::SpawnTowerWithRetry()
 			&& FVector::DistSquared(Tower->GetActorLocation(), TowerSpawnLocation) <= TowerPlacementToleranceSq;
 		if (Tower && bLocationMatches)
 		{
+			if (UTDSaveSubsystem* Saves = GetGameInstance() ? GetGameInstance()->GetSubsystem<UTDSaveSubsystem>() : nullptr)
+			{
+				const int32 HealthBonus = Saves->GetTowerMaxHealthBonus();
+				if (HealthBonus > 0 && Tower->HealthComponent)
+				{
+					Tower->HealthComponent->AdjustMaxHealth(static_cast<float>(HealthBonus));
+				}
+			}
 			BaseTowerAttackDamage = Tower->AttackDamage;
 			return true;
 		}
@@ -119,12 +127,12 @@ void ATDGameMode::HandleWaveComplete(int32 WaveNumber)
 	if (bFinalWave)
 	{
 		WriteMatchFinishedSave();
-		PlayMatchVFX(VictoryVFX, TDVFX::Gold, 4.0f); // *** victory celebration
+		PlayMatchVFX(VictoryVFX, TDVFX::Gold, 4.0f); //  victory celebration
 	}
 	else
 	{
 		WriteCheckpoint(WaveNumber);
-		PlayMatchVFX(WaveTransitionVFX, TDVFX::Turquoise, 2.0f); // *** wave transition
+		PlayMatchVFX(WaveTransitionVFX, TDVFX::Turquoise, 2.0f); //  wave transition
 	}
 
 	if (bFinalWave && WaveManager)

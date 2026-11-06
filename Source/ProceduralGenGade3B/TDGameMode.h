@@ -22,7 +22,7 @@ class UUserWidget;
 class UButton;
 class UDefenderUpgradeComponent;
 class UTDSaveGame;
-class UNiagaraSystem; // *** visual pass
+class UNiagaraSystem; //  visual pass
 
 // Fires whenever the player's resources change. The UI listens to this.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnResourcesChanged, int32, NewAmount);
@@ -80,7 +80,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<UUserWidget> SettingsWidgetClass;
 
-	// *** Visual pass: match-level effects, played at the tower. Swappable in the editor.
+	//  Visual pass: match-level effects, played at the tower. Swappable in the editor.
 	UPROPERTY(EditDefaultsOnly, Category = "Rules|VFX")
 	TSoftObjectPtr<UNiagaraSystem> WaveTransitionVFX;
 
@@ -323,7 +323,7 @@ private:
 	void WriteMatchFinishedSave();
 	void ApplyResumeSave(UTDSaveGame* Save);
 
-	/** *** Plays a match-level effect at the tower. */
+	/**  Plays a match-level effect at the tower. */
 	void PlayMatchVFX(const TSoftObjectPtr<UNiagaraSystem>& System, const FLinearColor& Color, float Lifetime) const;
 
 	FTimerHandle MenuStretchTimerHandle;
@@ -372,6 +372,7 @@ private:
 	FMetaCurrencyRewards PaidMatchRewards;
 
 	bool bWaveResultsVisible = false;
+	bool bVictoryHealthRewardGranted = false;
 
 	int32 BeamUpgradeLevel = 0;
 	float BaseTowerAttackDamage = 0.0f;

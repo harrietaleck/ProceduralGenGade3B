@@ -13,8 +13,8 @@ class UPointLightComponent;
 class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
 class ADefender;
-class UNiagaraSystem;     // *** visual pass
-class UMaterialInterface; // ***
+class UNiagaraSystem;     //  visual pass
+class UMaterialInterface; // 
 
 // The kind of loot an enemy drops.
 UENUM(BlueprintType)
@@ -209,7 +209,7 @@ public:
     FLinearColor SpawnGlowColor =
         FLinearColor(0.15f, 0.9f, 1.0f);
 
-    // *** Visual pass: editable effect/material references (swap them in the editor, no code needed).
+    //  Visual pass: editable effect/material references (swap them in the editor, no code needed).
     /** Dark magical burst when the enemy appears. */
     UPROPERTY(EditAnywhere, Category = "Enemy|VFX")
     TSoftObjectPtr<UNiagaraSystem> SpawnVFX;

@@ -14,7 +14,7 @@ ATDMusicManager::ATDMusicManager()
     RootComponent = MusicAudio;
 
     MusicAudio->bAutoActivate = false;
-    // *** Keep music audible through SetGamePaused and prevent parallel instances.
+    //  Keep music audible through SetGamePaused and prevent parallel instances.
     MusicAudio->bIsUISound = true;
     MusicAudio->bCanPlayMultipleInstances = false;
     MusicAudio->OnAudioFinished.AddDynamic(this, &ATDMusicManager::HandleMusicFinished);

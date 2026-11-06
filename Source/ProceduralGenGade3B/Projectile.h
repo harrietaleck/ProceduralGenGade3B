@@ -9,10 +9,10 @@
 #include "Projectile.generated.h"
 
 class UStaticMeshComponent;
-class UStaticMesh;         // *** projectile shapes
-class UNiagaraComponent;   // *** visual pass
-class UNiagaraSystem;      // ***
-class UMaterialInterface;  // ***
+class UStaticMesh;         //  projectile shapes
+class UNiagaraComponent;   //  visual pass
+class UNiagaraSystem;      // 
+class UMaterialInterface;  // 
 
 UCLASS()
 class PROCEDURALGENGADE3B_API AProjectile : public AActor
@@ -42,7 +42,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile")
 	FLinearColor ProjectileColor = FLinearColor(1.0f, 0.82f, 0.2f);
 
-	// *** Visual pass: editable effect/material references (swap them in the editor, no code needed).
+	//  Visual pass: editable effect/material references (swap them in the editor, no code needed).
 	/** Glowing trail attached while the projectile flies. */
 	UPROPERTY(EditAnywhere, Category = "Projectile|VFX")
 	TSoftObjectPtr<UNiagaraSystem> TrailVFX;
@@ -67,8 +67,8 @@ public:
 	void ConfigureVisuals(float InVisualScale, FLinearColor InColor);
 
 	/**
-	 * *** Optional shape for this shot (e.g. an arrow or a spear). The mesh's +Z points along the flight
-	 * *** direction; ShapeScale stretches it on top of VisualScale. A set ImpactOverride replaces ImpactVFX.
+	 *  Optional shape for this shot (e.g. an arrow or a spear). The mesh's +Z points along the flight
+	 *  direction; ShapeScale stretches it on top of VisualScale. A set ImpactOverride replaces ImpactVFX.
 	 */
 	void ConfigureShape(UStaticMesh* InMesh, const FVector& InShapeScale, const TSoftObjectPtr<UNiagaraSystem>& ImpactOverride);
 
@@ -107,11 +107,11 @@ private:
 	UPROPERTY()
 	TObjectPtr<class UMaterialInstanceDynamic> CachedDynMat;
 
-	/** *** Per-shot shape stretch and whether the mesh's +Z (not +X) should face the flight direction. */
+	/**  Per-shot shape stretch and whether the mesh's +Z (not +X) should face the flight direction. */
 	FVector ShapeScale = FVector::OneVector;
 	bool bPointAlongFlight = false;
 
-	/** *** The attached trail, so ConfigureVisuals recolours it instead of spawning a second one. */
+	/**  The attached trail, so ConfigureVisuals recolours it instead of spawning a second one. */
 	UPROPERTY()
 	TObjectPtr<UNiagaraComponent> TrailComponent;
 };

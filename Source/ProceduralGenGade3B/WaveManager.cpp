@@ -17,6 +17,26 @@ AWaveManager::AWaveManager()
 	EnsureDefaultWaveTable();
 }
 
+void AWaveManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	StopWaves();
+
+	for (const FTrackedEnemy& Tracked : TrackedEnemies)
+	{
+		if (AEnemy* Enemy = Tracked.Enemy.Get())
+		{
+			Enemy->OnSplit.RemoveDynamic(this, &AWaveManager::HandleEnemySplit);
+			if (UHealthComponent* Health = Enemy->HealthComponent)
+			{
+				Health->OnDeath.RemoveDynamic(this, &AWaveManager::HandleTrackedEnemyDeath);
+			}
+		}
+	}
+	TrackedEnemies.Reset();
+
+	Super::EndPlay(EndPlayReason);
+}
+
 void AWaveManager::EnsureDefaultWaveTable()
 {
 	// Backup table that is only used when the adaptive director is turned off.
@@ -319,9 +339,9 @@ void AWaveManager::TrackEnemy(AEnemy* Enemy, float SpawnTime, float ExpectedTrav
 {
 	if (UHealthComponent* Health = Enemy->HealthComponent)
 	{
-		Health->OnDeath.AddDynamic(this, &AWaveManager::HandleTrackedEnemyDeath);
+		Health->OnDeath.AddUniqueDynamic(this, &AWaveManager::HandleTrackedEnemyDeath);
 	}
-	Enemy->OnSplit.AddDynamic(this, &AWaveManager::HandleEnemySplit);
+	Enemy->OnSplit.AddUniqueDynamic(this, &AWaveManager::HandleEnemySplit);
 
 	FTrackedEnemy Tracked;
 	Tracked.Enemy = Enemy;

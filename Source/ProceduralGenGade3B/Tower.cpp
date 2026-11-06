@@ -14,9 +14,9 @@
 #include "Kismet/GameplayStatics.h"
 #include "Particles/ParticleSystem.h"
 #include "UObject/ConstructorHelpers.h"
-#include "TDVFX.h" // *** visual pass
-#include "Materials/MaterialInterface.h" // ***
-#include "Materials/MaterialInstanceDynamic.h" // *** emerald beam
+#include "TDVFX.h" //  visual pass
+#include "Materials/MaterialInterface.h" // 
+#include "Materials/MaterialInstanceDynamic.h" //  emerald beam
 
 ATower::ATower()
 {
@@ -39,7 +39,7 @@ ATower::ATower()
 
 	ProjectileClass = AProjectile::StaticClass();
 
-	// *** Default visual-pass assets; all of them can be swapped in the editor.
+	//  Default visual-pass assets; all of them can be swapped in the editor.
 	FireVFX = TDVFX::Asset(TEXT("/Game/VFX/Towers/NS_TowerFire"));
 	UpgradeVFX = TDVFX::Asset(TEXT("/Game/VFX/Towers/NS_TowerUpgrade"));
 	BeamMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/Materials/Instances/MI_Beam_Gold.MI_Beam_Gold")));
@@ -50,8 +50,8 @@ ATower::ATower()
 	}
 }
 
-// *** Runs after the world is validated, so these extra components never affect the tower's
-// *** placement/overlap check. No collision and no shadows keep them cheap.
+//  Runs after the world is validated, so these extra components never affect the tower's
+//  placement/overlap check. No collision and no shadows keep them cheap.
 void ATower::ActivateTowerVisuals()
 {
 	UStaticMesh* Cone = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone"));
@@ -83,14 +83,14 @@ void ATower::ActivateTowerVisuals()
 
 void ATower::PlayUpgradeVFX() const
 {
-	TDVFX::Play(this, UpgradeVFX, GetActorLocation(), TDVFX::Gold, 2.0f); // *** stops after 2 s even if the system loops
+	TDVFX::Play(this, UpgradeVFX, GetActorLocation(), TDVFX::Gold, 2.0f); //  stops after 2 s even if the system loops
 }
 
 void ATower::ShowBeam(const FVector& From, const FVector& To)
 {
 	if (!BeamMesh)
 	{
-		// *** Created on the first shot (after world validation) and reused for every later shot.
+		//  Created on the first shot (after world validation) and reused for every later shot.
 		UMaterialInterface* Material = BeamMaterial.LoadSynchronous();
 		if (!Material)
 		{
@@ -98,8 +98,8 @@ void ATower::ShowBeam(const FVector& From, const FVector& To)
 		}
 		BeamMesh = NewObject<UStaticMeshComponent>(this, TEXT("BeamMesh"));
 		BeamMesh->SetStaticMesh(MeshComponent->GetStaticMesh());
-		// *** Emerald beam: one dynamic instance per tower (created once) recolours the existing
-		// *** M_TowerBeam instance, keeping its bright soft-edged centre and scrolling energy.
+		//  Emerald beam: one dynamic instance per tower (created once) recolours the existing
+		//  M_TowerBeam instance, keeping its bright soft-edged centre and scrolling energy.
 		UMaterialInstanceDynamic* BeamMID = UMaterialInstanceDynamic::Create(Material, this);
 		BeamMID->SetVectorParameterValue(TEXT("BeamColor"), BeamColor);
 		BeamMID->SetScalarParameterValue(TEXT("EmissiveIntensity"), BeamIntensity);
@@ -163,8 +163,8 @@ void ATower::FireAtNearestEnemy()
 	}
 
 	const FVector MuzzleLocation = GetActorLocation() + MuzzleOffset;
-	TDVFX::Play(this, FireVFX, MuzzleLocation, TDVFX::Gold); // *** muzzle flash
-	ShowBeam(MuzzleLocation, Target->GetActorLocation());     // *** short golden energy beam
+	TDVFX::Play(this, FireVFX, MuzzleLocation, TDVFX::Gold); //  muzzle flash
+	ShowBeam(MuzzleLocation, Target->GetActorLocation());     //  short golden energy beam
 
 	if (ProjectileClass)
 	{

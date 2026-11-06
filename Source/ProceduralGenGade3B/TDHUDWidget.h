@@ -100,6 +100,10 @@ public:
 
     TObjectPtr<UTextBlock> DefenderModeText;
 
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+
+    TObjectPtr<UTextBlock> DefendersCountdown;
+
     /** Optional pause button on the match HUD. */
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))

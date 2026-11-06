@@ -32,8 +32,8 @@ public:
     /** Replaces the whole wallet. Used when a save is loaded. */
     void SetWallet(const FMetaCurrencyRewards& NewWallet);
 
-    // *** Defender upgrades bought while no matching unit is on the field (e.g. from the Start-menu
-    // *** shop). They are already paid for and activate when that unit type is first placed.
+    //  Defender upgrades bought while no matching unit is on the field (e.g. from the Start-menu
+    //  shop). They are already paid for and activate when that unit type is first placed.
     void AddPendingUpgrade(int32 Index) { PendingUpgrades |= (1u << Index); }
     bool IsUpgradePending(int32 Index) const { return (PendingUpgrades & (1u << Index)) != 0; }
 
@@ -48,5 +48,5 @@ private:
     UPROPERTY()
     FMetaCurrencyRewards Wallet;
 
-    uint32 PendingUpgrades = 0; // *** one bit per upgrade (Basic, Archer, Poison, Strong, Tower)
+    uint32 PendingUpgrades = 0; //  one bit per upgrade (Basic, Archer, Poison, Strong, Tower)
 };

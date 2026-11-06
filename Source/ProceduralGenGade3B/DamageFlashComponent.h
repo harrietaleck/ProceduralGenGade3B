@@ -19,14 +19,16 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	UFUNCTION()
 	void OnHealthChanged(float CurrentHealth, float MaxHealth);
 
 	void PlayDamageFlash();
+	void ResetDamageFlash();
 
-	UPROPERTY()
-	TObjectPtr<UStaticMeshComponent> Mesh;
+	TWeakObjectPtr<UStaticMeshComponent> Mesh;
+	TWeakObjectPtr<UHealthComponent> HealthComponent;
 
 	FVector BaseScale = FVector::OneVector;
 	float LastHealth = -1.0f;

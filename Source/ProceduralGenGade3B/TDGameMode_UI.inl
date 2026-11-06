@@ -1,4 +1,4 @@
-﻿// TDGameMode_UI.inl - settings, pause and end screen widgets.
+// TDGameMode_UI.inl - settings, pause and end screen widgets.
 // This file is included by TDGameMode.cpp and is not compiled on its own.
 
 void ATDGameMode::BindSettingsButtons()
@@ -50,7 +50,7 @@ void ATDGameMode::BindSettingsButtons()
 				USlider* VolumeSlider = Cast<USlider>(Screen->GetWidgetFromName(TEXT("MusicSlider")));
 				if (VolumeSlider)
 				{
-					// *** Keep the Blueprint range normalized to SetMusicVolume's 0-1 contract.
+					//  Keep the Blueprint range normalized to SetMusicVolume's 0-1 contract.
 					VolumeSlider->SetMinValue(0.0f);
 					VolumeSlider->SetMaxValue(1.0f);
 					VolumeSlider->SetValue(MusicManager->GetMusicVolume());
@@ -86,22 +86,12 @@ void ATDGameMode::BindVictoryScreenButtons()
 		}
 		Button->SetIsEnabled(true);
 		Button->SetVisibility(ESlateVisibility::Visible);
-		if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Button->Slot))
-		{
-			const FVector2D Size = CanvasSlot->GetSize();
-			if (Size.X <= 1.0f || Size.Y <= 1.0f || Size.X > 450.0f || Size.Y > 180.0f)
-			{
-				CanvasSlot->SetAutoSize(false);
-				CanvasSlot->SetSize(FVector2D(240.0f, 72.0f));
-			}
-			CanvasSlot->SetZOrder(100);
-		}
 	};
 
 	if (UButton* Retry = Cast<UButton>(VictoryScreenWidget->GetWidgetFromName(TEXT("RetryButton"))))
 	{
 		Retry->OnClicked.Clear();
-		Retry->OnClicked.AddDynamic(this, &ATDGameMode::RetryCurrentWave);
+		Retry->OnClicked.AddDynamic(this, &ATDGameMode::RestartGame);
 		PrepareButton(Retry);
 	}
 	if (UButton* Next = Cast<UButton>(VictoryScreenWidget->GetWidgetFromName(TEXT("NextWaveButton"))))
@@ -244,7 +234,7 @@ void ATDGameMode::ResumeFromSettings()
 	UGameplayStatics::SetGamePaused(this, false);
 	if (ATDMusicManager* MusicManager = ATDMusicManager::GetOrCreate(this))
 	{
-		// *** Persist the last selected value without restarting the music on resume.
+		//  Persist the last selected value without restarting the music on resume.
 		MusicManager->PersistMusicVolume();
 	}
 

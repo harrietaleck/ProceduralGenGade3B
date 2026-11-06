@@ -9,6 +9,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Engine/TimerHandle.h"
+#include "Styling/SlateTypes.h"
 #include "DefenderUpgradeComponent.generated.h"
 
 class ADefender;
@@ -34,13 +35,21 @@ namespace DefenderUpgrades
 
 	struct FSlot
 	{
+		struct FTextColor
+		{
+			TWeakObjectPtr<UTextBlock> Widget;
+			FSlateColor OriginalColor;
+		};
+
 		EPhase Phase = EPhase::Ready;
 		FTimerHandle PhaseTimer;
 		TArray<FBoost> Boosts;
 		TWeakObjectPtr<UButton> Button;
+		FButtonStyle OriginalButtonStyle;
+		TArray<FTextColor> OriginalTextColors;
 		TWeakObjectPtr<UTextBlock> Label;
-		TWeakObjectPtr<UTextBlock> StatsLabel; // *** current and upgraded stats shown under the button
-		double NoTargetUntil = 0.0;            // *** world time until which "No units" is shown
+		TWeakObjectPtr<UTextBlock> StatsLabel; //  current and upgraded stats shown under the button
+		double NoTargetUntil = 0.0;            //  world time until which "No units" is shown
 	};
 }
 
@@ -61,17 +70,20 @@ public:
 	/** Gives a newly placed defender any upgrade that is active for its type. */
 	void HandleDefenderSpawned(ADefender* Defender);
 
+	/** Starts and immediately refreshes the match HUD countdown once the HUD exists. */
+	void StartHudCountdownUpdates();
+
 	/** Phase (0 Ready, 1 Active, 2 Cooldown) and seconds left of each upgrade, for save games. */
 	void GetSaveState(TArray<uint8>& OutPhases, TArray<float>& OutSecondsLeft) const;
 
 	/** Restores saved phases and timers; active boosts are re-applied without charging again. */
 	void RestoreSaveState(const TArray<uint8>& Phases, const TArray<float>& SecondsLeft);
 
-	/** *** Starts any already-paid (queued) upgrade whose unit is now on the field, e.g. the Tower at match start. */
+	/**  Starts any already-paid (queued) upgrade whose unit is now on the field, e.g. the Tower at match start. */
 	void ActivatePendingUpgrades();
 
 protected:
-	virtual void BeginPlay() override; // *** starts the HUD upgrade countdown timer
+	virtual void BeginPlay() override; //  starts the HUD upgrade countdown timer
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
@@ -95,13 +107,17 @@ private:
 	void OnTowerClicked();
 
 	UFUNCTION()
+	void HandleMetaCurrencyChanged();
+
+	UFUNCTION()
 	void CloseScreen();
 
 	void BindScreen(UUserWidget* Screen);
-	// *** One helper now creates both the countdown label and the stats label on a button.
+	void ClearScreenBindings();
+	//  One helper now creates both the countdown label and the stats label on a button.
 	UTextBlock* CreateButtonLabel(UUserWidget* Screen, UButton* Button, const TCHAR* Suffix, int32 FontSize,
 		FVector2D Pivot, FVector2D Alignment, FVector2D PixelOffset) const;
-	FString DescribeStats(DefenderUpgrades::EUpgrade Upgrade) const; // *** live stats, or class defaults if none spawned
+	FString DescribeStats(DefenderUpgrades::EUpgrade Upgrade) const; //  live stats, or class defaults if none spawned
 	void TryActivate(DefenderUpgrades::EUpgrade Upgrade);
 	void EndActive(DefenderUpgrades::EUpgrade Upgrade);
 	void EndCooldown(DefenderUpgrades::EUpgrade Upgrade);
@@ -113,10 +129,9 @@ private:
 	bool Spend(DefenderUpgrades::EUpgrade Upgrade) const;
 	ATDGameMode* GetGameMode() const;
 
-	// *** Final polish pass: queued purchases and the HUD countdown (DefenderUpgradeComponent_Extra.inl).
+	//  Final polish pass: queued purchases and the HUD countdown (DefenderUpgradeComponent_Extra.inl).
 	void StartActive(DefenderUpgrades::EUpgrade Upgrade, const TArray<AActor*>& Targets);
 	bool IsPending(DefenderUpgrades::EUpgrade Upgrade) const;
 	void UpdateHudCountdown();
 	FTimerHandle CountdownTimer;
-	TWeakObjectPtr<UTextBlock> CountdownLabel;
 };

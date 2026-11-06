@@ -22,8 +22,9 @@ void UTDSaveSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     // Bring the meta currencies back after the application was closed.
     if (const UTDSaveGame* Save = LoadSave())
     {
-        // *** Restore the shared music level from the existing persistent save slot.
+        //  Restore the shared music level from the existing persistent save slot.
         MusicVolume = FMath::Clamp(Save->MusicVolume, 0.0f, 1.0f);
+        TowerMaxHealthBonus = FMath::Max(0, Save->TowerMaxHealthBonus);
         if (UTDMetaProgressionSubsystem* Meta = GetGameInstance()->GetSubsystem<UTDMetaProgressionSubsystem>())
         {
             Meta->SetWallet(Save->Wallet);
@@ -59,8 +60,9 @@ bool UTDSaveSubsystem::WriteSave(UTDSaveGame* Save) const
 
     Save->SaveVersion = UTDSaveGame::CurrentVersion;
     Save->SavedAt = FDateTime::Now();
-    // *** Carry the selected volume through every match checkpoint and wallet save.
+    //  Carry the selected volume through every match checkpoint and wallet save.
     Save->MusicVolume = MusicVolume;
+    Save->TowerMaxHealthBonus = TowerMaxHealthBonus;
 
     const bool bSaved = UGameplayStatics::SaveGameToSlot(Save, SaveSlotName, SaveUserIndex);
 
@@ -70,13 +72,13 @@ bool UTDSaveSubsystem::WriteSave(UTDSaveGame* Save) const
     return bSaved;
 }
 
-// *** Return the persisted shared volume, defaulting to the manager's initial value.
+//  Return the persisted shared volume, defaulting to the manager's initial value.
 float UTDSaveSubsystem::GetMusicVolume() const
 {
     return MusicVolume;
 }
 
-// *** Reuse the current save object so a volume change cannot discard match progress.
+//  Reuse the current save object so a volume change cannot discard match progress.
 bool UTDSaveSubsystem::SaveMusicVolume(float NewVolume)
 {
     MusicVolume = FMath::Clamp(NewVolume, 0.0f, 1.0f);
@@ -90,6 +92,32 @@ bool UTDSaveSubsystem::SaveMusicVolume(float NewVolume)
         }
     }
 
+    return WriteSave(Save);
+}
+
+int32 UTDSaveSubsystem::GetTowerMaxHealthBonus() const
+{
+    return TowerMaxHealthBonus;
+}
+
+bool UTDSaveSubsystem::AddTowerMaxHealthBonus(int32 Bonus)
+{
+    if (Bonus <= 0)
+    {
+        return false;
+    }
+
+    UTDSaveGame* Save = LoadSave();
+    if (!Save)
+    {
+        Save = NewObject<UTDSaveGame>(this);
+        if (UTDMetaProgressionSubsystem* Meta = GetGameInstance()->GetSubsystem<UTDMetaProgressionSubsystem>())
+        {
+            Save->Wallet = Meta->GetWallet();
+        }
+    }
+
+    TowerMaxHealthBonus += Bonus;
     return WriteSave(Save);
 }
 
@@ -174,10 +202,10 @@ void UTDSaveSubsystem::BindStartScreen(UWorld* World)
 
 void UTDSaveSubsystem::OnNewGameClicked()
 {
-    // *** Clear any pending Resume request.
+    //  Clear any pending Resume request.
     bResumePending = false;
 
-    // *** Reset all four permanent currencies to their starting values.
+    //  Reset all four permanent currencies to their starting values.
     FMetaCurrencyRewards StartingWallet;
     StartingWallet.ForestEssence = 40;
     StartingWallet.WoodenMight = 30;
@@ -186,10 +214,10 @@ void UTDSaveSubsystem::OnNewGameClicked()
 
     if (UTDMetaProgressionSubsystem* Meta = GetGameInstance()->GetSubsystem<UTDMetaProgressionSubsystem>())
     {
-        // *** Reset the live wallet.
+        //  Reset the live wallet.
         Meta->SetWallet(StartingWallet);
 
-        // *** Update the saved wallet so the previous amounts aren't restored on next launch.
+        //  Update the saved wallet so the previous amounts aren't restored on next launch.
         if (UTDSaveGame* Save = LoadSave())
         {
             Save->Wallet = StartingWallet;

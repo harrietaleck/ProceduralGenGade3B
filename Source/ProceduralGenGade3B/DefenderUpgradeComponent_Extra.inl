@@ -4,8 +4,24 @@
 void UDefenderUpgradeComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	// Timer, not Tick. World timers pause with the game, so the countdown freezes and resumes with it.
-	GetWorld()->GetTimerManager().SetTimer(CountdownTimer, this, &UDefenderUpgradeComponent::UpdateHudCountdown, 0.2f, true);
+	if (UGameInstance* GameInstance = GetWorld() ? GetWorld()->GetGameInstance() : nullptr)
+	{
+		if (UTDMetaProgressionSubsystem* Meta = GameInstance->GetSubsystem<UTDMetaProgressionSubsystem>())
+		{
+			Meta->OnMetaCurrencyChanged.AddUniqueDynamic(this, &UDefenderUpgradeComponent::HandleMetaCurrencyChanged);
+		}
+	}
+}
+
+void UDefenderUpgradeComponent::StartHudCountdownUpdates()
+{
+	UpdateHudCountdown();
+	if (UWorld* World = GetWorld())
+	{
+		// Reuse this handle so initialization cannot create a second countdown timer.
+		World->GetTimerManager().SetTimer(
+			CountdownTimer, this, &UDefenderUpgradeComponent::UpdateHudCountdown, 1.0f, true);
+	}
 }
 
 bool UDefenderUpgradeComponent::IsPending(EUpgrade Upgrade) const
@@ -50,66 +66,63 @@ void UDefenderUpgradeComponent::ActivatePendingUpgrades()
 	}
 }
 
-// Bottom-right HUD countdown (MM:SS) for the upgrade whose active time or cooldown ends next.
 void UDefenderUpgradeComponent::UpdateHudCountdown()
 {
 	const ATDGameMode* GameMode = GetGameMode();
 	UTDHUDWidget* Hud = GameMode ? GameMode->GetMatchHUDWidget() : nullptr;
-	if (!Hud || !Hud->WidgetTree)
+	if (!Hud || !Hud->DefendersCountdown)
 	{
-		return; // Start menu: no match HUD.
-	}
-
-	UTextBlock* Label = CountdownLabel.Get();
-	if (!Label)
-	{
-		UCanvasPanel* Canvas = nullptr;
-		Hud->WidgetTree->ForEachWidget([&Canvas](UWidget* Widget) { if (!Canvas) { Canvas = Cast<UCanvasPanel>(Widget); } });
-		if (!Canvas)
-		{
-			return;
-		}
-		Label = Hud->WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("UpgradeCountdown"));
-		UCanvasPanelSlot* LabelSlot = Canvas->AddChildToCanvas(Label);
-		LabelSlot->SetAnchors(FAnchors(1.0f, 1.0f));
-		LabelSlot->SetAlignment(FVector2D(1.0f, 1.0f));
-		LabelSlot->SetPosition(FVector2D(-40.0f, -40.0f));
-		LabelSlot->SetAutoSize(true);
-		LabelSlot->SetZOrder(100);
-		FSlateFontInfo Font = Label->GetFont();
-		Font.Size = 24;
-		Label->SetFont(Font);
-		Label->SetJustification(ETextJustify::Right);
-		Label->SetShadowOffset(FVector2D(2.0f, 2.0f));
-		Label->SetShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.9f));
-		CountdownLabel = Label;
-	}
-
-	const FTimerManager& Timers = GetWorld()->GetTimerManager();
-	int32 Next = INDEX_NONE;
-	float NextLeft = 0.0f;
-	for (int32 Index = 0; Index < (int32)EUpgrade::Count; ++Index)
-	{
-		const float Left = Slots[Index].Phase == EPhase::Ready ? -1.0f : Timers.GetTimerRemaining(Slots[Index].PhaseTimer);
-		if (Left >= 0.0f && (Next == INDEX_NONE || Left < NextLeft))
-		{
-			Next = Index;
-			NextLeft = Left;
-		}
-	}
-	if (Next == INDEX_NONE)
-	{
-		Label->SetVisibility(ESlateVisibility::Collapsed); // nothing running: every upgrade is available
 		return;
 	}
 
-	static const TCHAR* Names[] = { TEXT("Basic"), TEXT("Archer"), TEXT("Poison"), TEXT("Strong Guardian"), TEXT("Tower") };
-	const bool bActive = Slots[Next].Phase == EPhase::Active;
-	const int32 Seconds = FMath::CeilToInt(NextLeft);
-	Label->SetText(FText::FromString(FString::Printf(TEXT("%s upgrade %s %02d:%02d"),
-		Names[Next], bActive ? TEXT("active") : TEXT("ready in"), Seconds / 60, Seconds % 60)));
-	Label->SetColorAndOpacity(bActive ? FLinearColor(0.55f, 1.0f, 0.45f) : FLinearColor::White);
-	Label->SetVisibility(ESlateVisibility::HitTestInvisible);
+	static const TCHAR* Names[] = {
+		TEXT("Basic"),
+		TEXT("Archer"),
+		TEXT("Poison"),
+		TEXT("Strong"),
+		TEXT("Tower")
+	};
+	TArray<FString> StatusLines;
+	FTimerManager& Timers = GetWorld()->GetTimerManager();
+
+	for (int32 Index = 0; Index < (int32)EUpgrade::Count; ++Index)
+	{
+		const EUpgrade Upgrade = (EUpgrade)Index;
+		const FSlot& Slot = Slots[Index];
+		FString Status;
+
+		if (Slot.Phase == EPhase::Active || Slot.Phase == EPhase::Cooldown)
+		{
+			const int32 Seconds = FMath::CeilToInt(FMath::Max(0.0f, Timers.GetTimerRemaining(Slot.PhaseTimer)));
+			const TCHAR* PhaseName = Slot.Phase == EPhase::Active ? TEXT("Active") : TEXT("Cooldown");
+			Status = FString::Printf(TEXT("%s: %s %d s"), Names[Index], PhaseName, Seconds);
+		}
+		else if (IsPending(Upgrade))
+		{
+			Status = FString::Printf(TEXT("%s: Queued"), Names[Index]);
+		}
+		else
+		{
+			Status = FString::Printf(TEXT("%s: Ready"), Names[Index]);
+		}
+		StatusLines.Add(MoveTemp(Status));
+	}
+
+	Hud->DefendersCountdown->SetText(FText::FromString(FString::Join(StatusLines, TEXT("\n"))));
+	Hud->DefendersCountdown->SetColorAndOpacity(FLinearColor::White);
+	Hud->DefendersCountdown->SetRenderOpacity(1.0f);
+	Hud->DefendersCountdown->SetShadowOffset(FVector2D(2.0f, 2.0f));
+	Hud->DefendersCountdown->SetShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.9f));
+	Hud->DefendersCountdown->SetAutoWrapText(false);
+	FSlateFontInfo CountdownFont = Hud->DefendersCountdown->GetFont();
+	CountdownFont.Size = FMath::Max(CountdownFont.Size, 18);
+	Hud->DefendersCountdown->SetFont(CountdownFont);
+	if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Hud->DefendersCountdown->Slot))
+	{
+		Slot->SetAutoSize(true);
+		Slot->SetZOrder(FMath::Max(Slot->GetZOrder(), 100));
+	}
+	Hud->DefendersCountdown->SetVisibility(ESlateVisibility::HitTestInvisible);
 }
 
 // Reads the real stats: from a living spawned defender/tower of that type when one exists,

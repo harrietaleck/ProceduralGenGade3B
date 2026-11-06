@@ -152,16 +152,17 @@ void UTDEndScreenWidget::ResolveOptionalWidgetBindings()
 
 void UTDEndScreenWidget::BindActionButtons()
 {
-	auto PrepareButton = [](UButton* Button)
+	auto PrepareButton = [this](UButton* Button)
 	{
 		if (!Button)
 		{
 			return;
 		}
 		Button->SetIsEnabled(true);
-		if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Button->Slot))
+		if (bHasPresentedResult && !bPresentedVictory
+			&& (Button == RetryButton || Button == MainMenuButton))
 		{
-			CanvasSlot->SetZOrder(200);
+			Button->SetVisibility(ESlateVisibility::Visible);
 		}
 	};
 

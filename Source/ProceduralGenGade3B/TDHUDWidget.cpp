@@ -40,10 +40,11 @@ void UTDHUDWidget::PlaceLootBottomRight()
 
     if (LootSlot)
     {
-        LootSlot->SetAnchors(FAnchors(1.0f, 1.0f));
-        LootSlot->SetAlignment(FVector2D(1.0f, 1.0f));
+        // Keep the Loot readout above the existing bottom-left tower-health display.
+        LootSlot->SetAnchors(FAnchors(0.0f, 1.0f));
+        LootSlot->SetAlignment(FVector2D(0.0f, 1.0f));
         LootSlot->SetAutoSize(true);
-        LootSlot->SetPosition(FVector2D(-40.0f, -30.0f));
+        LootSlot->SetPosition(FVector2D(40.0f, -115.0f));
         LootSlot->SetZOrder(100);
     }
 
@@ -51,7 +52,7 @@ void UTDHUDWidget::PlaceLootBottomRight()
     LootFont.Size = FMath::Max(LootFont.Size, 30);
     LootText->SetFont(LootFont);
 
-    LootText->SetJustification(ETextJustify::Right);
+    LootText->SetJustification(ETextJustify::Left);
     LootText->SetShadowOffset(FVector2D(2.0f, 2.0f));
     LootText->SetShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.85f));
     LootText->SetRenderOpacity(1.0f);
@@ -66,6 +67,12 @@ void UTDHUDWidget::InitializeHUD(ATDGameMode* InGameMode)
     GameMode = InGameMode;
 
     PlaceLootBottomRight();
+
+    if (DefendersCountdown)
+    {
+        DefendersCountdown->SetText(FText::FromString(TEXT("Defender Ready")));
+        DefendersCountdown->SetVisibility(ESlateVisibility::HitTestInvisible);
+    }
 
     if (!GameMode)
     {
@@ -220,8 +227,8 @@ void UTDHUDWidget::BindDefenderButtons()
 void UTDHUDWidget::HandleBasicDefenderClicked()
 {
     //Select the basic defender
-    if (ATDPlayerController* PC =
-        GetWorld()->GetFirstPlayerController<ATDPlayerController>())
+    if (ATDPlayerController* PC = Cast<ATDPlayerController>(
+        GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr))
     {
         PC->SelectBasicDefender();
     }
@@ -251,8 +258,8 @@ void UTDHUDWidget::HandleBasicDefenderClicked()
 void UTDHUDWidget::HandleArcherDefenderClicked()
 {
     //Select the archer defender
-    if (ATDPlayerController* PC =
-        GetWorld()->GetFirstPlayerController<ATDPlayerController>())
+    if (ATDPlayerController* PC = Cast<ATDPlayerController>(
+        GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr))
     {
         PC->SelectArcherDefender();
     }
@@ -282,8 +289,8 @@ void UTDHUDWidget::HandleArcherDefenderClicked()
 void UTDHUDWidget::HandlePoisonLightBombClicked()
 {
     //Select the Poison Light Bomb defender
-    if (ATDPlayerController* PC =
-        GetWorld()->GetFirstPlayerController<ATDPlayerController>())
+    if (ATDPlayerController* PC = Cast<ATDPlayerController>(
+        GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr))
     {
         PC->SelectPoisonLightBombDefender();
     }

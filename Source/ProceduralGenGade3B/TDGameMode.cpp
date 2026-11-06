@@ -6,8 +6,8 @@
 #include "DefenderUpgradeComponent.h"
 #include "TDSaveGame.h"
 #include "TDSaveSubsystem.h"
-#include "TDVFX.h" // *** visual pass
-#include "Misc/PackageName.h" // *** checks the optional ambience asset exists
+#include "TDVFX.h" //  visual pass
+#include "Misc/PackageName.h" //  checks the optional ambience asset exists
 #include "ProceduralTerrain.h"
 #include "Tower.h"
 #include "Defender.h"
@@ -31,6 +31,7 @@
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
+#include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/Slider.h"
 #include "Components/TextBlock.h"
@@ -55,7 +56,7 @@ ATDGameMode::ATDGameMode()
 	EndScreenWidgetClass = UTDEndScreenWidget::StaticClass();
 	DefenderUpgrades = CreateDefaultSubobject<UDefenderUpgradeComponent>(TEXT("DefenderUpgrades"));
 
-	// *** Default visual-pass assets; all of them can be swapped in the editor.
+	//  Default visual-pass assets; all of them can be swapped in the editor.
 	WaveTransitionVFX = TDVFX::Asset(TEXT("/Game/VFX/Environment/NS_WaveTransition"));
 	VictoryVFX = TDVFX::Asset(TEXT("/Game/VFX/Gameplay/NS_Victory"));
 	DefeatVFX = TDVFX::Asset(TEXT("/Game/VFX/Gameplay/NS_Defeat"));
@@ -223,10 +224,10 @@ void ATDGameMode::BeginPlay()
 		}
 	}
 
-	// *** Visual pass: tower crystals + activation burst (after validation, so they never affect it),
-	// *** and looping forest ambience if that system has been created.
+	//  Visual pass: tower crystals + activation burst (after validation, so they never affect it),
+	//  and looping forest ambience if that system has been created.
 	Tower->ActivateTowerVisuals();
-	DefenderUpgrades->ActivatePendingUpgrades(); // *** a Tower upgrade bought in the Start-menu shop starts now
+	DefenderUpgrades->ActivatePendingUpgrades(); //  a Tower upgrade bought in the Start-menu shop starts now
 	if (FPackageName::DoesPackageExist(ForestAmbienceVFX.ToSoftObjectPath().GetLongPackageName()))
 	{
 		TDVFX::Play(this, ForestAmbienceVFX, Tower->GetActorLocation() + FVector(0.0f, 0.0f, 300.0f), TDVFX::Turquoise);
@@ -258,6 +259,10 @@ void ATDGameMode::BeginPlay()
 				MatchHUDWidget = Widget;
 				MatchHUDWidget->AddToViewport(0);
 				MatchHUDWidget->InitializeHUD(this);
+				if (DefenderUpgrades)
+				{
+					DefenderUpgrades->StartHudCountdownUpdates();
+				}
 			}
 		}
 
@@ -405,7 +410,7 @@ void ATDGameMode::PlayMatchVFX(const TSoftObjectPtr<UNiagaraSystem>& System, con
 {
 	if (Tower)
 	{
-		TDVFX::Play(this, System, Tower->GetActorLocation(), Color, Lifetime); // *** pooled, stops after Lifetime
+		TDVFX::Play(this, System, Tower->GetActorLocation(), Color, Lifetime); //  pooled, stops after Lifetime
 	}
 }
 

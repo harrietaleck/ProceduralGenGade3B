@@ -150,15 +150,16 @@ void UTDEndScreenWidget::PresentMatchResult(bool bVictory, const FMatchResult& R
 	ResolveOptionalWidgetBindings();
 	EnsureResultTextWidgets();
 	EnsureBlueprintLayoutFitsScreen();
-	BindActionButtons();
 
 	const bool bOfferNextWave = bVictory
 		&& Result.TotalWaves > 0
 		&& Result.WavesCleared < Result.TotalWaves;
 	bPendingNextWave = bOfferNextWave;
 	bPresentedVictory = bVictory;
+	bHasPresentedResult = true;
 
 	ApplyTheme(bVictory, Result.BeamTier, bOfferNextWave);
+	BindActionButtons();
 	ApplyTierTypography(Result);
 	ApplyMatchResultToWidgets(Result);
 	LayoutDefeatResultWidgets();
@@ -210,7 +211,7 @@ void UTDEndScreenWidget::OnRetryClicked()
 		}
 		else if (bPresentedVictory)
 		{
-			GameMode->RetryCurrentWave();
+			GameMode->RestartGame();
 		}
 		else
 		{

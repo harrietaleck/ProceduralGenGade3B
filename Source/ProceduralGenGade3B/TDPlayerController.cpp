@@ -17,7 +17,7 @@
 
 #include "TDGameMode.h"
 #include "DefenderUpgradeComponent.h"
-#include "TDMetaProgressionSubsystem.h" // *** used by the GrantUpgradeTestResources dev command
+#include "TDMetaProgressionSubsystem.h" //  used by the GrantUpgradeTestResources dev command
 
 #include "TDHUDWidget.h"
 #include "TDHUD.h"
@@ -158,8 +158,8 @@ void ATDPlayerController::OnQuickSave()
     }
 }
 
-// *** Grants: 100 Forest Essence (Basic + Strong), 65 Gem Stones (Archer), 50 Light Lanterns (Poison)
-// *** and 750 Loot (Tower), using the same wallet and Loot the HUD shows.
+//  Grants: 100 Forest Essence (Basic + Strong), 65 Gem Stones (Archer), 50 Light Lanterns (Poison)
+//  and 750 Loot (Tower), using the same wallet and Loot the HUD shows.
 void ATDPlayerController::GrantUpgradeTestResources()
 {
 #if !UE_BUILD_SHIPPING
@@ -170,13 +170,13 @@ void ATDPlayerController::GrantUpgradeTestResources()
         return;
     }
 
-    FMetaCurrencyRewards TestRewards; // ***
-    TestRewards.ForestEssence = 800;  // *** Strong 50 + Tower 750 (leaf)
-    TestRewards.WoodenMight = 50;     // *** Basic (wood)
+    FMetaCurrencyRewards TestRewards; // 
+    TestRewards.ForestEssence = 800;  //  Strong 50 + Tower 750 (leaf)
+    TestRewards.WoodenMight = 50;     //  Basic (wood)
     TestRewards.GemStones = 65;       // Archer (gem)
     TestRewards.LightLanterns = 50;   // Poison (sun)
-    Meta->AddRewards(TestRewards);  // *** existing meta wallet
-    GameMode->RefreshMetaHUD();     // *** HUD shows the new balance immediately
+    Meta->AddRewards(TestRewards);  //  existing meta wallet
+    GameMode->RefreshMetaHUD();     //  HUD shows the new balance immediately
     UE_LOG(LogTemp, Display, TEXT("GrantUpgradeTestResources: +800 Forest Essence, +50 Wooden Might, +65 Gem Stones, +50 Light Lanterns."));
 #endif
 }
@@ -553,7 +553,7 @@ void ATDPlayerController::OnPlaceDefenderClicked()
         GameMode->NotifyDefenderPlaced();
 
         NewDefender->SetOccupiedSlot(SlotLocation);
-        NewDefender->PlayPlacementVFX(); // *** fire burst, sparks and glow - only after a successful, paid placement
+        NewDefender->PlayPlacementVFX(); //  fire burst, sparks and glow - only after a successful, paid placement
 
         if (AProceduralTerrain* Terrain =
 

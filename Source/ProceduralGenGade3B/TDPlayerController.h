@@ -92,9 +92,9 @@ protected:
     void OnQuickSave();
 
 public:
-    // *** Development-only test command (type in the ~ console): GrantUpgradeTestResources.
-    // *** Adds exactly one round of upgrade costs through the existing AddRewards/AddResources, so a
-    // *** real upgrade can be tested without changing resource collection or rewards. No-op in Shipping.
+    //  Development-only test command (type in the ~ console): GrantUpgradeTestResources.
+    //  Adds exactly one round of upgrade costs through the existing AddRewards/AddResources, so a
+    //  real upgrade can be tested without changing resource collection or rewards. No-op in Shipping.
     UFUNCTION(Exec)
     void GrantUpgradeTestResources();
 

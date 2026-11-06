@@ -7,8 +7,8 @@
 #include "DrawDebugHelpers.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
-#include "Projectile.h" // *** visual spear
-#include "TDVFX.h"      // ***
+#include "Projectile.h" //  visual spear
+#include "TDVFX.h"      // 
 
 AStrongDefender::AStrongDefender()
 {
@@ -26,9 +26,9 @@ AStrongDefender::AStrongDefender()
 	MetaCost.GemStones = 10;
 	MetaCost.LightLanterns = 0;
 
-	DefenderBallColor = FLinearColor(1.0f, 0.8f, 0.2f); // *** golden spear (was purple)
+	DefenderBallColor = FLinearColor(1.0f, 0.8f, 0.2f); //  golden spear (was purple)
 
-	// *** Magical spear: a larger long cone (about 112 x 16 units) with a stronger impact burst.
+	//  Magical spear: a larger long cone (about 112 x 16 units) with a stronger impact burst.
 	ProjectileShape = TSoftObjectPtr<UStaticMesh>(FSoftObjectPath(TEXT("/Engine/BasicShapes/Cone.Cone")));
 	ProjectileShapeScale = FVector(0.45f, 0.45f, 3.2f);
 	ProjectileImpactVFX = TDVFX::Asset(TEXT("/Game/VFX/Enemies/NS_EnemyDeath"));
@@ -97,10 +97,10 @@ void AStrongDefender::FireStunBolt()
 	}
 
 	const FVector Muzzle = Location + MuzzleOffset;
-	PlayFireVFX(Muzzle); // *** stun bolt flash
+	PlayFireVFX(Muzzle); //  stun bolt flash
 
-	// *** Visual-only spear that flies to the target (0 damage). The stun and damage below stay
-	// *** instant, exactly as before, so timing, damage and targeting are unchanged.
+	//  Visual-only spear that flies to the target (0 damage). The stun and damage below stay
+	//  instant, exactly as before, so timing, damage and targeting are unchanged.
 	if (ProjectileClass)
 	{
 		FActorSpawnParameters SpawnParams;
