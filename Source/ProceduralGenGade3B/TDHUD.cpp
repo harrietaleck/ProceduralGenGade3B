@@ -46,8 +46,7 @@ void ATDHUD::DrawHUD()
 
 	AWaveManager* WaveManager = GameMode->GetWaveManager();
 
-	// The game-style HUD: wave banner on top, defender cards along the bottom.
-	DrawWaveBanner(GameMode, WaveManager);
+	// The game-style HUD: defender cards along the bottom. The wave info lives in the top UMG bar.
 	DrawDefenderBar(GameMode);
 
 	// The old text panel is now a developer panel on F1.
@@ -459,67 +458,6 @@ void ATDHUD::DrawCenteredText(const FString& Text, const FLinearColor& Color, fl
 	float W = 0.0f, H = 0.0f;
 	GetTextSize(Text, W, H, Font, Scale);
 	DrawText(Text, Color, CenterX - W * 0.5f, Y, Font, Scale);
-}
-
-void ATDHUD::DrawWaveBanner(ATDGameMode* GameMode, AWaveManager* WaveManager)
-{
-	if (!Canvas || !GameMode || !WaveManager || GameMode->IsGameOver() || GameMode->IsVictory())
-	{
-		return;
-	}
-
-	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetLargeFont() : nullptr);
-	const int32 Wave = WaveManager->GetCurrentWave();
-	const int32 Total = WaveManager->GetTotalWaves();
-	const EWaveState State = WaveManager->GetWaveState();
-
-	FString Sub;
-	FLinearColor Accent(0.95f, 0.8f, 0.35f);
-	float Progress = 0.0f;
-	switch (State)
-	{
-	case EWaveState::CountingDown:
-		Sub = FString::Printf(TEXT("Next wave in %d s  -  place your defenders"), WaveManager->GetCountdownSecondsRemaining());
-		Accent = FLinearColor(0.45f, 0.85f, 1.0f);
-		Progress = 1.0f;
-		break;
-	case EWaveState::Active:
-		Sub = FString::Printf(TEXT("%d enemies left"), WaveManager->GetEnemiesRemaining());
-		Accent = FLinearColor(1.0f, 0.45f, 0.35f);
-		Progress = 1.0f;
-		break;
-	case EWaveState::Complete:
-		Sub = TEXT("Wave cleared");
-		Accent = FLinearColor(0.5f, 0.95f, 0.55f);
-		Progress = 1.0f;
-		break;
-	default:
-		Sub = TEXT("Get ready");
-		break;
-	}
-
-	const float W = 460.0f;
-	const float H = 92.0f;
-	const float X = Canvas->SizeX * 0.5f - W * 0.5f;
-	const float Y = 235.0f; // Sits below the UMG resource bar, which is drawn on top of the canvas HUD.
-	DrawFramedRect(X, Y, W, H, FLinearColor(0.03f, 0.05f, 0.04f, 0.82f), Accent * 0.9f, 3.0f);
-	DrawRect(Accent, X + 3.0f, Y + 3.0f, W - 6.0f, 5.0f * Progress);
-
-	DrawCenteredText(FString::Printf(TEXT("WAVE  %d / %d"), FMath::Max(Wave, 1), Total), FLinearColor(1.0f, 0.95f, 0.8f),
-		X + W * 0.5f, Y + 14.0f, Font, 2.1f);
-	DrawCenteredText(Sub, Accent, X + W * 0.5f, Y + 58.0f, Font, 1.25f);
-
-	// One pip per wave, filled for waves already reached.
-	const float PipSize = 14.0f;
-	const float PipGap = 8.0f;
-	const float PipsWidth = Total * PipSize + (Total - 1) * PipGap;
-	float PipX = X + W * 0.5f - PipsWidth * 0.5f;
-	for (int32 I = 1; I <= Total; ++I)
-	{
-		DrawFramedRect(PipX, Y + H + 6.0f, PipSize, PipSize,
-			I <= Wave ? Accent : FLinearColor(0.1f, 0.1f, 0.1f, 0.7f), FLinearColor(0.9f, 0.85f, 0.7f, 0.9f), 2.0f);
-		PipX += PipSize + PipGap;
-	}
 }
 
 void ATDHUD::DrawDefenderBar(ATDGameMode* GameMode)

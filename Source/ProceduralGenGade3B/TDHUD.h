@@ -42,9 +42,6 @@ private:
 	/** Bottom-centre bar with one card per defender: hotkey, name, cost, selected and affordable states. */
 	void DrawDefenderBar(ATDGameMode* GameMode);
 
-	/** Top-centre banner: wave number, enemies left or countdown, and a progress bar. */
-	void DrawWaveBanner(ATDGameMode* GameMode, AWaveManager* WaveManager);
-
 	/** The big PAUSED overlay. Split out so it still shows while the developer panel is hidden. */
 	void DrawPauseOverlay(ATDGameMode* GameMode);
 
