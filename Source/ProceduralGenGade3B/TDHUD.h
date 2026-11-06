@@ -24,8 +24,29 @@ public:
 	/** Show or hide the wave director graph (G). It also appears automatically when the match ends. */
 	void ToggleDirectorGraph() { bShowDirectorGraph = !bShowDirectorGraph; }
 
+	/** Show or hide the developer panel (F1): seed, director numbers, blight generation and so on. */
+	void ToggleDebugPanel() { bShowDebugPanel = !bShowDebugPanel; }
+
 private:
 	bool bShowDirectorGraph = false;
+
+	/** The text-heavy developer panel is hidden by default so the match looks like a game. */
+	bool bShowDebugPanel = false;
+
+	/** Fills a rectangle and draws a thin border around it, used by every card and banner. */
+	void DrawFramedRect(float X, float Y, float W, float H, const FLinearColor& Fill, const FLinearColor& Border, float BorderThickness = 2.0f);
+
+	/** Draws text centred on CenterX. */
+	void DrawCenteredText(const FString& Text, const FLinearColor& Color, float CenterX, float Y, UFont* Font, float Scale);
+
+	/** Bottom-centre bar with one card per defender: hotkey, name, cost, selected and affordable states. */
+	void DrawDefenderBar(ATDGameMode* GameMode);
+
+	/** Top-centre banner: wave number, enemies left or countdown, and a progress bar. */
+	void DrawWaveBanner(ATDGameMode* GameMode, AWaveManager* WaveManager);
+
+	/** The big PAUSED overlay. Split out so it still shows while the developer panel is hidden. */
+	void DrawPauseOverlay(ATDGameMode* GameMode);
 
 	/** Lane forecast. It refreshes on real time so it still updates while the game is paused. */
 	TArray<FLaneForecast> CachedForecast;

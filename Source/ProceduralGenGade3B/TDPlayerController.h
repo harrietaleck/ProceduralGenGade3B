@@ -82,6 +82,9 @@ protected:
     /** U spends Light Lanterns to upgrade the tower beam. */
     void OnUpgradeBeamPressed();
 
+    /** F1 shows or hides the developer panel on the HUD. */
+    void OnToggleDebugPanel();
+
     /** G shows or hides the wave director graph. */
     void OnToggleDirectorGraph();
 

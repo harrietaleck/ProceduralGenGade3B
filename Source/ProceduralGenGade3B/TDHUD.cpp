@@ -4,6 +4,8 @@
 #include "TDGameMode.h"
 #include "Tower.h"
 #include "Defender.h"
+#include "ArcherDefender.h"
+#include "BombDefender.h"
 #include "Enemy.h"
 #include "WaveManager.h"
 #include "HealthComponent.h"
@@ -42,11 +44,21 @@ void ATDHUD::DrawHUD()
 		return;
 	}
 
-	DrawInfoPanel(GameMode);
+	AWaveManager* WaveManager = GameMode->GetWaveManager();
+
+	// The game-style HUD: wave banner on top, defender cards along the bottom.
+	DrawWaveBanner(GameMode, WaveManager);
+	DrawDefenderBar(GameMode);
+
+	// The old text panel is now a developer panel on F1.
+	if (bShowDebugPanel)
+	{
+		DrawInfoPanel(GameMode);
+	}
+	DrawPauseOverlay(GameMode);
 	DrawDefenderHealthBars();
 	DrawEnemyHealthBars();
 
-	AWaveManager* WaveManager = GameMode->GetWaveManager();
 	if (WaveManager && WaveManager->bUseAdaptiveDirector && WaveManager->Director)
 	{
 		DrawWaveForecast(GameMode, WaveManager);
@@ -422,14 +434,164 @@ void ATDHUD::DrawInfoPanel(ATDGameMode* GameMode)
 		TextY += InfoLineSpacing;
 	}
 
+}
+
+void ATDHUD::DrawPauseOverlay(ATDGameMode* GameMode)
+{
 	// Don't draw the paused banner while the settings screen is open.
-	if (GameMode->IsPaused() && !GameMode->IsGameOver() && !GameMode->IsVictory() && !GameMode->IsSettingsVisible())
+	if (!Canvas || !GameMode || !GameMode->IsPaused() || GameMode->IsGameOver() || GameMode->IsVictory() || GameMode->IsSettingsVisible())
 	{
-		const float CenterX = Canvas->SizeX * 0.5f;
-		const float CenterY = Canvas->SizeY * 0.5f;
-		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.45f), 0.f, 0.f, Canvas->SizeX, Canvas->SizeY);
-		DrawText(TEXT("PAUSED"), FLinearColor(1.f, 0.95f, 0.3f), CenterX - 90.0f, CenterY - 24.0f, Font, 2.8f);
+		return;
 	}
+	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetLargeFont() : nullptr);
+	DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.45f), 0.f, 0.f, Canvas->SizeX, Canvas->SizeY);
+	DrawCenteredText(TEXT("PAUSED"), FLinearColor(1.f, 0.95f, 0.3f), Canvas->SizeX * 0.5f, Canvas->SizeY * 0.5f - 24.0f, Font, 2.8f);
+}
+
+void ATDHUD::DrawFramedRect(float X, float Y, float W, float H, const FLinearColor& Fill, const FLinearColor& Border, float BorderThickness)
+{
+	DrawRect(Border, X, Y, W, H);
+	DrawRect(Fill, X + BorderThickness, Y + BorderThickness, W - BorderThickness * 2.0f, H - BorderThickness * 2.0f);
+}
+
+void ATDHUD::DrawCenteredText(const FString& Text, const FLinearColor& Color, float CenterX, float Y, UFont* Font, float Scale)
+{
+	float W = 0.0f, H = 0.0f;
+	GetTextSize(Text, W, H, Font, Scale);
+	DrawText(Text, Color, CenterX - W * 0.5f, Y, Font, Scale);
+}
+
+void ATDHUD::DrawWaveBanner(ATDGameMode* GameMode, AWaveManager* WaveManager)
+{
+	if (!Canvas || !GameMode || !WaveManager || GameMode->IsGameOver() || GameMode->IsVictory())
+	{
+		return;
+	}
+
+	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetLargeFont() : nullptr);
+	const int32 Wave = WaveManager->GetCurrentWave();
+	const int32 Total = WaveManager->GetTotalWaves();
+	const EWaveState State = WaveManager->GetWaveState();
+
+	FString Sub;
+	FLinearColor Accent(0.95f, 0.8f, 0.35f);
+	float Progress = 0.0f;
+	switch (State)
+	{
+	case EWaveState::CountingDown:
+		Sub = FString::Printf(TEXT("Next wave in %d s  -  place your defenders"), WaveManager->GetCountdownSecondsRemaining());
+		Accent = FLinearColor(0.45f, 0.85f, 1.0f);
+		Progress = 1.0f;
+		break;
+	case EWaveState::Active:
+		Sub = FString::Printf(TEXT("%d enemies left"), WaveManager->GetEnemiesRemaining());
+		Accent = FLinearColor(1.0f, 0.45f, 0.35f);
+		Progress = 1.0f;
+		break;
+	case EWaveState::Complete:
+		Sub = TEXT("Wave cleared");
+		Accent = FLinearColor(0.5f, 0.95f, 0.55f);
+		Progress = 1.0f;
+		break;
+	default:
+		Sub = TEXT("Get ready");
+		break;
+	}
+
+	const float W = 460.0f;
+	const float H = 92.0f;
+	const float X = Canvas->SizeX * 0.5f - W * 0.5f;
+	const float Y = 235.0f; // Sits below the UMG resource bar, which is drawn on top of the canvas HUD.
+	DrawFramedRect(X, Y, W, H, FLinearColor(0.03f, 0.05f, 0.04f, 0.82f), Accent * 0.9f, 3.0f);
+	DrawRect(Accent, X + 3.0f, Y + 3.0f, W - 6.0f, 5.0f * Progress);
+
+	DrawCenteredText(FString::Printf(TEXT("WAVE  %d / %d"), FMath::Max(Wave, 1), Total), FLinearColor(1.0f, 0.95f, 0.8f),
+		X + W * 0.5f, Y + 14.0f, Font, 2.1f);
+	DrawCenteredText(Sub, Accent, X + W * 0.5f, Y + 58.0f, Font, 1.25f);
+
+	// One pip per wave, filled for waves already reached.
+	const float PipSize = 14.0f;
+	const float PipGap = 8.0f;
+	const float PipsWidth = Total * PipSize + (Total - 1) * PipGap;
+	float PipX = X + W * 0.5f - PipsWidth * 0.5f;
+	for (int32 I = 1; I <= Total; ++I)
+	{
+		DrawFramedRect(PipX, Y + H + 6.0f, PipSize, PipSize,
+			I <= Wave ? Accent : FLinearColor(0.1f, 0.1f, 0.1f, 0.7f), FLinearColor(0.9f, 0.85f, 0.7f, 0.9f), 2.0f);
+		PipX += PipSize + PipGap;
+	}
+}
+
+void ATDHUD::DrawDefenderBar(ATDGameMode* GameMode)
+{
+	ATDPlayerController* PC = Cast<ATDPlayerController>(GetOwningPlayerController());
+	if (!Canvas || !GameMode || !PC || GameMode->IsGameOver() || GameMode->IsVictory())
+	{
+		return;
+	}
+
+	struct FCard
+	{
+		FString Hotkey;
+		TSubclassOf<ADefender> Class;
+		FLinearColor Colour;
+		FString Role;
+	};
+	const TArray<FCard> Cards = {
+		{ TEXT("1"), ADefender::StaticClass(),               FLinearColor(0.45f, 0.75f, 0.35f), TEXT("Guard") },
+		{ TEXT("2"), AArcherDefender::StaticClass(),         FLinearColor(0.35f, 0.65f, 0.95f), TEXT("Ranged") },
+		{ TEXT("3"), APoisonLightBombDefender::StaticClass(), FLinearColor(0.75f, 0.45f, 0.95f), TEXT("Poison") },
+		{ TEXT("4"), PC->StrongDefenderClass,                FLinearColor(0.95f, 0.65f, 0.25f), TEXT("Heavy") },
+	};
+
+	UFont* Font = const_cast<UFont*>(GEngine ? GEngine->GetLargeFont() : nullptr);
+	const TSubclassOf<ADefender> Active = PC->GetActiveDefenderClass();
+
+	const float CardW = 190.0f;
+	const float CardH = 118.0f;
+	const float Gap = 14.0f;
+	const float BarW = Cards.Num() * CardW + (Cards.Num() - 1) * Gap;
+	float X = Canvas->SizeX * 0.5f - BarW * 0.5f;
+	const float Y = Canvas->SizeY - CardH - 26.0f;
+
+	// Soft backing plate for the whole bar.
+	DrawFramedRect(X - 16.0f, Y - 14.0f, BarW + 32.0f, CardH + 28.0f, FLinearColor(0.02f, 0.03f, 0.03f, 0.7f), FLinearColor(0.4f, 0.35f, 0.25f, 0.9f), 2.0f);
+
+	for (const FCard& Card : Cards)
+	{
+		const ADefender* Defaults = Card.Class ? Cast<ADefender>(Card.Class->GetDefaultObject()) : nullptr;
+		const bool bSelected = Defaults && Active == Card.Class;
+		const bool bAfford = Defaults && GameMode->GetResources() >= Defaults->Cost && GameMode->CanAffordMeta(Defaults->MetaCost);
+		const float Dim = bAfford ? 1.0f : 0.45f;
+
+		const FLinearColor Border = bSelected ? FLinearColor(1.0f, 0.92f, 0.45f) : Card.Colour * (0.7f * Dim);
+		DrawFramedRect(X, Y - (bSelected ? 10.0f : 0.0f), CardW, CardH, FLinearColor(0.06f, 0.07f, 0.07f, 0.92f), Border, bSelected ? 4.0f : 2.0f);
+
+		const float TopY = Y - (bSelected ? 10.0f : 0.0f);
+		// Coloured crest with the hotkey, the quickest way to tell the cards apart at a glance.
+		DrawFramedRect(X + 10.0f, TopY + 10.0f, 38.0f, 38.0f, Card.Colour * Dim, FLinearColor(0.0f, 0.0f, 0.0f, 0.8f), 2.0f);
+		DrawCenteredText(Card.Hotkey, FLinearColor::White, X + 29.0f, TopY + 14.0f, Font, 1.5f);
+
+		const FString Name = Defaults ? Defaults->DefenderName : TEXT("Locked");
+		DrawText(Name, FLinearColor(1.0f, 0.97f, 0.88f) * Dim, X + 58.0f, TopY + 10.0f, Font, 1.3f);
+		DrawText(Card.Role, Card.Colour * Dim, X + 58.0f, TopY + 32.0f, Font, 0.95f);
+
+		FString Price = TEXT("-");
+		if (Defaults)
+		{
+			Price = Defaults->Cost > 0 ? FString::Printf(TEXT("%d Loot"), Defaults->Cost) : TEXT("Gems");
+		}
+		DrawText(Price, bAfford ? FLinearColor(1.0f, 0.88f, 0.4f) : FLinearColor(1.0f, 0.4f, 0.35f), X + 12.0f, TopY + 62.0f, Font, 1.3f);
+		if (Defaults)
+		{
+			DrawText(FString::Printf(TEXT("Upkeep %d / wave"), Defaults->UpkeepPerWave), FLinearColor(0.7f, 0.7f, 0.7f) * Dim, X + 12.0f, TopY + 90.0f, Font, 0.9f);
+		}
+		X += CardW + Gap;
+	}
+
+	// Hint line under the bar so the controls are still discoverable without the debug panel.
+	DrawCenteredText(TEXT("1-4 pick a defender   |   click a pad to place   |   B upgrades   |   P pause   |   F1 debug"),
+		FLinearColor(0.85f, 0.85f, 0.8f, 0.85f), Canvas->SizeX * 0.5f, Y - 40.0f, Font, 0.85f);
 }
 
 void ATDHUD::DrawEnemyHealthBars()

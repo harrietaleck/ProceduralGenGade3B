@@ -141,6 +141,11 @@ void ATDPlayerController::SetupInputComponent()
         InputComponent->BindKey(EKeys::G, IE_Pressed, this, &ATDPlayerController::OnToggleDirectorGraph);
     GraphBinding.bExecuteWhenPaused = true;
 
+    //Press F1 to show or hide the developer panel (seed, director numbers, blight generation)
+    FInputKeyBinding& DebugBinding =
+        InputComponent->BindKey(EKeys::F1, IE_Pressed, this, &ATDPlayerController::OnToggleDebugPanel);
+    DebugBinding.bExecuteWhenPaused = true;
+
     //Press B to open the Defenders screen and buy temporary upgrades
     InputComponent->BindKey(EKeys::B, IE_Pressed, this, &ATDPlayerController::OnToggleDefenderUpgrades);
 
@@ -189,6 +194,14 @@ void ATDPlayerController::OnToggleDefenderUpgrades()
         {
             Upgrades->ToggleScreen();
         }
+    }
+}
+
+void ATDPlayerController::OnToggleDebugPanel()
+{
+    if (ATDHUD* TDHUD = Cast<ATDHUD>(GetHUD()))
+    {
+        TDHUD->ToggleDebugPanel();
     }
 }
 
