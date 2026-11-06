@@ -13,7 +13,7 @@ from pathlib import Path
 from docx import Document
 from docx.enum.section import WD_SECTION
 from docx.enum.table import WD_TABLE_ALIGNMENT, WD_CELL_VERTICAL_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK, WD_TAB_ALIGNMENT, WD_TAB_LEADER
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, Cm, RGBColor
@@ -40,6 +40,11 @@ WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 
 BODY_FONT = "Cambria"
 HEAD_FONT = "Calibri"
+
+TOC_HEADINGS = [("", "The feature at a glance"), ("1", "Concept and research basis"),
+                ("2", "The genome and its biomass budget"), ("3", "Selection, crossover and mutation"),
+                ("4", "Appearance and player feedback"), ("5", "Integration, testing and balance"),
+                ("", "Reference list")]
 
 BODY = []          # every counted body paragraph
 FIG_N = [0]
@@ -178,8 +183,9 @@ def heading(doc, number, text):
     p.paragraph_format.space_before = Pt(16)
     p.paragraph_format.space_after = Pt(6)
     p.paragraph_format.keep_with_next = True
-    run = p.add_run(f"{number}  ")
-    set_font(run, HEAD_FONT, 17, True, color=GOLD)
+    if number:
+        run = p.add_run(f"{number}  ")
+        set_font(run, HEAD_FONT, 17, True, color=GOLD)
     run = p.add_run(text)
     set_font(run, HEAD_FONT, 17, True, color=DEEP)
     para_border(p, "bottom", 8, "1F5F4A", 3)
@@ -268,11 +274,78 @@ def callout(doc, title, lines, fill="EEF6F0", bar="D9A441", mono=False):
     para(doc, "", after=8)
 
 
+
+# ---------------------------------------------------------------------------------------------
+# Table of contents: a real Word TOC field, pre-filled with correct page numbers
+# ---------------------------------------------------------------------------------------------
+
+def add_toc(doc, entries, width_cm=16.2):
+    """Insert a genuine Word TOC field whose current result is `entries` = [(label, page), ...].
+
+    Because it is a real field, Word can rebuild it (right-click > Update Field) after the document is edited,
+    and until then it shows the page numbers that were measured when the file was generated.
+    """
+    n = len(entries)
+    for i, (label, page) in enumerate(entries):
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(6)
+        p.paragraph_format.tab_stops.add_tab_stop(Cm(width_cm), WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS)
+        if i == 0:
+            for kind in ("begin", "instr", "separate"):
+                run = p.add_run()
+                if kind == "instr":
+                    el = OxmlElement("w:instrText")
+                    el.set(qn("xml:space"), "preserve")
+                    el.text = r' TOC \o "1-2" \h \z \u '
+                else:
+                    el = OxmlElement("w:fldChar")
+                    el.set(qn("w:fldCharType"), kind)
+                run._r.append(el)
+        set_font(p.add_run(label), HEAD_FONT, 11.5, color=INK)
+        set_font(p.add_run("	" + str(page)), HEAD_FONT, 11.5, color=INK)
+        if i == n - 1:
+            run = p.add_run()
+            el = OxmlElement("w:fldChar")
+            el.set(qn("w:fldCharType"), "end")
+            run._r.append(el)
+
+
+def measure_heading_pages(docx_path, titles):
+    """Render the .docx with Word, then find the page each heading (large text) lands on."""
+    import tempfile
+    from docx2pdf import convert
+    import fitz
+    pdf = Path(tempfile.mkdtemp()) / "measure.pdf"
+    convert(str(docx_path), str(pdf))
+    found = {}
+    for page_no, page in enumerate(fitz.open(str(pdf)), start=1):
+        for block in page.get_text("dict")["blocks"]:
+            for line in block.get("lines", []):
+                for span in line["spans"]:
+                    if span["size"] > 14:
+                        for title in titles:
+                            if title not in found and title in span["text"]:
+                                found[title] = page_no
+    return found
+
+
+def contents_block(doc, headings, pages):
+    """The 'Contents' title plus the TOC. headings = [(number, title)], pages = {title: page} or None."""
+    para(doc, "Contents", font=HEAD_FONT, size=20, bold=True, color=DEEP, align="left", after=2)
+    p = para(doc, "", after=10)
+    para_border(p, "bottom", 18, "D9A441", 2)
+    entries = []
+    for number, title in headings:
+        label = f"{number}   {title}" if number else title
+        entries.append((label, (pages or {}).get(title, "0")))
+    add_toc(doc, entries)
+    para(doc, "", after=6)
+
 # ---------------------------------------------------------------------------------------------
 # The document
 # ---------------------------------------------------------------------------------------------
 
-def build():
+def build(toc_pages=None):
     figs.draw_all(SCREENSHOT)
 
     doc = Document()
@@ -354,9 +427,8 @@ def build():
     doc.add_page_break()
 
     # ================= AT A GLANCE =================
-    para(doc, "The feature at a glance", font=HEAD_FONT, size=20, bold=True, color=DEEP, align="left", after=2)
-    p = para(doc, "", after=10)
-    para_border(p, "bottom", 18, "D9A441", 2)
+    contents_block(doc, TOC_HEADINGS, toc_pages)
+    heading(doc, "", "The feature at a glance")
 
     callout(doc, "Design goal", [
         "Replayable variety that always feels fair. Each generation should look and play differently from the last, never "
@@ -536,6 +608,13 @@ def build():
 
 if __name__ == "__main__":
     total = build()
+    try:
+        pages = measure_heading_pages(OUT, [t for _, t in TOC_HEADINGS])
+        BODY.clear(); FIG_N[0] = 0; TAB_N[0] = 0
+        total = build(pages)
+        print("Contents page numbers:", pages)
+    except Exception as error:  # Word or the PDF reader is missing: the field still updates when opened in Word
+        print("Could not measure page numbers (", error, "); the contents will show 0 until updated in Word.")
     print(f"Saved {OUT}")
     print(f"Body word count: {total}")
     print("Whitespace-split count (how Word counts):", sum(len(t.split()) for t in BODY))

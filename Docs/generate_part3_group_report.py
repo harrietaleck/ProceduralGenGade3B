@@ -32,6 +32,11 @@ GITHUB = "https://github.com/harrietaleck/ProceduralGenGade3B"
 ACCESSED = "6 November 2026"
 
 HARRIET, BELINDA = "Harriet Manda", "Belinda Mtabane"
+
+TOC_HEADINGS = [("1", "The project in brief"), ("2", "Who did what"), ("3", "Part 3 in detail"),
+                ("4", "Successes"), ("5", "Challenges we met and how we solved them"),
+                ("6", "Testing and what is still open"), ("7", "Acknowledgements and use of tools"),
+                ("", "Reference list")]
 H_COL, B_COL = pf.DEEP, pf.GOLD
 
 
@@ -202,7 +207,7 @@ def stat_cards(doc, stats):
 # The document
 # ---------------------------------------------------------------------------------------------
 
-def build():
+def build(toc_pages=None):
     FIGS.mkdir(parents=True, exist_ok=True)
     commits, lines, files = repo_facts()
     h_count = sum(1 for w, _, _ in commits if w == "H")
@@ -279,7 +284,8 @@ def build():
                      (str(files), "C++ source files"), ("4", "automated tests"), ("3", "assessment parts built")])
     doc.add_page_break()
 
-    # ================= 1 overview =================
+    # ================= contents + 1 overview =================
+    gp.contents_block(doc, TOC_HEADINGS, toc_pages)
     gp.heading(doc, "1", "The project in brief")
     text(doc,
          "Our game is a 3D tower defence. Every match builds a new terrain from a random seed, with four lanes "
@@ -434,5 +440,13 @@ def build():
 
 if __name__ == "__main__":
     h, b, lines, files = build()
+    try:
+        pages = gp.measure_heading_pages(OUT, [t for _, t in TOC_HEADINGS])
+        gp.FIG_N[0] = 0
+        gp.TAB_N[0] = 0
+        h, b, lines, files = build(pages)
+        print("Contents page numbers:", pages)
+    except Exception as error:
+        print("Could not measure page numbers (", error, "); the contents will show 0 until updated in Word.")
     print(f"Saved {OUT}")
     print(f"unique commits: Harriet {h}, Belinda {b}; C++ lines {lines}; files {files}")
