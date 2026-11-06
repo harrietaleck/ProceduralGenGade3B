@@ -42,3 +42,7 @@ Content/UI/StartScreenLvl.umap
 
 # Python bytecode from the Docs generators
 __pycache__/
+
+# Presentation cards are for the video only and are not part of the submission
+Docs/GADE7322_Part3_Presentation_Cards.*
+Docs/generate_part3_presentation_cards.py
