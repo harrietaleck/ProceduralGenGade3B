@@ -11,6 +11,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "WaveDirector.h"
+#include "EnemyEvolution.h"
 #include "WaveManager.generated.h"
 
 class AEnemySpawner;
@@ -91,6 +92,17 @@ public:
 
     UPROPERTY(VisibleAnywhere, Instanced, BlueprintReadOnly, Category = "Waves")
     TObjectPtr<UWaveDirector> Director;
+
+    /** Evolving Blight: when on, every enemy gets a genome and the best of each wave breed the next generation. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Waves|Evolution")
+    bool bUseEvolvingEnemies = true;
+
+    /** Breeds the enemy genomes between waves. */
+    UPROPERTY(VisibleAnywhere, Instanced, BlueprintReadOnly, Category = "Waves|Evolution")
+    TObjectPtr<UEnemyEvolution> Evolution;
+
+    UFUNCTION(BlueprintPure, Category = "Waves|Evolution")
+    UEnemyEvolution* GetEvolution() const { return Evolution; }
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Waves")
     TArray<FWaveData> Waves;
@@ -187,6 +199,10 @@ private:
         float ExpectedTravelTime = 30.0f;
         bool bLeaked = false;
         bool bResolved = false;
+
+        /** The enemy's genome, kept here because the enemy may be gone by the time we report its outcome. */
+        FEnemyGenome Genome;
+        bool bHasGenome = false;
     };
 
     UPROPERTY()

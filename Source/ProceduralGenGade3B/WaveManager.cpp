@@ -5,6 +5,8 @@
 #include "EnemySpawner.h"
 #include "Enemy.h"
 #include "HealthComponent.h"
+#include "ProceduralTerrain.h"
+#include "TDGameMode.h"
 #include "TimerManager.h"
 
 AWaveManager::AWaveManager()
@@ -13,6 +15,7 @@ AWaveManager::AWaveManager()
 	PrimaryActorTick.bCanEverTick = false;
 
 	Director = CreateDefaultSubobject<UWaveDirector>(TEXT("WaveDirector"));
+	Evolution = CreateDefaultSubobject<UEnemyEvolution>(TEXT("EnemyEvolution"));
 
 	EnsureDefaultWaveTable();
 }
@@ -318,6 +321,20 @@ float AWaveManager::SpawnNextEnemy()
 		NewEnemy->MoveSpeed *= ActiveWave.SpeedMultiplier;
 		NewEnemy->ResourceReward = FMath::RoundToInt(NewEnemy->ResourceReward * ActiveWave.RewardMultiplier);
 
+		// Evolving Blight: give the enemy its genome. This sits on top of the type stats and the wave scaling
+		// and runs before the elite modifier, which is added last.
+		FEnemyGenome SpawnedGenome;
+		bool bGaveGenome = false;
+		if (bUseEvolvingEnemies && Evolution)
+		{
+			const ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>();
+			const AProceduralTerrain* Terrain = GameMode ? GameMode->GetTerrain() : nullptr;
+			Evolution->EnsureSeeded(Terrain ? Terrain->Seed : 0);
+			SpawnedGenome = Evolution->NextGenome();
+			NewEnemy->ApplyGenome(SpawnedGenome);
+			bGaveGenome = true;
+		}
+
 		// Elite modifiers are added on top of the wave scaling.
 		NewEnemy->MakeElite(Elite);
 
@@ -328,6 +345,11 @@ float AWaveManager::SpawnNextEnemy()
 			ExpectedTravelTime = PathLength / NewEnemy->MoveSpeed;
 		}
 		TrackEnemy(NewEnemy, GetWorld()->GetTimeSeconds(), ExpectedTravelTime);
+		if (bGaveGenome && TrackedEnemies.Num() > 0)
+		{
+			TrackedEnemies.Last().Genome = SpawnedGenome;
+			TrackedEnemies.Last().bHasGenome = true;
+		}
 	}
 
 	++EnemiesSpawnedThisWave;
@@ -442,6 +464,11 @@ void AWaveManager::ResolveTrackedEnemies()
 			const float Progress = (Now - Tracked.SpawnTime) / FMath::Max(1.0f, Tracked.ExpectedTravelTime);
 			Director->RecordEnemyOutcome(Progress, Tracked.bLeaked);
 		}
+		if (Evolution && Tracked.bHasGenome)
+		{
+			const float Progress = (Now - Tracked.SpawnTime) / FMath::Max(1.0f, Tracked.ExpectedTravelTime);
+			Evolution->RecordOutcome(Tracked.Genome, Progress, Tracked.bLeaked);
+		}
 	}
 }
 
@@ -485,6 +512,18 @@ void AWaveManager::CheckWaveCompletion()
 	{
 		ResolveTrackedEnemies();
 		Director->EvaluateWave(GetWorld());
+	}
+
+	// The wave is over, so breed the next generation from the enemies that got furthest. This needs the
+	// outcomes resolved above, which is why it sits after ResolveTrackedEnemies. If the director is off,
+	// resolve here so evolution still works on its own.
+	if (Evolution && bUseEvolvingEnemies)
+	{
+		if (!(bUseAdaptiveDirector && Director))
+		{
+			ResolveTrackedEnemies();
+		}
+		Evolution->EndWave();
 	}
 
 	State = EWaveState::Complete;

@@ -17,6 +17,10 @@ class PROCEDURALGENGADE3B_API UDamageFlashComponent : public UActorComponent
 public:
 	UDamageFlashComponent();
 
+	/** Makes the size this component restores after a hit Factor times bigger. Call it when something else
+	 *  (like an enemy's size gene) permanently changes the mesh scale, or the next hit would undo it. */
+	void ScaleBase(float Factor) { BaseScale *= Factor; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;

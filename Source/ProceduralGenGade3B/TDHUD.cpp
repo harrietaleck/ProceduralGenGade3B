@@ -323,6 +323,20 @@ void ATDHUD::DrawInfoPanel(ATDGameMode* GameMode)
 
 	// Wave director info, so you can see the difficulty change while you play.
 	const AWaveManager* WaveManager = GameMode->GetWaveManager();
+
+	// Evolving Blight: which generation we are on and who the best mutant of the last wave was.
+	if (const UEnemyEvolution* Evolution = WaveManager && WaveManager->bUseEvolvingEnemies ? WaveManager->GetEvolution() : nullptr)
+	{
+		if (Evolution->HasChampion())
+		{
+			const FEnemyGenome Champion = Evolution->GetChampion();
+			AddLine(FString::Printf(TEXT("Blight generation %d  |  champion: %s%s"),
+				Evolution->GetGeneration(), *Champion.Name,
+				Evolution->GetChampionFitness() >= 1.0f ? TEXT("  (reached the tower)") : TEXT("")),
+				InfoSecondaryScale, FLinearColor(1.0f, 0.75f, 0.3f));
+		}
+	}
+
 	const UWaveDirector* Director = WaveManager && WaveManager->bUseAdaptiveDirector ? WaveManager->Director.Get() : nullptr;
 	if (Director)
 	{

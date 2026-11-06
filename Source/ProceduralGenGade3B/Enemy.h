@@ -6,6 +6,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "EnemyGenome.h"
 #include "Enemy.generated.h"
 
 class UHealthComponent;
@@ -271,6 +272,17 @@ public:
 
     static FString GetEliteName(EEliteModifier Modifier);
 
+    // Gives this enemy its genome from the Evolving Blight system. This changes health, speed, damage, loot,
+    // size and the look of the body. Call it after spawning and wave scaling, and before MakeElite.
+    UFUNCTION(BlueprintCallable, Category = "Enemy|Genome")
+    void ApplyGenome(const FEnemyGenome& InGenome);
+
+    UFUNCTION(BlueprintPure, Category = "Enemy|Genome")
+    const FEnemyGenome& GetGenome() const { return Genome; }
+
+    UFUNCTION(BlueprintPure, Category = "Enemy|Genome")
+    bool HasGenome() const { return bHasGenome; }
+
     // Turns this enemy into an elite. Call it after spawning and wave scaling.
     UFUNCTION(BlueprintCallable, Category = "Enemy|Elite")
     void MakeElite(EEliteModifier Modifier);
@@ -348,6 +360,12 @@ private:
     float StunTimeRemaining = 0.0f;
 
     EEliteModifier EliteModifier = EEliteModifier::None;
+
+    // The genes of this enemy. Only meaningful when bHasGenome is true.
+    UPROPERTY()
+    FEnemyGenome Genome;
+
+    bool bHasGenome = false;
     int32 ShieldHitsRemaining = 0;
 
     // Poison status. Bomb clouds mark it and venom spread also does damage over time.

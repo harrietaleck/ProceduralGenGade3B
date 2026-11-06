@@ -89,6 +89,58 @@ FString AEnemy::GetEliteName(EEliteModifier Modifier)
     }
 }
 
+void AEnemy::ApplyGenome(const FEnemyGenome& InGenome)
+{
+    Genome = InGenome;
+    bHasGenome = true;
+
+    // ---- Stats. Every multiplier is 1.0 at a gene value of 0.5, so an average genome plays like the old enemy. ----
+    if (HealthComponent)
+    {
+        HealthComponent->MaxHealth *= Genome.HealthMultiplier();
+        HealthComponent->Heal(HealthComponent->MaxHealth); // fill up to the new maximum
+    }
+    AttackDamage *= Genome.DamageMultiplier();
+    MoveSpeed *= Genome.SpeedMultiplier();
+
+    // Danger pays: a stronger genome drops more loot.
+    ResourceReward = FMath::RoundToInt(ResourceReward * (0.7f + 0.5f * Genome.PowerRating()));
+
+    // ---- Size. The mesh is the root component, so the scale has to go through the same places the spawn
+    // animation and the damage flash already use, or the next hit would shrink it back. ----
+    const float Size = Genome.SizeScale();
+    SpawnTargetScale *= Size;
+    if (MeshComponent)
+    {
+        MeshComponent->SetRelativeScale3D(MeshComponent->GetRelativeScale3D() * Size);
+    }
+    if (UDamageFlashComponent* Flash = FindComponentByClass<UDamageFlashComponent>())
+    {
+        Flash->ScaleBase(Size);
+    }
+
+    // ---- Colour. Hue only rotates the type colour by up to 30 degrees either way, so a Wolf still looks like
+    // a Wolf and a Bear still looks like a Bear. ----
+    FLinearColor Hsv = BodyColor.LinearRGBToHSV();
+    Hsv.R = FMath::Fmod(Hsv.R + (Genome.Hue - 0.5f) * 60.0f + 360.0f, 360.0f);
+    BodyColor = Hsv.HSVToLinearRGB();
+    ApplyBodyColor();
+
+    // ---- Shader. These are the parameters of M_CorruptionPulse, so every genome ripples differently. ----
+    if (BodyMaterial)
+    {
+        BodyMaterial->SetScalarParameterValue(TEXT("PulseSpeed"), 1.5f + 4.0f * Genome.Swiftness);
+        BodyMaterial->SetScalarParameterValue(TEXT("PulseAmplitude"), 3.0f + 11.0f * Genome.Pulse);
+        BodyMaterial->SetScalarParameterValue(TEXT("EmissiveStrength"), 0.3f + 0.9f * Genome.Fury);
+    }
+
+    // The unchanged champion announces itself when it spawns.
+    if (Genome.bChampion)
+    {
+        ShowCombatText(FString::Printf(TEXT("%s (champion)"), *Genome.Name), FColor(255, 190, 60));
+    }
+}
+
 void AEnemy::MakeElite(EEliteModifier Modifier)
 {
     if (Modifier == EEliteModifier::None || !HealthComponent)
