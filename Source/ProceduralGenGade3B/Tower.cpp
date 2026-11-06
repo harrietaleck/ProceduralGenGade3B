@@ -3,6 +3,7 @@
 #include "Tower.h"
 #include "HealthComponent.h"
 #include "DamageFlashComponent.h"
+#include "UpgradeVisualComponent.h"
 #include "Enemy.h"
 #include "Projectile.h"
 #include "TowerDebrisPiece.h"
@@ -36,6 +37,7 @@ ATower::ATower()
 	HealthComponent->MaxHealth = 500.0f;
 
 	CreateDefaultSubobject<UDamageFlashComponent>(TEXT("DamageFlash"));
+	CreateDefaultSubobject<UUpgradeVisualComponent>(TEXT("UpgradeVisual")); // orb and ring for upgrade tiers
 
 	ProjectileClass = AProjectile::StaticClass();
 

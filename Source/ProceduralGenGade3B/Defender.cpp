@@ -4,6 +4,7 @@
 
 #include "HealthComponent.h"
 #include "DamageFlashComponent.h"
+#include "UpgradeVisualComponent.h"
 #include "Enemy.h"
 #include "Projectile.h"
 #include "ProceduralTerrain.h"
@@ -47,6 +48,7 @@ ADefender::ADefender()
     HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
     HealthComponent->MaxHealth = 120.0f;
     CreateDefaultSubobject<UDamageFlashComponent>(TEXT("DamageFlash"));
+    CreateDefaultSubobject<UUpgradeVisualComponent>(TEXT("UpgradeVisual")); // orb, ring and tint for upgrade tiers
     ProjectileClass = AProjectile::StaticClass();
     MetaCost.ForestEssence = 8;
     MetaCost.WoodenMight = 5;
