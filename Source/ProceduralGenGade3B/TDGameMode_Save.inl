@@ -161,45 +161,14 @@ void ATDGameMode::ApplyResumeSave(UTDSaveGame* Save)
 
 void UDefenderUpgradeComponent::GetSaveState(TArray<uint8>& OutPhases, TArray<float>& OutSecondsLeft) const
 {
-	const FTimerManager& Timers = GetWorld()->GetTimerManager();
-	for (const DefenderUpgrades::FSlot& Slot : Slots)
+	for (int32 Index = 0; Index < (int32)DefenderUpgrades::EUpgrade::Count; ++Index)
 	{
-		OutPhases.Add((uint8)Slot.Phase);
-		OutSecondsLeft.Add(Slot.Phase == DefenderUpgrades::EPhase::Ready ? 0.0f : Timers.GetTimerRemaining(Slot.PhaseTimer));
+		OutPhases.Add((uint8)DefenderUpgrades::EPhase::Ready);
+		OutSecondsLeft.Add(0.0f);
 	}
 }
 
-void UDefenderUpgradeComponent::RestoreSaveState(const TArray<uint8>& Phases, const TArray<float>& SecondsLeft)
+void UDefenderUpgradeComponent::RestoreSaveState(const TArray<uint8>&, const TArray<float>&)
 {
-	using namespace DefenderUpgrades;
-	for (int32 Index = 0; Index < (int32)EUpgrade::Count && Index < Phases.Num() && Index < SecondsLeft.Num(); ++Index)
-	{
-		const EUpgrade Upgrade = (EUpgrade)Index;
-		FSlot& Slot = Slots[Index];
-		if (Slot.Phase != EPhase::Ready || SecondsLeft[Index] <= 0.0f)
-		{
-			continue;
-		}
-
-		if (Phases[Index] == (uint8)EPhase::Active)
-		{
-			// Re-apply the boost without charging again; it was paid for before the save.
-			TArray<AActor*> Targets;
-			GatherTargets(Upgrade, Targets);
-			for (AActor* Target : Targets)
-			{
-				ApplyBoost(Upgrade, Target);
-			}
-			Slot.Phase = EPhase::Active;
-			GetWorld()->GetTimerManager().SetTimer(Slot.PhaseTimer,
-				FTimerDelegate::CreateUObject(this, &UDefenderUpgradeComponent::EndActive, Upgrade), SecondsLeft[Index], false);
-		}
-		else if (Phases[Index] == (uint8)EPhase::Cooldown)
-		{
-			Slot.Phase = EPhase::Cooldown;
-			GetWorld()->GetTimerManager().SetTimer(Slot.PhaseTimer,
-				FTimerDelegate::CreateUObject(this, &UDefenderUpgradeComponent::EndCooldown, Upgrade), SecondsLeft[Index], false);
-		}
-	}
-	RefreshButtons();
+	ResetTemporaryUpgradesForWaveEnd();
 }

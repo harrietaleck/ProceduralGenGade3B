@@ -248,6 +248,10 @@ void ATDGameMode::BeginPlay()
 	{
 		WaveManager->Initialize(Spawner, ResumeSave == nullptr);
 		WaveManager->OnWaveComplete.AddDynamic(this, &ATDGameMode::HandleWaveComplete);
+		if (DefenderUpgrades)
+		{
+			WaveManager->OnWaveStarted.AddDynamic(DefenderUpgrades, &UDefenderUpgradeComponent::HandleWaveStarted);
+		}
 	}
 
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
@@ -261,7 +265,7 @@ void ATDGameMode::BeginPlay()
 				MatchHUDWidget->InitializeHUD(this);
 				if (DefenderUpgrades)
 				{
-					DefenderUpgrades->StartHudCountdownUpdates();
+					DefenderUpgrades->RefreshUpgradeUI();
 				}
 			}
 		}
@@ -353,6 +357,14 @@ void ATDGameMode::ShowInsufficientFundsWarning()
 	if (MatchHUDWidget)
 	{
 		MatchHUDWidget->FlashLootInsufficient();
+	}
+}
+
+void ATDGameMode::ShowUpgradeInsufficientFundsWarning()
+{
+	if (WarningBannerWidget)
+	{
+		WarningBannerWidget->ShowWarning(TEXT("Not enough resources for this upgrade"));
 	}
 }
 

@@ -112,6 +112,11 @@ void ATDGameMode::HandleWaveComplete(int32 WaveNumber)
 		return;
 	}
 
+	if (DefenderUpgrades)
+	{
+		DefenderUpgrades->ResetTemporaryUpgradesForWaveEnd();
+	}
+
 	if (WaveManager)
 	{
 		WaveManager->HoldForResultsScreen();

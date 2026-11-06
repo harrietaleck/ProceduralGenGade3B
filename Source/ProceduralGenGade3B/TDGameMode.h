@@ -118,6 +118,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Rules")
 	void ShowInsufficientFundsWarning();
 
+	/** Shows a warning when a defender upgrade can't be purchased from the meta wallet. */
+	void ShowUpgradeInsufficientFundsWarning();
+
 	/** Fired when resources change. */
 	UPROPERTY(BlueprintAssignable, Category = "Rules")
 	FOnResourcesChanged OnResourcesChanged;

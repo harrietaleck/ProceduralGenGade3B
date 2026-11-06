@@ -92,7 +92,7 @@ public:
 	UPROPERTY()
 	TArray<FTDSavedDefender> Defenders;
 
-	/** Temporary upgrade phase (0 Ready, 1 Active, 2 Cooldown) and seconds left, per upgrade. */
+	/** Legacy fields retained for save compatibility; wave-scoped upgrades are no longer persisted. */
 	UPROPERTY()
 	TArray<uint8> UpgradePhases;
 

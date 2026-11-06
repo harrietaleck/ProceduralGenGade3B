@@ -17,31 +17,30 @@
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
 #include "EngineUtils.h"
-#include "TimerManager.h"
-#include "TDHUDWidget.h"                 //  HUD upgrade countdown
+#include "TDHUDWidget.h"                 //  HUD upgrade status text
 #include "TDMetaProgressionSubsystem.h"  //  queued (already paid) upgrades
 
 using namespace DefenderUpgrades;
 
 namespace
 {
-	/** Speed is attacks per second; Active and Cooldown are seconds. */
-	struct FUpgradeConfig { const TCHAR* ButtonName; float Health, Speed, Damage, Active, Cooldown; int32 Cost; };
+	struct FUpgradeConfig { const TCHAR* ButtonName; float Health, Speed, Damage; int32 Cost; };
 
 	const FUpgradeConfig Configs[] = {
-		{ TEXT("BasicButton"),  130.0f, 4.5f, 16.0f, 20.0f, 10.0f, 50 },
-		{ TEXT("ArcherButton"), 115.0f, 5.5f, 14.0f, 30.0f, 20.0f, 65 },
-		{ TEXT("PoisonButton"), 140.0f, 4.0f, 20.0f, 15.0f, 15.0f, 50 },
-		{ TEXT("StrongButton"), 250.0f, 3.0f, 28.0f, 60.0f, 30.0f, 50 },
-		{ TEXT("TowerButton"),  650.0f, 1.8f, 60.0f, 90.0f, 60.0f, 750 },
+		{ TEXT("BasicButton"),  130.0f, 4.5f, 16.0f, 50 },
+		{ TEXT("ArcherButton"), 115.0f, 5.5f, 14.0f, 65 },
+		{ TEXT("PoisonButton"), 140.0f, 4.0f, 20.0f, 50 },
+		{ TEXT("StrongButton"), 250.0f, 3.0f, 28.0f, 50 },
+		{ TEXT("TowerButton"),  650.0f, 1.8f, 60.0f, 750 },
 	};
 
 	constexpr float ArcherArrowSpeedBonus = 1000.0f;
 	const FLinearColor ReadyColor(1.0f, 1.0f, 1.0f, 0.0f);
-	const FLinearColor GreyColor(0.25f, 0.25f, 0.25f, 0.65f);
 
 	const FUpgradeConfig& ConfigOf(EUpgrade Upgrade)
 	{
@@ -96,10 +95,6 @@ void UDefenderUpgradeComponent::EndPlay(const EEndPlayReason::Type EndPlayReason
 	}
 
 	ClearScreenBindings();
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().ClearAllTimersForObject(this);
-	}
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -114,7 +109,6 @@ void UDefenderUpgradeComponent::BindOpenScreen()
 
 	BoundScreen.Reset();
 	ClearScreenBindings();
-	GetWorld()->GetTimerManager().ClearTimer(RefreshTimer);
 
 	TArray<UUserWidget*> Widgets;
 	UWidgetBlueprintLibrary::GetAllWidgetsOfClass(this, Widgets, UUserWidget::StaticClass(), true);
@@ -160,8 +154,8 @@ void UDefenderUpgradeComponent::BindScreen(UUserWidget* Screen)
 		});
 
 		Button->OnClicked.RemoveAll(this);
-		Slot.Label = CreateButtonLabel(Screen, Button, TEXT("_Timer"), 20, FVector2D(0.0f, 1.0f), FVector2D(0.0f, 1.0f), FVector2D(8.0f, -6.0f)); // countdown at bottom left
-		Slot.StatsLabel = CreateButtonLabel(Screen, Button, TEXT("_Stats"), 13, FVector2D(0.5f, 1.0f), FVector2D(0.5f, 0.0f), FVector2D(0.0f, 4.0f)); //  stats just below the button
+		Slot.Label = CreateButtonLabel(Screen, Button, TEXT("_Status"), 20, FVector2D(0.0f, 1.0f), FVector2D(0.0f, 1.0f), FVector2D(8.0f, -6.0f));
+		Slot.StatsLabel = CreateButtonLabel(Screen, Button, TEXT("_Stats"), 13, FVector2D(0.5f, 1.0f), FVector2D(0.5f, 0.0f), FVector2D(0.0f, 4.0f));
 	}
 
 	if (UButton* Button = Slots[(int32)EUpgrade::Basic].Button.Get())  { Button->OnClicked.AddDynamic(this, &UDefenderUpgradeComponent::OnBasicClicked); }
@@ -181,9 +175,7 @@ void UDefenderUpgradeComponent::BindScreen(UUserWidget* Screen)
 		}
 	}
 
-	RefreshButtons();
-	GetWorld()->GetTimerManager().SetTimer(
-		RefreshTimer, this, &UDefenderUpgradeComponent::RefreshButtons, 1.0f, true);
+	RefreshUpgradeUI();
 }
 
 void UDefenderUpgradeComponent::ClearScreenBindings()
@@ -205,11 +197,63 @@ void UDefenderUpgradeComponent::ClearScreenBindings()
 UTextBlock* UDefenderUpgradeComponent::CreateButtonLabel(UUserWidget* Screen, UButton* Button, const TCHAR* Suffix, int32 FontSize,
 	FVector2D Pivot, FVector2D Alignment, FVector2D PixelOffset) const //
 {
+	if (FCString::Strcmp(Suffix, TEXT("_Status")) == 0)
+	{
+		const FName LabelName(*(Button->GetName() + Suffix));
+		UTextBlock* Label = Cast<UTextBlock>(Screen->GetWidgetFromName(LabelName));
+		UOverlay* Overlay = Cast<UOverlay>(Button->GetContent());
+		if (!Overlay)
+		{
+			Overlay = Screen->WidgetTree->ConstructWidget<UOverlay>(
+				UOverlay::StaticClass(), FName(*(Button->GetName() + TEXT("_StatusOverlay"))));
+			UWidget* ExistingContent = Button->GetContent();
+			Button->SetContent(Overlay);
+			if (ExistingContent)
+			{
+				if (UOverlaySlot* ContentSlot = Overlay->AddChildToOverlay(ExistingContent))
+				{
+					ContentSlot->SetHorizontalAlignment(HAlign_Fill);
+					ContentSlot->SetVerticalAlignment(VAlign_Fill);
+				}
+			}
+		}
+
+		if (!Label)
+		{
+			Label = Screen->WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), LabelName);
+		}
+		if (UPanelWidget* Parent = Label->GetParent(); Parent && Parent != Overlay)
+		{
+			Parent->RemoveChild(Label);
+		}
+		if (Label->GetParent() != Overlay)
+		{
+			Overlay->AddChildToOverlay(Label);
+		}
+
+		if (UOverlaySlot* LabelSlot = Cast<UOverlaySlot>(Label->Slot))
+		{
+			LabelSlot->SetHorizontalAlignment(HAlign_Center);
+			LabelSlot->SetVerticalAlignment(VAlign_Bottom);
+			LabelSlot->SetPadding(FMargin(2.0f, 0.0f, 2.0f, 3.0f));
+		}
+		FSlateFontInfo Font = Label->GetFont();
+		Font.Size = FontSize;
+		Label->SetFont(Font);
+		Label->SetJustification(ETextJustify::Center);
+		Label->SetColorAndOpacity(FLinearColor::Black);
+		Label->SetShadowOffset(FVector2D(1.0f, 1.0f));
+		Label->SetShadowColorAndOpacity(FLinearColor(1.0f, 1.0f, 1.0f, 0.8f));
+		Label->SetRenderOpacity(1.0f);
+		Label->SetVisibility(ESlateVisibility::HitTestInvisible);
+		return Label;
+	}
+
 	UCanvasPanelSlot* ButtonSlot = Cast<UCanvasPanelSlot>(Button->Slot);
 	UCanvasPanel* Canvas = Cast<UCanvasPanel>(Button->GetParent());
 	if (!ButtonSlot || !Canvas || !Screen->WidgetTree)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Cannot position countdown label for '%s': expected a CanvasPanel parent."), *Button->GetName());
+		UE_LOG(LogTemp, Warning, TEXT("Cannot position stats label for '%s': expected a CanvasPanel parent."), *Button->GetName());
 		return nullptr;
 	}
 
@@ -288,7 +332,6 @@ void UDefenderUpgradeComponent::CloseScreen()
 {
 	if (UUserWidget* Screen = BoundScreen.Get()) { Screen->RemoveFromParent(); }
 	ClearScreenBindings();
-	GetWorld()->GetTimerManager().ClearTimer(RefreshTimer);
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
 	{
 		FInputModeGameAndUI InputMode;
@@ -307,7 +350,7 @@ void UDefenderUpgradeComponent::OnTowerClicked()  { TryActivate(EUpgrade::Tower)
 
 void UDefenderUpgradeComponent::HandleMetaCurrencyChanged()
 {
-	RefreshButtons();
+	RefreshUpgradeUI();
 }
 
 void UDefenderUpgradeComponent::GatherTargets(EUpgrade Upgrade, TArray<AActor*>& OutTargets) const
@@ -343,6 +386,7 @@ bool UDefenderUpgradeComponent::Spend(EUpgrade Upgrade) const
 
 void UDefenderUpgradeComponent::TryActivate(EUpgrade Upgrade)
 {
+	UE_LOG(LogTemp, Display, TEXT("Defender upgrade purchase requested: %s."), ConfigOf(Upgrade).ButtonName);
 	FSlot& Slot = Slots[(int32)Upgrade];
 	const ATDGameMode* GameMode = GetGameMode();
 	//  Was IsInteractionBlocked(), which is also true on the between-wave results screen and silently
@@ -354,13 +398,15 @@ void UDefenderUpgradeComponent::TryActivate(EUpgrade Upgrade)
 	if (!Spend(Upgrade)) //  the single deduction; nothing is charged when this fails
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Defender upgrade %s refused: not enough resources."), ConfigOf(Upgrade).ButtonName); //
-		RefreshButtons();
+		if (ATDGameMode* MutableGameMode = GetGameMode())
+		{
+			MutableGameMode->ShowUpgradeInsufficientFundsWarning();
+		}
+		RefreshUpgradeUI();
 		return;
 	}
 
-	//  Root cause of "buttons do nothing": the Defenders screen is the Start-menu shop, where no units
-	//  exist, so every click used to be refused. Now the paid upgrade is queued and starts as soon as
-	//  that unit type is on the field (placement, or match start for the Tower).
+	// If there is no matching unit yet, keep the already-paid upgrade queued until one is placed.
 	if (Targets.Num() == 0)
 	{
 		if (UTDMetaProgressionSubsystem* Meta = GetWorld()->GetGameInstance()->GetSubsystem<UTDMetaProgressionSubsystem>())
@@ -368,30 +414,10 @@ void UDefenderUpgradeComponent::TryActivate(EUpgrade Upgrade)
 			Meta->AddPendingUpgrade((int32)Upgrade);
 		}
 		UE_LOG(LogTemp, Display, TEXT("Defender upgrade %s bought and queued until that unit is on the field."), ConfigOf(Upgrade).ButtonName);
-		RefreshButtons();
+		RefreshUpgradeUI();
 		return;
 	}
 	StartActive(Upgrade, Targets); //
-}
-
-void UDefenderUpgradeComponent::EndActive(EUpgrade Upgrade)
-{
-	RemoveBoosts(Upgrade);
-
-	FSlot& Slot = Slots[(int32)Upgrade];
-	Slot.Phase = EPhase::Cooldown;
-	GetWorld()->GetTimerManager().SetTimer(
-		Slot.PhaseTimer,
-		FTimerDelegate::CreateUObject(this, &UDefenderUpgradeComponent::EndCooldown, Upgrade),
-		ConfigOf(Upgrade).Cooldown,
-		false);
-	RefreshButtons();
-}
-
-void UDefenderUpgradeComponent::EndCooldown(EUpgrade Upgrade)
-{
-	Slots[(int32)Upgrade].Phase = EPhase::Ready;
-	RefreshButtons();
 }
 
 void UDefenderUpgradeComponent::HandleDefenderSpawned(ADefender* Defender)
@@ -399,7 +425,63 @@ void UDefenderUpgradeComponent::HandleDefenderSpawned(ADefender* Defender)
 	if (!Defender) { return; }
 	const EUpgrade Upgrade = UpgradeFor(Defender);
 	if (Slots[(int32)Upgrade].Phase == EPhase::Active) { ApplyBoost(Upgrade, Defender); }
-	else { ActivatePendingUpgrades(); } //  first unit of a queued (already paid) upgrade type
+	else { ActivatePendingUpgrades(); }
+	RefreshUpgradeUI();
+}
+
+void UDefenderUpgradeComponent::ResetTemporaryUpgradesForWaveEnd()
+{
+	UWorld* World = GetWorld();
+	UTDMetaProgressionSubsystem* Meta = World && World->GetGameInstance()
+		? World->GetGameInstance()->GetSubsystem<UTDMetaProgressionSubsystem>()
+		: nullptr;
+	bool bRefundQueued[(int32)EUpgrade::Count] = {};
+	if (Meta)
+	{
+		for (int32 Index = 0; Index < (int32)EUpgrade::Count; ++Index)
+		{
+			bRefundQueued[Index] = Meta->IsUpgradePending(Index);
+		}
+		Meta->ClearPendingUpgrades();
+	}
+
+	for (int32 Index = 0; Index < (int32)EUpgrade::Count; ++Index)
+	{
+		FSlot& Slot = Slots[Index];
+		const bool bWasActive = Slot.Phase == EPhase::Active;
+		const bool bWasQueued = bRefundQueued[Index];
+		RemoveBoosts((EUpgrade)Index);
+		if (bWasActive || bWasQueued)
+		{
+			Slot.Phase = EPhase::DisabledAfterWave;
+		}
+		else if (Slot.Phase != EPhase::DisabledAfterWave)
+		{
+			Slot.Phase = EPhase::Ready;
+		}
+
+		if (Meta && bRefundQueued[Index])
+		{
+			// A queued purchase that never had a matching unit received no effect this wave.
+			Meta->AddRewards(MetaCostOf((EUpgrade)Index));
+		}
+	}
+
+	UE_LOG(LogTemp, Display, TEXT("Wave-end upgrade reset complete; queued purchases cleared."));
+	RefreshUpgradeUI();
+}
+
+void UDefenderUpgradeComponent::HandleWaveStarted(int32 WaveNumber)
+{
+	for (FSlot& Slot : Slots)
+	{
+		if (Slot.Phase == EPhase::DisabledAfterWave)
+		{
+			Slot.Phase = EPhase::Ready;
+		}
+	}
+	UE_LOG(LogTemp, Display, TEXT("Refreshing defender upgrades for wave %d."), WaveNumber);
+	RefreshUpgradeUI();
 }
 
 void UDefenderUpgradeComponent::ApplyBoost(EUpgrade Upgrade, AActor* Target)
@@ -465,23 +547,18 @@ void UDefenderUpgradeComponent::RemoveBoosts(EUpgrade Upgrade)
 
 //  DescribeStats moved to DefenderUpgradeComponent_Extra.inl to keep this file under 500 lines.
 
-void UDefenderUpgradeComponent::RefreshButtons()
+void UDefenderUpgradeComponent::RefreshUpgradeUI()
 {
-	UpdateHudCountdown();
+	UpdateStatusText();
 
 	UUserWidget* Screen = BoundScreen.Get();
 	if (!Screen || !Screen->IsInViewport())
 	{
-		GetWorld()->GetTimerManager().ClearTimer(RefreshTimer);
 		ClearScreenBindings();
 		return;
 	}
 
-	const FTimerManager& Timers = GetWorld()->GetTimerManager();
-
-	//  The Defenders screen has no C++ parent and its graph never sets its resource text, so its
-	//  four Text Blocks (LeafR, WoodR, GemR, LanternR) stayed empty. Fill them from the existing
-	//  meta wallet here; this runs when the screen is bound, after every purchase and every 0.25 s.
+	// Fill the screen's resource text from the existing meta wallet when it opens or changes.
 	if (const ATDGameMode* GameMode = GetGameMode())
 	{
 		const FMetaCurrencyRewards Wallet = GameMode->GetMetaWallet();
@@ -504,17 +581,15 @@ void UDefenderUpgradeComponent::RefreshButtons()
 		UButton* Button = Slot.Button.Get();
 		if (!Button) { continue; }
 
-		const bool bUnavailable = Slot.Phase != EPhase::Ready;
-		const bool bQueued = !bUnavailable && IsPending(Upgrade);
-		const bool bCanAfford = CanAfford(Upgrade);
-		const bool bUnlocked = !bUnavailable && !bQueued && bCanAfford;
-		const FLinearColor StateColor = bUnavailable
-			? FLinearColor(0.9f, 0.12f, 0.12f, 1.0f)
-			: bQueued
-				? FLinearColor(1.0f, 0.42f, 0.05f, 1.0f)
-				: bUnlocked
-					? ReadyColor
-					: GreyColor;
+		const bool bQueued = Slot.Phase == EPhase::Ready && IsPending(Upgrade);
+		const bool bActive = Slot.Phase == EPhase::Active;
+		const bool bDisabledAfterWave = Slot.Phase == EPhase::DisabledAfterWave;
+		const bool bHasColoredState = bQueued || bActive || bDisabledAfterWave;
+		const FLinearColor StateColor = bDisabledAfterWave
+			? FLinearColor(0.85f, 0.05f, 0.05f, 1.0f)
+			: bQueued ? FLinearColor(1.0f, 0.42f, 0.05f, 1.0f)
+			: bActive ? FLinearColor(1.0f, 0.42f, 0.05f, 1.0f)
+			: ReadyColor;
 
 		// Keep clicks available so the purchase handler can show why a purchase is refused.
 		// TryActivate still enforces phase, queue, match state, and the actual wallet balance.
@@ -526,9 +601,9 @@ void UDefenderUpgradeComponent::RefreshButtons()
 		StateStyle.Disabled = StateStyle.Normal;
 		StateStyle.Disabled.TintColor = FSlateColor(StateColor);
 		Button->SetStyle(StateStyle);
-		Button->SetBackgroundColor(FLinearColor::White);
+		Button->SetBackgroundColor(StateColor);
 
-		if (bUnavailable || bQueued || !bCanAfford)
+		if (bHasColoredState)
 		{
 			for (const FSlot::FTextColor& TextColor : Slot.OriginalTextColors)
 			{
@@ -549,7 +624,7 @@ void UDefenderUpgradeComponent::RefreshButtons()
 			}
 		}
 
-		if (UTextBlock* Stats = Slot.StatsLabel.Get()) //  refreshed every 0.25 s, so activation/expiry show at once
+		if (UTextBlock* Stats = Slot.StatsLabel.Get())
 		{
 			Stats->SetText(FText::FromString(DescribeStats(Upgrade))); //
 			//  Keep generated stats hidden below the buttons; button labels and purchase logic remain unchanged.
@@ -558,31 +633,13 @@ void UDefenderUpgradeComponent::RefreshButtons()
 
 		UTextBlock* Label = Slot.Label.Get();
 		if (!Label) { continue; }
-		if (bQueued)
-		{
-			Label->SetText(FText::FromString(TEXT("Queued")));
-			Label->SetColorAndOpacity(FLinearColor::Black);
-			Label->SetVisibility(ESlateVisibility::HitTestInvisible);
-			continue;
-		}
-		if (Slot.Phase == EPhase::Ready)
-		{
-			if (!bCanAfford)
-			{
-				Label->SetText(FText::FromString(TEXT("Insufficient resources")));
-				Label->SetColorAndOpacity(FLinearColor::Black);
-				Label->SetVisibility(ESlateVisibility::HitTestInvisible);
-			}
-			else
-			{
-				Label->SetVisibility(ESlateVisibility::Collapsed);
-			}
-			continue;
-		}
-
-		const int32 Seconds = FMath::CeilToInt(FMath::Max(0.0f, Timers.GetTimerRemaining(Slot.PhaseTimer)));
-		Label->SetText(FText::FromString(FString::Printf(TEXT("%d s"), Seconds)));
+		const TCHAR* Status = bDisabledAfterWave ? TEXT("DISABLED")
+			: bQueued ? TEXT("QUEUED")
+			: bActive ? TEXT("ENABLED")
+			: TEXT("DISABLED");
+		Label->SetText(FText::FromString(Status));
 		Label->SetColorAndOpacity(FLinearColor::Black);
+		Label->SetRenderOpacity(1.0f);
 		Label->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 }

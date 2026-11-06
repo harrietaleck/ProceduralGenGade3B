@@ -1,5 +1,5 @@
 // DefenderUpgradeComponent_Extra.inl - included by DefenderUpgradeComponent.cpp (not compiled alone).
-// Queued purchases, the HUD upgrade countdown and the stats text shown on the Defenders screen.
+// Queued purchases, wave-scoped status text and the stats text shown on the Defenders screen.
 
 void UDefenderUpgradeComponent::BeginPlay()
 {
@@ -10,17 +10,6 @@ void UDefenderUpgradeComponent::BeginPlay()
 		{
 			Meta->OnMetaCurrencyChanged.AddUniqueDynamic(this, &UDefenderUpgradeComponent::HandleMetaCurrencyChanged);
 		}
-	}
-}
-
-void UDefenderUpgradeComponent::StartHudCountdownUpdates()
-{
-	UpdateHudCountdown();
-	if (UWorld* World = GetWorld())
-	{
-		// Reuse this handle so initialization cannot create a second countdown timer.
-		World->GetTimerManager().SetTimer(
-			CountdownTimer, this, &UDefenderUpgradeComponent::UpdateHudCountdown, 1.0f, true);
 	}
 }
 
@@ -42,9 +31,7 @@ void UDefenderUpgradeComponent::StartActive(EUpgrade Upgrade, const TArray<AActo
 		if (const ATower* Tower = Cast<ATower>(Target)) { Tower->PlayUpgradeVFX(); }
 		else if (const ADefender* Defender = Cast<ADefender>(Target)) { Defender->PlayActivationVFX(); }
 	}
-	GetWorld()->GetTimerManager().SetTimer(Slot.PhaseTimer,
-		FTimerDelegate::CreateUObject(this, &UDefenderUpgradeComponent::EndActive, Upgrade), ConfigOf(Upgrade).Active, false);
-	RefreshButtons();
+	RefreshUpgradeUI();
 }
 
 void UDefenderUpgradeComponent::ActivatePendingUpgrades()
@@ -66,7 +53,7 @@ void UDefenderUpgradeComponent::ActivatePendingUpgrades()
 	}
 }
 
-void UDefenderUpgradeComponent::UpdateHudCountdown()
+void UDefenderUpgradeComponent::UpdateStatusText()
 {
 	const ATDGameMode* GameMode = GetGameMode();
 	UTDHUDWidget* Hud = GameMode ? GameMode->GetMatchHUDWidget() : nullptr;
@@ -83,28 +70,18 @@ void UDefenderUpgradeComponent::UpdateHudCountdown()
 		TEXT("Tower")
 	};
 	TArray<FString> StatusLines;
-	FTimerManager& Timers = GetWorld()->GetTimerManager();
-
 	for (int32 Index = 0; Index < (int32)EUpgrade::Count; ++Index)
 	{
 		const EUpgrade Upgrade = (EUpgrade)Index;
 		const FSlot& Slot = Slots[Index];
-		FString Status;
-
-		if (Slot.Phase == EPhase::Active || Slot.Phase == EPhase::Cooldown)
-		{
-			const int32 Seconds = FMath::CeilToInt(FMath::Max(0.0f, Timers.GetTimerRemaining(Slot.PhaseTimer)));
-			const TCHAR* PhaseName = Slot.Phase == EPhase::Active ? TEXT("Active") : TEXT("Cooldown");
-			Status = FString::Printf(TEXT("%s: %s %d s"), Names[Index], PhaseName, Seconds);
-		}
-		else if (IsPending(Upgrade))
-		{
-			Status = FString::Printf(TEXT("%s: Queued"), Names[Index]);
-		}
-		else
-		{
-			Status = FString::Printf(TEXT("%s: Ready"), Names[Index]);
-		}
+		const bool bQueued = Slot.Phase == EPhase::Ready && IsPending(Upgrade);
+		const bool bActive = Slot.Phase == EPhase::Active;
+		const bool bDisabledAfterWave = Slot.Phase == EPhase::DisabledAfterWave;
+		const TCHAR* State = bDisabledAfterWave ? TEXT("DISABLED")
+			: bQueued ? TEXT("QUEUED")
+			: bActive ? TEXT("ENABLED")
+			: TEXT("DISABLED");
+		FString Status = FString::Printf(TEXT("%s: %s"), Names[Index], State);
 		StatusLines.Add(MoveTemp(Status));
 	}
 
@@ -114,9 +91,9 @@ void UDefenderUpgradeComponent::UpdateHudCountdown()
 	Hud->DefendersCountdown->SetShadowOffset(FVector2D(2.0f, 2.0f));
 	Hud->DefendersCountdown->SetShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.9f));
 	Hud->DefendersCountdown->SetAutoWrapText(false);
-	FSlateFontInfo CountdownFont = Hud->DefendersCountdown->GetFont();
-	CountdownFont.Size = FMath::Max(CountdownFont.Size, 18);
-	Hud->DefendersCountdown->SetFont(CountdownFont);
+	FSlateFontInfo StatusFont = Hud->DefendersCountdown->GetFont();
+	StatusFont.Size = FMath::Max(StatusFont.Size, 18);
+	Hud->DefendersCountdown->SetFont(StatusFont);
 	if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Hud->DefendersCountdown->Slot))
 	{
 		Slot->SetAutoSize(true);

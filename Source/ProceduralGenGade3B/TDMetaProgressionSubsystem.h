@@ -44,6 +44,11 @@ public:
         return bWasPending;
     }
 
+    void ClearPendingUpgrades()
+    {
+        PendingUpgrades = 0;
+    }
+
 private:
     UPROPERTY()
     FMetaCurrencyRewards Wallet;
