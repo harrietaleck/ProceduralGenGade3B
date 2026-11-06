@@ -41,6 +41,14 @@ ADefender::ADefender()
     // Scale the cylinder so it looks like a small tower.
     MeshComponent->SetRelativeScale3D(FVector(0.9f, 0.9f, 1.2f));
 
+    // Swap in the Kenney turret model (CC0) if it has been imported. The cylinder stays as a fallback.
+    static ConstructorHelpers::FObjectFinder<UStaticMesh> TurretMesh(TEXT("/Game/ImportedAssets/Kenney/SM_weapon_turret"));
+    if (TurretMesh.Succeeded())
+    {
+        MeshComponent->SetStaticMesh(TurretMesh.Object);
+        MeshComponent->SetRelativeScale3D(FVector(2.2f));
+    }
+
     MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
     MeshComponent->SetCollisionResponseToAllChannels(ECR_Overlap);
 

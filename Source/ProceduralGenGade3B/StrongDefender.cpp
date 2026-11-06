@@ -34,6 +34,14 @@ AStrongDefender::AStrongDefender()
 	ProjectileImpactVFX = TDVFX::Asset(TEXT("/Game/VFX/Enemies/NS_EnemyDeath"));
 	BodyColor = FLinearColor(0.5f, 0.3f, 0.95f);
 	MeshComponent->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.4f));
+
+	// Kenney cannon model (CC0) when it has been imported; the stretched cylinder stays as a fallback.
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> CannonMesh(TEXT("/Game/ImportedAssets/Kenney/SM_weapon_cannon"));
+	if (CannonMesh.Succeeded())
+	{
+		MeshComponent->SetStaticMesh(CannonMesh.Object);
+		MeshComponent->SetRelativeScale3D(FVector(2.6f));
+	}
 }
 
 float AStrongDefender::GetThreatRating() const

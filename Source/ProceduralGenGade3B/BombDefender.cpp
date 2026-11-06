@@ -36,6 +36,14 @@ APoisonLightBombDefender::APoisonLightBombDefender()
         MeshComponent->SetRelativeScale3D(FVector(0.8f, 0.8f, 0.8f));
     }
 
+    //Use the Kenney catapult model (CC0) when it has been imported; BombAreaMesh stays the sphere
+    static ConstructorHelpers::FObjectFinder<UStaticMesh> CatapultMesh(TEXT("/Game/ImportedAssets/Kenney/SM_weapon_catapult"));
+    if (CatapultMesh.Succeeded() && MeshComponent)
+    {
+        MeshComponent->SetStaticMesh(CatapultMesh.Object);
+        MeshComponent->SetRelativeScale3D(FVector(2.0f));
+    }
+
     //The bomb defender doesn't use projectiles
     ProjectileClass = nullptr;
 

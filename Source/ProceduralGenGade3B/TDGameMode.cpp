@@ -38,6 +38,15 @@
 #include "Components/TextBlock.h"
 #include "Widgets/Layout/Anchors.h"
 #include "EngineUtils.h"
+#include "Engine/DirectionalLight.h"
+#include "Engine/SkyLight.h"
+#include "Engine/ExponentialHeightFog.h"
+#include "Components/DirectionalLightComponent.h"
+#include "Components/PointLightComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Components/SkyLightComponent.h"
+#include "Components/ExponentialHeightFogComponent.h"
 #include "TimerManager.h"
 
 ATDGameMode::ATDGameMode()
@@ -70,12 +79,131 @@ ATDGameMode::ATDGameMode()
 	StartingMetaWallet.LightLanterns = 10;
 }
 
+// Fantasy-horror mood: a dimmer, cool moonlit sun, a lower sky light and a low violet-teal fog.
+// It is dark enough to feel eerie but the lanes and defenders stay easy to read.
+static void ApplyMoodLighting(UWorld* World)
+{
+	if (!World)
+	{
+		return;
+	}
+	for (TActorIterator<ADirectionalLight> It(World); It; ++It)
+	{
+		if (UDirectionalLightComponent* Sun = Cast<UDirectionalLightComponent>(It->GetLightComponent()))
+		{
+			Sun->SetLightColor(FLinearColor(0.62f, 0.7f, 1.0f));
+			Sun->SetIntensity(Sun->Intensity * 0.55f);
+		}
+	}
+	for (TActorIterator<ASkyLight> It(World); It; ++It)
+	{
+		if (USkyLightComponent* Sky = It->GetLightComponent())
+		{
+			Sky->SetLightColor(FLinearColor(0.5f, 0.55f, 0.85f));
+			Sky->SetIntensity(Sky->Intensity * 0.65f);
+		}
+	}
+
+	AExponentialHeightFog* Fog = nullptr;
+	for (TActorIterator<AExponentialHeightFog> It(World); It; ++It)
+	{
+		Fog = *It;
+		break;
+	}
+	if (!Fog)
+	{
+		Fog = World->SpawnActor<AExponentialHeightFog>(FVector(0.0f, 0.0f, 0.0f), FRotator::ZeroRotator);
+	}
+	if (Fog && Fog->GetComponent())
+	{
+		UExponentialHeightFogComponent* FogComp = Fog->GetComponent();
+		FogComp->SetFogDensity(0.018f);
+		FogComp->SetFogHeightFalloff(0.25f);
+		FogComp->SetFogMaxOpacity(0.75f);
+		FogComp->SetStartDistance(1500.0f);
+		FogComp->FogInscatteringLuminance = FLinearColor(0.16f, 0.12f, 0.3f);
+		FogComp->MarkRenderStateDirty();
+	}
+}
+
+// Level dressing: glowing crystal clusters and rock piles beside every lane, each crystal with a small
+// coloured light, so the paths read clearly in the dim light. Positions come from the lane waypoints.
+static void DecorateLanes(UWorld* World, AProceduralTerrain* Terrain)
+{
+	if (!World || !Terrain)
+	{
+		return;
+	}
+	UStaticMesh* Crystal = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/ImportedAssets/Kenney/SM_detail_crystal_large"));
+	UStaticMesh* Rocks = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/ImportedAssets/Kenney/SM_detail_rocks_large"));
+	if (!Crystal && !Rocks)
+	{
+		return;
+	}
+
+	FRandomStream Random(Terrain->Seed);
+	const FLinearColor Glows[] = { FLinearColor(0.6f, 0.25f, 1.0f), FLinearColor(0.2f, 0.9f, 0.85f), FLinearColor(1.0f, 0.55f, 0.2f) };
+	int32 Placed = 0;
+	for (const FEnemyPath& Path : Terrain->GetEnemyPaths())
+	{
+		float SinceLast = 0.0f;
+		for (int32 I = 1; I < Path.Waypoints.Num() && Placed < 60; ++I)
+		{
+			SinceLast += FVector::Dist2D(Path.Waypoints[I - 1], Path.Waypoints[I]);
+			if (SinceLast < 650.0f)
+			{
+				continue;
+			}
+			SinceLast = 0.0f;
+
+			const FVector Dir = (Path.Waypoints[I] - Path.Waypoints[I - 1]).GetSafeNormal2D();
+			const FVector Side(-Dir.Y, Dir.X, 0.0f);
+			const float Offset = (Random.FRand() > 0.5f ? 1.0f : -1.0f) * Random.FRandRange(420.0f, 640.0f);
+			FVector Pos = Path.Waypoints[I] + Side * Offset;
+
+			// Drop the prop onto the ground. Skip it if nothing is below.
+			FHitResult Hit;
+			if (!World->LineTraceSingleByChannel(Hit, Pos + FVector(0, 0, 2000), Pos - FVector(0, 0, 2000), ECC_Visibility))
+			{
+				continue;
+			}
+			Pos = Hit.ImpactPoint;
+
+			const bool bCrystal = Crystal && (!Rocks || Random.FRand() > 0.35f);
+			UStaticMeshComponent* Prop = NewObject<UStaticMeshComponent>(Terrain);
+			Prop->SetStaticMesh(bCrystal ? Crystal : Rocks);
+			Prop->SetMobility(EComponentMobility::Movable);
+			Prop->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Prop->SetWorldLocationAndRotation(Pos, FRotator(0.0f, Random.FRandRange(0.0f, 360.0f), 0.0f));
+			Prop->SetWorldScale3D(FVector(Random.FRandRange(1.6f, 2.4f)));
+			Prop->RegisterComponentWithWorld(World);
+			++Placed;
+
+			if (bCrystal)
+			{
+				UPointLightComponent* Glow = NewObject<UPointLightComponent>(Terrain);
+				Glow->SetMobility(EComponentMobility::Movable);
+				Glow->SetLightColor(Glows[Random.RandRange(0, 2)]);
+				Glow->SetIntensity(2500.0f);
+				Glow->SetAttenuationRadius(550.0f);
+				Glow->SetCastShadows(false);
+				Glow->SetWorldLocation(Pos + FVector(0, 0, 90));
+				Glow->RegisterComponentWithWorld(World);
+			}
+		}
+	}
+}
+
 void ATDGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
 	const FString LevelName = UGameplayStatics::GetCurrentLevelName(this, true);
 	ATDMusicManager::GetOrCreate(this);
+	if (!LevelName.Contains(TEXT("StartScreen")))
+	{
+		ApplyMoodLighting(GetWorld());
+	}
 	if (LevelName.Contains(TEXT("StartScreen")))
 	{
 		if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
@@ -232,6 +360,7 @@ void ATDGameMode::BeginPlay()
 	//  Visual pass: tower crystals + activation burst (after validation, so they never affect it),
 	//  and looping forest ambience if that system has been created.
 	Tower->ActivateTowerVisuals();
+	DecorateLanes(GetWorld(), Terrain);
 	if (!ResumeSave)
 	{
 		DefenderUpgrades->ActivatePendingUpgrades(); //  a Tower upgrade bought in the Start-menu shop starts now

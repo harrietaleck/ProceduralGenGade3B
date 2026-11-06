@@ -31,6 +31,14 @@ AArcherDefender::AArcherDefender()
         MeshComponent->SetRelativeScale3D(FVector(0.65f, 0.65f, 1.5f));
     }
 
+    //Use the Kenney ballista model (CC0) when it has been imported; the cone stays as a fallback
+    static ConstructorHelpers::FObjectFinder<UStaticMesh> BallistaMesh(TEXT("/Game/ImportedAssets/Kenney/SM_weapon_ballista"));
+    if (BallistaMesh.Succeeded() && MeshComponent)
+    {
+        MeshComponent->SetStaticMesh(BallistaMesh.Object);
+        MeshComponent->SetRelativeScale3D(FVector(2.8f));
+    }
+
     //Set the long range attack distance
     AttackRange = 1000.0f;
 

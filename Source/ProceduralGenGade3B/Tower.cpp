@@ -33,6 +33,33 @@ ATower::ATower()
 	MeshComponent->SetRelativeScale3D(FVector(1.5f, 1.5f, 3.0f));
 	MeshComponent->SetCollisionProfileName(TEXT("BlockAll"));
 
+	// Stone-brick tower from the Kenney Tower Defense Kit (CC0): four stacked pieces. The bottom piece was
+	// imported with its pivot lowered so the stack keeps the same ground level as the old cylinder.
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> BottomMesh(TEXT("/Game/ImportedAssets/Kenney/SM_tower_round_bottom_a"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> MiddleMesh(TEXT("/Game/ImportedAssets/Kenney/SM_tower_round_middle_a"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> TopMesh(TEXT("/Game/ImportedAssets/Kenney/SM_tower_round_top_a"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> RoofMesh(TEXT("/Game/ImportedAssets/Kenney/SM_tower_round_roof_a"));
+	if (BottomMesh.Succeeded() && MiddleMesh.Succeeded() && TopMesh.Succeeded() && RoofMesh.Succeeded())
+	{
+		MeshComponent->SetStaticMesh(BottomMesh.Object);
+		MeshComponent->SetRelativeScale3D(FVector(1.2f));
+
+		struct FPiece { const TCHAR* Name; UStaticMesh* Mesh; float Z; };
+		const FPiece Pieces[] = {
+			{ TEXT("TowerMiddle"), MiddleMesh.Object, -35.0f },
+			{ TEXT("TowerTop"),    TopMesh.Object,     20.0f },
+			{ TEXT("TowerRoof"),   RoofMesh.Object,   102.5f },
+		};
+		for (const FPiece& Piece : Pieces)
+		{
+			UStaticMeshComponent* Part = CreateDefaultSubobject<UStaticMeshComponent>(Piece.Name);
+			Part->SetupAttachment(MeshComponent);
+			Part->SetStaticMesh(Piece.Mesh);
+			Part->SetRelativeLocation(FVector(0.0f, 0.0f, Piece.Z));
+			Part->SetCollisionProfileName(TEXT("BlockAll"));
+		}
+	}
+
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
 	HealthComponent->MaxHealth = 500.0f;
 

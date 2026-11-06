@@ -283,6 +283,8 @@ void AEnemy::SetEnemyType(EEnemyType InEnemyType)
 void AEnemy::ApplyEnemyType()
 {
     FString MeshPath;
+    const TCHAR* ImportedPath = nullptr; // set per type when an imported animal model should replace the shape
+    float ImportedScale = 1.0f;
 
     switch (EnemyType)
     {
@@ -297,6 +299,8 @@ void AEnemy::ApplyEnemyType()
         HealthComponent->MaxHealth = 260.0f;
         MeshPath = TEXT("/Engine/BasicShapes/Cube.Cube");
         MeshComponent->SetRelativeScale3D(FVector(1.0f));
+        ImportedPath = TEXT("/Game/ImportedAssets/Animals/SM_Dog");
+        ImportedScale = 0.42f;
         BodyColor = FLinearColor(0.42f, 0.24f, 0.08f);
         ResourceType = EResourceType::ArcaneOrb;
         break;
@@ -312,6 +316,8 @@ void AEnemy::ApplyEnemyType()
         HealthComponent->MaxHealth = 75.0f;
         MeshPath = TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
         MeshComponent->SetRelativeScale3D(FVector(0.45f));
+        ImportedPath = TEXT("/Game/ImportedAssets/Animals/SM_Wolf");
+        ImportedScale = 0.22f;
         BodyColor = FLinearColor(0.55f, 0.62f, 0.75f);
         ResourceType = EResourceType::ToxicMucus;
         break;
@@ -327,6 +333,8 @@ void AEnemy::ApplyEnemyType()
         HealthComponent->MaxHealth = 100.0f;
         MeshPath = TEXT("/Engine/BasicShapes/Sphere.Sphere");
         MeshComponent->SetRelativeScale3D(FVector(0.6f));
+        ImportedPath = TEXT("/Game/ImportedAssets/Animals/SM_Cat");
+        ImportedScale = 0.3f;
         BodyColor = FLinearColor(0.85f, 0.15f, 0.15f);
         ResourceType = EResourceType::ArcaneOrb;
         break;
@@ -336,6 +344,16 @@ void AEnemy::ApplyEnemyType()
     if (UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, *MeshPath))
     {
         MeshComponent->SetStaticMesh(Mesh);
+    }
+
+    // Quaternius animal model (CC0) instead of the plain shape, if it has been imported.
+    if (ImportedPath)
+    {
+        if (UStaticMesh* Animal = LoadObject<UStaticMesh>(nullptr, ImportedPath))
+        {
+            MeshComponent->SetStaticMesh(Animal);
+            MeshComponent->SetRelativeScale3D(FVector(ImportedScale));
+        }
     }
 }
 
