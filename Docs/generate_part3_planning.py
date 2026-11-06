@@ -444,6 +444,7 @@ def build(toc_pages=None):
         ["Reproducible", "Seeded by the map seed: same map and same play give the same lineages"],
         ["Where it lives", "UEnemyEvolution, FEnemyGenome, AEnemy::ApplyGenome, the Wave Manager and the HUD"],
         ["How it is checked", "Four automated tests plus play-testing across several waves"],
+        ["Related procedural enemies", "From wave two, boid swarms (separation, alignment, cohesion) and poison slimes that spread a cellular-automaton cloud"],
     ], [4.2, 12.0], None)
 
     # ================= 1 CONCEPT =================

@@ -72,18 +72,25 @@ CARDS = [
         point=[],
     ),
     dict(
-        title="The game in 25 seconds", secs=25,
-        say="Every match builds a new terrain from a seed, with four lanes leading to the central tower. A Wave "
-            "Director adapts each wave to how the player is doing. Everything I show next sits on top of that "
-            "existing game, so I will point out each Part 3 requirement as it happens.",
-        show=["The match is running: terrain, four brown lanes, the tower in the middle.",
-              "Press R once to restart and show that the terrain is different (new map seed on the HUD).",
-              "Point at the HUD: wave number, resources, tower health, director line."],
-        code=[],
-        point=[],
+        title="The game: look and feel", secs=25,
+        say="Every match builds a new terrain from a seed, with lanes leading to the central tower. I replaced the "
+            "placeholder shapes with free CC0 models: Kenney's stone tower and turrets, and Quaternius animals for the "
+            "enemies. The lighting is dimmed and cool with a violet fog for a fantasy-horror mood, glowing crystals "
+            "line the lanes, and the bottom bar shows the defender cards with their cost.",
+        show=["The match is running: terrain, lanes, the brick tower in the middle, crystals beside the lanes.",
+              "Point at the bottom defender cards: hotkey, cost, the selected card raised and highlighted.",
+              "Press F1 to show the developer panel (seed, director, Blight) and press it again to hide it."],
+        code=[
+            dict(file="TDHUD.cpp", start="const bool bSelected = Defaults && Active == Card.Class;", end="const float Dim", extra_after=0,
+                 why="Each card knows if it is selected and affordable, so the bar updates itself from the game state."),
+            dict(file="TDGameMode.cpp", start="static void ApplyMoodLighting", end="Sky->SetIntensity", extra_after=2,
+                 why="The mood: a dimmer, cool-blue sun and sky light, plus a low violet fog added in code."),
+        ],
+        point=["Models: Kenney Tower Defense Kit and Quaternius animal packs, both CC0 (credited in the group report).",
+               "If a model is missing the code falls back to the old shape, so the game never breaks."],
     ),
     dict(
-        title="Upgrades: two tiers each", secs=45,
+        title="Upgrades: two tiers each", secs=40,
         say="Every defender type and the tower now has two upgrade tiers. I press B to open the upgrade screen and buy "
             "tier one for the tower. The same button now offers tier two, which is stronger and costs more. Buying "
             "it raises health, damage and fire rate, and the unit changes visually: a gold orb floats above it, and "
@@ -107,7 +114,7 @@ CARDS = [
                "Fixed a bug on the way: clicking an already-active upgrade used to charge again for no effect."],
     ),
     dict(
-        title="Shaders", secs=40,
+        title="Shaders", secs=35,
         say="I made two shaders in one material. First, vertex displacement: M_CorruptionPulse pushes every vertex "
             "along its normal by a sine wave of time and world position, so the enemy bodies ripple. Here is the "
             "graph in the material editor. Second, the same material blends each enemy's base colour with a pulse "
@@ -126,7 +133,7 @@ CARDS = [
                "The material was built with the editor's material graph, scripted from Python so it can be rebuilt."],
     ),
     dict(
-        title="Visual effects: particles and a post-process", secs=40,
+        title="Visual effects: particles and a post-process", secs=35,
         say="There are two custom effects. Belinda built the Niagara particle systems: tower shots, upgrade bursts "
             "and enemy spawns and deaths. I built the screen-space effect. It is a post-process material that drains "
             "the colour and pulses a red vignette. A component reads the tower's health every frame. Below forty-five "
@@ -163,7 +170,7 @@ CARDS = [
                "Seeded by the map seed, so the same map and play reproduce the same Blight."],
     ),
     dict(
-        title="How the evolution works", secs=40,
+        title="How the evolution works", secs=30,
         say="Evolution lives in one class, UEnemyEvolution. When a wave ends, EndWave sorts the enemies by fitness, "
             "which is how far they travelled plus a bonus for reaching the tower, and keeps the best forty percent as "
             "parents. The champion is copied unchanged. MakeChild does uniform crossover and mutates each gene with a "
@@ -184,7 +191,7 @@ CARDS = [
                "Run them with: Automation RunTests ProceduralGen.EnemyEvolution"],
     ),
     dict(
-        title="Plugging it into the game", secs=25,
+        title="Plugging it into the game", secs=20,
         say="The Wave Manager asks for a genome at every spawn and reports every outcome. ApplyGenome turns the genes "
             "into health, speed, damage, loot, size and shader values. It runs before the elite modifier, so "
             "everything stacks. The seed comes from the map.",
@@ -197,6 +204,27 @@ CARDS = [
                  why="Genes become health, damage, speed and loot. Danger pays: stronger genomes drop more."),
         ],
         point=[],
+    ),
+    dict(
+        title="More procedural enemies: boids and cellular poison", secs=40,
+        say="Two more procedural enemies join from wave two. The swarm uses boids: each small enemy follows the lane "
+            "but also keeps away from close neighbours, faces the way they face, and drifts to their centre, so the "
+            "pack flows like a flock. The slime uses a cellular automaton. When it dies, or gets near a defender, it "
+            "releases poison on a grid. Each infected cell can infect its neighbours, ages, and burns out. A defender "
+            "standing in infected cells takes heavy damage and is destroyed.",
+        show=["Play to wave two: point at the pack of small yellow enemies moving together, splitting round each other.",
+              "Point at the green slime. Let it reach a defender or kill it: the green poison patch grows and fades.",
+              "Show a defender in the poison losing its health bar and disappearing."],
+        code=[
+            dict(file="Enemy.cpp", start="FVector Separation = FVector::ZeroVector;", end="Steer = Steer.GetSafeNormal();", extra_after=0,
+                 why="The three boid rules: separation, alignment and cohesion, added to the heading along the lane."),
+            dict(file="PoisonCloud.cpp", start="TArray<uint8> Next = Age;", end="Age = Next;",
+                 why="The cellular automaton step: infected cells age and burn out, clean cells catch poison from young neighbours."),
+            dict(file="PoisonCloud.cpp", start="void APoisonCloud::DamageDefenders", to_closing_brace=True,
+                 why="Any defender standing in an infected cell takes damage once per step, which is how poison destroys it."),
+        ],
+        point=["Both are seeded random processes, so every game plays out differently.",
+               "Added to each wave's spawn queue in WaveManager so the wave only ends when they are gone."],
     ),
     dict(
         title="Balance: waves react to upgrades", secs=25,
@@ -215,7 +243,7 @@ CARDS = [
                "UpgradeBudgetPerTier = 0.12 is an editable property, no recompile needed to tune it."],
     ),
     dict(
-        title="Challenges and how I solved them", secs=25,
+        title="Challenges and how I solved them", secs=20,
         say="Three problems taught me the most. The damage flash reset enemy size after every hit, so I added "
             "ScaleBase. A settings screen rebound its buttons every frame, writing twelve thousand log lines in two "
             "minutes, so it now binds once. And the director had to measure upgrades before they reset.",
@@ -233,7 +261,7 @@ CARDS = [
     dict(
         title="Conclusion", secs=15,
         say="To summarise: two-tier upgrades, a vertex displacement shader, a post-process effect, and an evolving "
-            "enemy ecosystem, all tested and integrated into the game. Thank you for watching.",
+            "enemy ecosystem with flocking swarms and cellular poison, all tested and integrated into the game. Thank you for watching.",
         show=["Return to a clear shot of the game with the tower in the middle.",
               "Stop the recording after a one-second pause."],
         code=[],
@@ -453,9 +481,9 @@ def build():
         ["Why a genetic algorithm and not a neural network?", "Its rules stay readable, testable and tunable, which mattered for balance. Earlier tower defence work used both approaches (Hind and Harvey, 2024; Wattanapornprom, et al., 2024)."],
         ["What stops the enemies becoming unbeatable?", "Three limits: the shared biomass budget, a growth cap of 2.1, and gene limits. Evolution only redistributes a fixed budget."],
         ["How do you know it works?", "Four automated tests, including a selection test where mean swiftness rises from 0.46 to 0.94, plus play-testing and log checks."],
-        ["Which parts are yours and which are Belinda's?", "Mine: terrain, the Wave Director, the second upgrade tier, the vertex shader, the post-process, upgrade scaling and Evolving Blight. Belinda: the base upgrade system, Niagara effects, music, save/resume and the menu screens."],
+        ["Which parts are yours and which are Belinda's?", "Mine: terrain, the Wave Director, the second upgrade tier, the vertex shader, the post-process, upgrade scaling, Evolving Blight, the boid and poison enemies, the HUD cards, the model swap and the lighting. Belinda: the base upgrade system, Niagara effects, music, save/resume and the menu screens."],
         ["Why is the upgrade wave-scoped?", "It keeps upgrades a per-wave decision and lets the director measure them. Prices and numbers are editable in one table."],
-        ["What would you do with more time?", "Save the evolving population, add a bestiary of past champions, and replace the placeholder meshes with animated characters."],
+        ["What would you do with more time?", "Save the evolving population, add a bestiary of past champions, and swap the static models for animated characters."],
     ], [5.6, 10.8], "Likely questions and answers")
 
     doc.save(OUT)

@@ -342,6 +342,8 @@ def build(toc_pages=None):
         "A complete, playable game across three parts: a new procedural map every match, with at least three lanes to the tower.",
         "An adaptive Wave Director that reads the player, scales difficulty, chooses lanes from live defence coverage, reroutes enemies with A* and now accounts for upgrades.",
         "Every Part 3 requirement is built: two-tier upgrades, a vertex shader, a base-colour shader, Niagara particles, a post-process and an evolving enemy ecosystem.",
+        "Two more procedural enemies: flocking swarms driven by boid rules, and poison slimes whose cellular-automaton cloud spreads, ages and destroys any defender standing in it.",
+        "A game that now looks like a game: free CC0 models replace the placeholder shapes, a defender-card bar replaces the text panel, a moody fantasy-horror light and fog set the tone, and crystals line the lanes.",
         "Quality checks that can be repeated: four automated tests for the evolution system, including a selection test where mean enemy swiftness rises from 0.46 to 0.94 over eight generations, plus smoke runs that read the game log for errors.",
         "A polished front end: start, upgrade, settings, victory and defeat screens, background music with a saved volume, and save and resume.",
         f"Steady teamwork on one repository: about {h_count + b_count} unique commits, branches for each part, merged pull requests, and Git LFS for the binary assets.",
@@ -365,11 +367,12 @@ def build(toc_pages=None):
     gp.heading(doc, "6", "Testing and what is still open")
     text(doc,
          "We tested in three ways: automated tests for the evolution system, smoke runs that launch the game and "
-         "read its log for errors and crashes, and play-testing. We are open about what is not finished. Placeholder "
-         "shapes still stand in for the defender and enemy models, the in-match HUD is text-heavy, save and resume "
-         "does not store the evolving enemy population, and the tier II upgrade prices still need play-testing.")
+         "read its log for errors and crashes, and play-testing. We are open about what is not finished. The imported "
+         "models are static, so enemies slide rather than animate, save and resume does not store the evolving enemy "
+         "population, and the tier II upgrade prices, the swarm and slime strength and the poison damage still need "
+         "play-testing.")
     gp.callout(doc, "Next steps", [
-        "Replace placeholder shapes with licensed models and animations, and redesign the in-match HUD with defender cards and floating health bars.",
+        "Swap the static models for animated skeletal ones, and add floating health bars with icons to the in-match HUD.",
         "Save the evolving population, and add a bestiary of past champions.",
         "Play-test tier II prices and the Blight over more waves, and tune the numbers.",
     ])
@@ -378,11 +381,13 @@ def build(toc_pages=None):
     gp.heading(doc, "7", "Acknowledgements and use of tools")
     bullets(doc, [
         "Low Poly Nature: Essentials by Vertex Rage Studio (2024) supplies the trees, rocks and plants that the terrain scatters across the map. It is used unmodified under the Fab licence.",
+        "Tower Defense Kit 2.1 by Kenney (2024), released under CC0, supplies the stone tower pieces, the four defender models and the lane crystals and rocks.",
+        "Animals Pack and Animal Pack Vol.2 by Quaternius ([s.a.]a; [s.a.]b), released under CC0 and downloaded from OpenGameArt, supply the cat, wolf and dog models used for the enemies.",
         "Unreal Engine 5.8 and its documentation (Epic Games, [s.a.]a; [s.a.]b).",
         "Git, GitHub and GitHub Desktop for version control.",
     ])
     gp.callout(doc, "Use of generative AI", [
-        "Generative AI tools were used during development. The Cursor coding agent (Anysphere, 2026) helped with early gameplay code, comments and report drafts. Claude Code (Anthropic, 2026) helped with the Part 3 work: it assisted with C++ for the upgrade tiers, the shader and post-process, the Wave Director scaling and Evolving Blight, authored the shader and post-process material assets, wrote the automated tests, and helped draft the planning, presentation and group documents.",
+        "Generative AI tools were used during development. The Cursor coding agent (Anysphere, 2026) helped with early gameplay code, comments and report drafts. Claude Code (Anthropic, 2026) helped with the Part 3 work: it assisted with C++ for the upgrade tiers, the shader and post-process, the Wave Director scaling and Evolving Blight, authored the shader and post-process material assets, imported the free models, wrote the new HUD, the boid swarm and the poison cloud code, wrote the automated tests, and helped draft the planning, presentation and group documents.",
         "All of this output was reviewed, built, run and tested by us, and we made the design decisions and are responsible for the final submission.",
     ], fill="FFF8E6", bar="D9A441")
 
@@ -408,10 +413,13 @@ def build(toc_pages=None):
         [("Maleki, M.F. and Zhao, R., 2024. Procedural content generation in games: a survey with insights on emerging LLM integration. ", False),
          ("Proceedings of the AAAI Conference on Artificial Intelligence and Interactive Digital Entertainment", True),
          (", [e-journal] 20(1), pp.167-178. Available at: <https://doi.org/10.1609/aiide.v20i1.31877> [Accessed " + ACCESSED + "].", False)],
+        [("Kenney, 2024. Tower Defense Kit (2.1). [3D asset pack]. Available at: <https://kenney.nl/assets/tower-defense-kit> [Accessed " + ACCESSED + "].", False)],
         [("Manda, H. and Mtabane, B., 2026. ProceduralGenGade3B [Source code]. Available at: <" + GITHUB + "> [Accessed " + ACCESSED + "].", False)],
         [("Mortazavi, F., Moradi, H. and Vahabie, A.-H., 2024. Dynamic difficulty adjustment approaches in video games: a systematic literature review. ", False),
          ("Multimedia Tools and Applications", True),
          (", [e-journal] 83(35), pp.83227-83274. Available at: <https://doi.org/10.1007/s11042-024-18768-x> [Accessed " + ACCESSED + "].", False)],
+        [("Quaternius, [s.a.]a. Animals Pack. [3D asset pack]. Available at: <https://opengameart.org/content/5-low-poly-animals> [Accessed " + ACCESSED + "].", False)],
+        [("Quaternius, [s.a.]b. Animal Pack Vol.2. [3D asset pack]. Available at: <https://opengameart.org/content/animated-animales-low-poly> [Accessed " + ACCESSED + "].", False)],
         [("The Independent Institute of Education (IIE), 2025. Harvard Anglia style reference guide: adapted for The IIE. [pdf] The Independent Institute of Education.", False)],
         [("The Independent Institute of Education (IIE), 2026a. Game Development 3B [GADE7322 Part 1 PoE brief and assessment rubric]. The Independent Institute of Education: Unpublished.", False)],
         [("The Independent Institute of Education (IIE), 2026b. Game Development 3B [GADE7322 Part 2 PoE brief and assessment rubric]. The Independent Institute of Education: Unpublished.", False)],
