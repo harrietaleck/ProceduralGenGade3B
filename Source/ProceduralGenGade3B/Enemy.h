@@ -223,6 +223,11 @@ public:
     UPROPERTY(EditAnywhere, Category = "Enemy|VFX")
     TSoftObjectPtr<UMaterialInterface> CorruptionOverlay;
 
+    /** Body shader. Its vertices pulse in and out (World Position Offset) and its colour and glow breathe.
+        BodyColor is written into its "Color" parameter, so every enemy type keeps its own colour. */
+    UPROPERTY(EditAnywhere, Category = "Enemy|VFX")
+    TSoftObjectPtr<UMaterialInterface> BodyMaterialBase;
+
     // Health component.
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy")
     TObjectPtr<UHealthComponent> HealthComponent;

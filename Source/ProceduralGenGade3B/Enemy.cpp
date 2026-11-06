@@ -64,6 +64,7 @@ AEnemy::AEnemy()
     SpawnVFX = TDVFX::Asset(TEXT("/Game/VFX/Enemies/NS_EnemySpawn"));
     DeathVFX = TDVFX::Asset(TEXT("/Game/VFX/Enemies/NS_EnemyDeath"));
     CorruptionOverlay = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/Materials/Instances/MI_Corruption_Purple.MI_Corruption_Purple")));
+    BodyMaterialBase = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/Materials/Displacement/M_CorruptionPulse.M_CorruptionPulse")));
 }
 
 FString AEnemy::GetTypeName(EEnemyType Type)
@@ -295,7 +296,12 @@ void AEnemy::ApplyBodyColor()
 
     if (!BodyMaterial)
     {
-        UMaterialInterface* BaseMaterial = MeshComponent->GetMaterial(0);
+        // Prefer the pulsing displacement shader. If it is missing, fall back to whatever the mesh already uses.
+        UMaterialInterface* BaseMaterial = BodyMaterialBase.LoadSynchronous();
+        if (!BaseMaterial)
+        {
+            BaseMaterial = MeshComponent->GetMaterial(0);
+        }
         if (!BaseMaterial)
         {
             return;
@@ -307,6 +313,13 @@ void AEnemy::ApplyBodyColor()
     if (BodyMaterial)
     {
         BodyMaterial->SetVectorParameterValue(TEXT("Color"), BodyColor);
+
+        // The glow colour is a brighter version of the type colour, so a wolf pulses pale blue and a bear
+        // pulses warm brown instead of every enemy pulsing the same green.
+        BodyMaterial->SetVectorParameterValue(TEXT("PulseColor"),
+            FLinearColor(FMath::Min(1.0f, BodyColor.R * 1.6f + 0.15f),
+                         FMath::Min(1.0f, BodyColor.G * 1.6f + 0.15f),
+                         FMath::Min(1.0f, BodyColor.B * 1.6f + 0.15f)));
     }
 }
 
