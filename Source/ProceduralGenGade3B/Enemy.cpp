@@ -6,6 +6,7 @@
 
 #include "HealthComponent.h"
 #include "DamageFlashComponent.h"
+#include "TDVFX.h" // *** visual pass
 #include "Defender.h"
 #include "ArcherDefender.h"
 #include "ProceduralTerrain.h"
@@ -58,6 +59,11 @@ AEnemy::AEnemy()
     HealthComponent->MaxHealth = 100.0f;
 
     CreateDefaultSubobject<UDamageFlashComponent>(TEXT("DamageFlash"));
+
+    // *** Default visual-pass assets; all of them can be swapped in the editor.
+    SpawnVFX = TDVFX::Asset(TEXT("/Game/VFX/Enemies/NS_EnemySpawn"));
+    DeathVFX = TDVFX::Asset(TEXT("/Game/VFX/Enemies/NS_EnemyDeath"));
+    CorruptionOverlay = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/Materials/Instances/MI_Corruption_Purple.MI_Corruption_Purple")));
 }
 
 FString AEnemy::GetTypeName(EEnemyType Type)
@@ -313,6 +319,17 @@ void AEnemy::BeginPlay()
     Super::BeginPlay();
 
     ApplyBodyColor();
+
+    // *** Dark spawn burst, plus the corruption aura drawn over the body. The aura is skipped while
+    // *** its material is opaque, so it can never hide the enemy's type colour.
+    TDVFX::Play(this, SpawnVFX, GetActorLocation(), TDVFX::Corruption);
+    if (UMaterialInterface* Aura = CorruptionOverlay.LoadSynchronous())
+    {
+        if (Aura->GetBlendMode() == BLEND_Additive || Aura->GetBlendMode() == BLEND_Translucent)
+        {
+            MeshComponent->SetOverlayMaterial(Aura);
+        }
+    }
 
     //Start the spawn effect
     SpawnTargetScale = MeshComponent->GetRelativeScale3D();
@@ -945,5 +962,6 @@ void AEnemy::HandleDeath(AActor* Killer)
         SpawnSplitChildren();
     }
 
+    TDVFX::Play(this, DeathVFX, GetActorLocation(), TDVFX::Gold); // *** defeat burst (pooled, one-shot)
     Destroy();
 }

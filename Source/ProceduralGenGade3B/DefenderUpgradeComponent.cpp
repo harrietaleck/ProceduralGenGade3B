@@ -19,6 +19,8 @@
 #include "Components/TextBlock.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
+#include "TDHUDWidget.h"                 // *** HUD upgrade countdown
+#include "TDMetaProgressionSubsystem.h"  // *** queued (already paid) upgrades
 
 using namespace DefenderUpgrades;
 
@@ -271,38 +273,33 @@ void UDefenderUpgradeComponent::TryActivate(EUpgrade Upgrade)
 {
 	FSlot& Slot = Slots[(int32)Upgrade];
 	const ATDGameMode* GameMode = GetGameMode();
-	if (Slot.Phase != EPhase::Ready || !GameMode || GameMode->IsInteractionBlocked()) { return; }
+	// *** Was IsInteractionBlocked(), which is also true on the between-wave results screen and silently
+	// *** ate clicks there. Only a finished match blocks purchases now. A queued upgrade can't be bought twice.
+	if (Slot.Phase != EPhase::Ready || !GameMode || GameMode->IsGameOver() || GameMode->IsVictory() || IsPending(Upgrade)) { return; }
 
 	TArray<AActor*> Targets;
 	GatherTargets(Upgrade, Targets);
-	// *** Log why a click was refused, so a silent "no response" can be told apart from a broken binding.
-	if (Targets.Num() == 0)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Defender upgrade %s refused: no living target in this level (place one in a match first)."), ConfigOf(Upgrade).ButtonName); // ***
-		Slot.NoTargetUntil = GetWorld()->GetTimeSeconds() + 2.0; // *** show "No units" on the button; nothing is charged
-		RefreshButtons();
-		return;
-	}
-	if (!Spend(Upgrade))
+	if (!Spend(Upgrade)) // *** the single deduction; nothing is charged when this fails
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Defender upgrade %s refused: not enough resources."), ConfigOf(Upgrade).ButtonName); // ***
 		RefreshButtons();
 		return;
 	}
-	UE_LOG(LogTemp, Display, TEXT("Defender upgrade %s activated on %d target(s)."), ConfigOf(Upgrade).ButtonName, Targets.Num()); // ***
 
-	Slot.Phase = EPhase::Active;
-	for (AActor* Target : Targets)
+	// *** Root cause of "buttons do nothing": the Defenders screen is the Start-menu shop, where no units
+	// *** exist, so every click used to be refused. Now the paid upgrade is queued and starts as soon as
+	// *** that unit type is on the field (placement, or match start for the Tower).
+	if (Targets.Num() == 0)
 	{
-		ApplyBoost(Upgrade, Target);
+		if (UTDMetaProgressionSubsystem* Meta = GetWorld()->GetGameInstance()->GetSubsystem<UTDMetaProgressionSubsystem>())
+		{
+			Meta->AddPendingUpgrade((int32)Upgrade);
+		}
+		UE_LOG(LogTemp, Display, TEXT("Defender upgrade %s bought and queued until that unit is on the field."), ConfigOf(Upgrade).ButtonName);
+		RefreshButtons();
+		return;
 	}
-
-	GetWorld()->GetTimerManager().SetTimer(
-		Slot.PhaseTimer,
-		FTimerDelegate::CreateUObject(this, &UDefenderUpgradeComponent::EndActive, Upgrade),
-		ConfigOf(Upgrade).Active,
-		false);
-	RefreshButtons();
+	StartActive(Upgrade, Targets); // ***
 }
 
 void UDefenderUpgradeComponent::EndActive(EUpgrade Upgrade)
@@ -330,6 +327,7 @@ void UDefenderUpgradeComponent::HandleDefenderSpawned(ADefender* Defender)
 	if (!Defender) { return; }
 	const EUpgrade Upgrade = UpgradeFor(Defender);
 	if (Slots[(int32)Upgrade].Phase == EPhase::Active) { ApplyBoost(Upgrade, Defender); }
+	else { ActivatePendingUpgrades(); } // *** first unit of a queued (already paid) upgrade type
 }
 
 void UDefenderUpgradeComponent::ApplyBoost(EUpgrade Upgrade, AActor* Target)
@@ -393,42 +391,7 @@ void UDefenderUpgradeComponent::RemoveBoosts(EUpgrade Upgrade)
 	Slot.Boosts.Reset();
 }
 
-// *** Reads the real stats: from a living spawned defender/tower of that type when one exists,
-// *** otherwise from the class defaults (CDO) that new spawns start with, so it never shows zeros.
-FString UDefenderUpgradeComponent::DescribeStats(EUpgrade Upgrade) const
-{
-	TArray<AActor*> Targets;
-	GatherTargets(Upgrade, Targets);
-	const ATDGameMode* GameMode = GetGameMode();
-	const AActor* Source = Targets.Num() > 0 ? Targets[0] : nullptr; // ***
-	if (!Source)
-	{
-		UClass* Class = Upgrade == EUpgrade::Tower ? (GameMode && GameMode->TowerClass ? GameMode->TowerClass.Get() : ATower::StaticClass())
-			: Upgrade == EUpgrade::Archer ? AArcherDefender::StaticClass()
-			: Upgrade == EUpgrade::Poison ? APoisonLightBombDefender::StaticClass()
-			: Upgrade == EUpgrade::Strong ? AStrongDefender::StaticClass()
-			: ADefender::StaticClass(); // ***
-		Source = Class->GetDefaultObject<AActor>(); // ***
-	}
-
-	float Health = 0.0f, Interval = 1.0f, Damage = 0.0f;
-	// *** Uses the explicit HealthComponent members so class defaults (not yet spawned) read correctly too.
-	if (const ATower* Tower = Cast<ATower>(Source))
-	{
-		Interval = Tower->FireInterval; Damage = Tower->AttackDamage;
-		Health = Tower->HealthComponent ? Tower->HealthComponent->MaxHealth : 0.0f;
-	}
-	else if (const ADefender* Defender = Cast<ADefender>(Source))
-	{
-		Interval = Defender->GetAttackInterval(); Damage = Defender->GetAttackDamage();
-		Health = Defender->HealthComponent ? Defender->HealthComponent->MaxHealth : 0.0f;
-	}
-
-	// *** Speed is attacks per second, the same unit used by the upgrade targets.
-	const FUpgradeConfig& Config = ConfigOf(Upgrade);
-	return FString::Printf(TEXT("HP %.0f  SPD %.1f  DMG %.0f\nUpgrade: %.0f / %.1f / %.0f"),
-		Health, Interval > 0.0f ? 1.0f / Interval : 0.0f, Damage, Config.Health, Config.Speed, Config.Damage);
-}
+// *** DescribeStats moved to DefenderUpgradeComponent_Extra.inl to keep this file under 500 lines.
 
 void UDefenderUpgradeComponent::RefreshButtons()
 {
@@ -463,7 +426,7 @@ void UDefenderUpgradeComponent::RefreshButtons()
 		if (!Button) { continue; }
 
 		// *** Unlocked purely by resources: enough of its currency = clickable and transparent, otherwise locked grey.
-		const bool bUnlocked = Slot.Phase == EPhase::Ready && CanAfford(Upgrade); // ***
+		const bool bUnlocked = Slot.Phase == EPhase::Ready && CanAfford(Upgrade) && !IsPending(Upgrade); // *** queued = already bought
 		Button->SetIsEnabled(bUnlocked || Slot.Phase == EPhase::Active);           // ***
 		Button->SetBackgroundColor(bUnlocked || Slot.Phase == EPhase::Active ? ReadyColor : GreyColor);
 
@@ -477,10 +440,9 @@ void UDefenderUpgradeComponent::RefreshButtons()
 		if (!Label) { continue; }
 		if (Slot.Phase == EPhase::Ready)
 		{
-			const bool bShowNoTarget = GetWorld()->GetTimeSeconds() < Slot.NoTargetUntil; // ***
-			Label->SetText(FText::FromString(TEXT("No units")));                          // ***
-			Label->SetColorAndOpacity(FLinearColor(1.0f, 0.6f, 0.4f));                    // ***
-			Label->SetVisibility(bShowNoTarget ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); // ***
+			Label->SetText(FText::FromString(TEXT("Queued")));          // *** paid; starts when that unit is placed
+			Label->SetColorAndOpacity(FLinearColor(1.0f, 0.85f, 0.35f)); // ***
+			Label->SetVisibility(IsPending(Upgrade) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); // ***
 			continue;
 		}
 
@@ -492,3 +454,5 @@ void UDefenderUpgradeComponent::RefreshButtons()
 		Label->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 }
+
+#include "DefenderUpgradeComponent_Extra.inl" // *** queued purchases, HUD countdown, stats text

@@ -12,6 +12,8 @@ class UHealthComponent;
 class UStaticMeshComponent;
 class AEnemy;
 class AProjectile;
+class UNiagaraSystem;     // *** visual pass
+class UMaterialInterface; // ***
 
 UCLASS()
 class PROCEDURALGENGADE3B_API ATower : public AActor
@@ -63,6 +65,36 @@ public:
 	/** Changes the time between shots and restarts the fire timer to match. */
 	void SetFireInterval(float NewInterval);
 
+	// *** Visual pass: editable effect/material references (swap them in the editor, no code needed).
+	/** Magical flash at the muzzle on every shot. */
+	UPROPERTY(EditAnywhere, Category = "Tower|VFX")
+	TSoftObjectPtr<UNiagaraSystem> FireVFX;
+
+	/** Energy that surrounds the tower when it activates or is upgraded. */
+	UPROPERTY(EditAnywhere, Category = "Tower|VFX")
+	TSoftObjectPtr<UNiagaraSystem> UpgradeVFX;
+
+	/** Material of the short energy beam drawn to the target on each shot. */
+	UPROPERTY(EditAnywhere, Category = "Tower|VFX")
+	TSoftObjectPtr<UMaterialInterface> BeamMaterial;
+
+	/** *** Beam colour and brightness, written into BeamMaterial's BeamColor/EmissiveIntensity parameters. */
+	UPROPERTY(EditAnywhere, Category = "Tower|VFX")
+	FLinearColor BeamColor = FLinearColor(0.05f, 1.0f, 0.45f); // emerald
+
+	UPROPERTY(EditAnywhere, Category = "Tower|VFX", meta = (ClampMin = "0.0"))
+	float BeamIntensity = 16.0f;
+
+	/** Glowing crystals placed around the tower base (turquoise, gold, emerald). */
+	UPROPERTY(EditAnywhere, Category = "Tower|VFX")
+	TArray<TSoftObjectPtr<UMaterialInterface>> CrystalMaterials;
+
+	/** Called by the game mode once the world is validated: crystals plus an activation burst. */
+	void ActivateTowerVisuals();
+
+	/** Plays the upgrade energy effect around the tower (beam upgrades and tower upgrades). */
+	void PlayUpgradeVFX() const;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -80,6 +112,15 @@ private:
 
 	/** Handle for the repeating fire timer. */
 	FTimerHandle FireTimerHandle;
+
+	/** *** Thin cylinder shown briefly from muzzle to target on each shot (hidden otherwise). */
+	UPROPERTY(VisibleAnywhere, Category = "Tower|VFX", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UStaticMeshComponent> BeamMesh;
+
+	FTimerHandle BeamTimerHandle; // ***
+
+	/** *** Stretches the beam from the muzzle to the target and hides it again on a timer. */
+	void ShowBeam(const FVector& From, const FVector& To);
 
 	/** Gives back the closest living enemy inside AttackRange, or null if there is none. */
 	AEnemy* FindNearestEnemyInRange() const;

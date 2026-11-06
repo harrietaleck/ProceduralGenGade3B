@@ -12,6 +12,8 @@ class UHealthComponent;
 class UStaticMeshComponent;
 class AEnemy;
 class AProjectile;
+class UNiagaraSystem; // *** visual pass
+class UStaticMesh;    // *** projectile shapes
 
 UCLASS()
 class PROCEDURALGENGADE3B_API ADefender : public AActor
@@ -57,7 +59,7 @@ public:
     float DefenderBallScale = 0.35f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender")
-    FLinearColor DefenderBallColor = FLinearColor(1.0f, 0.55f, 0.1f);
+    FLinearColor DefenderBallColor = FLinearColor(0.2f, 0.85f, 1.0f); // *** Basic: turquoise/blue light orbs (was orange)
 
     /** Where the shots start from, measured from the middle of the defender. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defender")
@@ -89,6 +91,47 @@ public:
 
     /** Extra speed added to projectiles this defender fires. Used by temporary upgrades. */
     float ProjectileSpeedBonus = 0.0f;
+
+    // *** Visual pass: editable effect references. Colours follow DefenderBallColor, so each type differs.
+    /** Flash played every time this defender attacks. */
+    UPROPERTY(EditAnywhere, Category = "Defender|VFX")
+    TSoftObjectPtr<UNiagaraSystem> FireVFX;
+
+    /** Energy burst when the defender is placed or receives an upgrade. */
+    UPROPERTY(EditAnywhere, Category = "Defender|VFX")
+    TSoftObjectPtr<UNiagaraSystem> ActivationVFX;
+
+    /** *** Plays FireVFX in this defender's colour. Called by every attack type. */
+    void PlayFireVFX(const FVector& Location) const;
+
+    /** *** Plays ActivationVFX around the defender (placement and upgrades). */
+    void PlayActivationVFX() const;
+
+    // *** Final polish: recognisable projectiles and the placement effect.
+    /** Projectile shape (+Z points forward). Empty = the default glowing orb. */
+    UPROPERTY(EditAnywhere, Category = "Defender|VFX")
+    TSoftObjectPtr<UStaticMesh> ProjectileShape;
+
+    /** Stretch applied to ProjectileShape on top of DefenderBallScale. */
+    UPROPERTY(EditAnywhere, Category = "Defender|VFX")
+    FVector ProjectileShapeScale = FVector::OneVector;
+
+    /** Impact effect for this defender's shots. Empty = the projectile's default impact. */
+    UPROPERTY(EditAnywhere, Category = "Defender|VFX")
+    TSoftObjectPtr<UNiagaraSystem> ProjectileImpactVFX;
+
+    /** Fire burst and outward sparks played on the build pad after a successful placement. */
+    UPROPERTY(EditAnywhere, Category = "Defender|VFX")
+    TSoftObjectPtr<UNiagaraSystem> PlacementFireVFX;
+
+    UPROPERTY(EditAnywhere, Category = "Defender|VFX")
+    TSoftObjectPtr<UNiagaraSystem> PlacementSparksVFX;
+
+    /** Colour, size and shape for one of this defender's projectiles. Used by every attack that fires one. */
+    void StyleProjectile(AProjectile* Shot) const;
+
+    /** Fire burst, sparks and a brief golden/emerald glow on the pad. Called only after a successful placement. */
+    void PlayPlacementVFX();
 
     /** Shared component that handles health, damage and death. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Defender")

@@ -14,6 +14,9 @@
 #include "Kismet/GameplayStatics.h"
 #include "Particles/ParticleSystem.h"
 #include "UObject/ConstructorHelpers.h"
+#include "TDVFX.h" // *** visual pass
+#include "Materials/MaterialInterface.h" // ***
+#include "Materials/MaterialInstanceDynamic.h" // *** emerald beam
 
 ATower::ATower()
 {
@@ -35,6 +38,98 @@ ATower::ATower()
 	CreateDefaultSubobject<UDamageFlashComponent>(TEXT("DamageFlash"));
 
 	ProjectileClass = AProjectile::StaticClass();
+
+	// *** Default visual-pass assets; all of them can be swapped in the editor.
+	FireVFX = TDVFX::Asset(TEXT("/Game/VFX/Towers/NS_TowerFire"));
+	UpgradeVFX = TDVFX::Asset(TEXT("/Game/VFX/Towers/NS_TowerUpgrade"));
+	BeamMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/Materials/Instances/MI_Beam_Gold.MI_Beam_Gold")));
+	for (const TCHAR* Crystal : { TEXT("MI_Glow_Turquoise"), TEXT("MI_Glow_Gold"), TEXT("MI_Glow_Green") })
+	{
+		CrystalMaterials.Add(TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(
+			FString::Printf(TEXT("/Game/Materials/Instances/%s.%s"), Crystal, Crystal))));
+	}
+}
+
+// *** Runs after the world is validated, so these extra components never affect the tower's
+// *** placement/overlap check. No collision and no shadows keep them cheap.
+void ATower::ActivateTowerVisuals()
+{
+	UStaticMesh* Cone = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone"));
+	const int32 CrystalCount = 6;
+	const float GroundZ = GetActorLocation().Z - 150.0f; // the tower body is 300 units tall, centred on the actor
+	for (int32 Index = 0; Cone && CrystalMaterials.Num() > 0 && Index < CrystalCount; ++Index)
+	{
+		UMaterialInterface* Material = CrystalMaterials[Index % CrystalMaterials.Num()].LoadSynchronous();
+		if (!Material)
+		{
+			continue;
+		}
+		const float Angle = 2.0f * PI * Index / CrystalCount;
+		UStaticMeshComponent* Crystal = NewObject<UStaticMeshComponent>(this);
+		Crystal->SetStaticMesh(Cone);
+		Crystal->SetMaterial(0, Material);
+		Crystal->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Crystal->SetCastShadow(false);
+		Crystal->SetUsingAbsoluteScale(true);
+		Crystal->SetupAttachment(MeshComponent);
+		Crystal->RegisterComponent();
+		Crystal->SetWorldLocationAndRotation(
+			FVector(GetActorLocation().X + FMath::Cos(Angle) * 120.0f, GetActorLocation().Y + FMath::Sin(Angle) * 120.0f, GroundZ + 30.0f),
+			FRotator(0.0f, FMath::RadiansToDegrees(Angle), 10.0f));
+		Crystal->SetWorldScale3D(FVector(0.22f, 0.22f, 0.6f));
+	}
+	PlayUpgradeVFX();
+}
+
+void ATower::PlayUpgradeVFX() const
+{
+	TDVFX::Play(this, UpgradeVFX, GetActorLocation(), TDVFX::Gold, 2.0f); // *** stops after 2 s even if the system loops
+}
+
+void ATower::ShowBeam(const FVector& From, const FVector& To)
+{
+	if (!BeamMesh)
+	{
+		// *** Created on the first shot (after world validation) and reused for every later shot.
+		UMaterialInterface* Material = BeamMaterial.LoadSynchronous();
+		if (!Material)
+		{
+			return;
+		}
+		BeamMesh = NewObject<UStaticMeshComponent>(this, TEXT("BeamMesh"));
+		BeamMesh->SetStaticMesh(MeshComponent->GetStaticMesh());
+		// *** Emerald beam: one dynamic instance per tower (created once) recolours the existing
+		// *** M_TowerBeam instance, keeping its bright soft-edged centre and scrolling energy.
+		UMaterialInstanceDynamic* BeamMID = UMaterialInstanceDynamic::Create(Material, this);
+		BeamMID->SetVectorParameterValue(TEXT("BeamColor"), BeamColor);
+		BeamMID->SetScalarParameterValue(TEXT("EmissiveIntensity"), BeamIntensity);
+		BeamMesh->SetMaterial(0, BeamMID);
+		BeamMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		BeamMesh->SetCastShadow(false);
+		BeamMesh->SetUsingAbsoluteLocation(true);
+		BeamMesh->SetUsingAbsoluteRotation(true);
+		BeamMesh->SetUsingAbsoluteScale(true);
+		BeamMesh->SetupAttachment(MeshComponent);
+		BeamMesh->RegisterComponent();
+	}
+
+	const FVector Delta = To - From;
+	const float Length = Delta.Size();
+	if (Length < 1.0f)
+	{
+		return;
+	}
+	// The engine cylinder is 100 units tall along Z, so scale Z to the distance.
+	BeamMesh->SetWorldLocationAndRotation((From + To) * 0.5f, FRotationMatrix::MakeFromZ(Delta / Length).Rotator());
+	BeamMesh->SetWorldScale3D(FVector(0.12f, 0.12f, Length / 100.0f));
+	BeamMesh->SetVisibility(true);
+	GetWorldTimerManager().SetTimer(BeamTimerHandle, FTimerDelegate::CreateWeakLambda(this, [this]()
+	{
+		if (BeamMesh)
+		{
+			BeamMesh->SetVisibility(false);
+		}
+	}), 0.12f, false);
 }
 
 void ATower::BeginPlay()
@@ -68,6 +163,8 @@ void ATower::FireAtNearestEnemy()
 	}
 
 	const FVector MuzzleLocation = GetActorLocation() + MuzzleOffset;
+	TDVFX::Play(this, FireVFX, MuzzleLocation, TDVFX::Gold); // *** muzzle flash
+	ShowBeam(MuzzleLocation, Target->GetActorLocation());     // *** short golden energy beam
 
 	if (ProjectileClass)
 	{

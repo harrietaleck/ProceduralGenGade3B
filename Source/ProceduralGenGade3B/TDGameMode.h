@@ -22,6 +22,7 @@ class UUserWidget;
 class UButton;
 class UDefenderUpgradeComponent;
 class UTDSaveGame;
+class UNiagaraSystem; // *** visual pass
 
 // Fires whenever the player's resources change. The UI listens to this.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnResourcesChanged, int32, NewAmount);
@@ -78,6 +79,20 @@ public:
 	/** Pause and settings overlay. This is a Blueprint UserWidget and the settings controls stay in Blueprint. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules")
 	TSubclassOf<UUserWidget> SettingsWidgetClass;
+
+	// *** Visual pass: match-level effects, played at the tower. Swappable in the editor.
+	UPROPERTY(EditDefaultsOnly, Category = "Rules|VFX")
+	TSoftObjectPtr<UNiagaraSystem> WaveTransitionVFX;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Rules|VFX")
+	TSoftObjectPtr<UNiagaraSystem> VictoryVFX;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Rules|VFX")
+	TSoftObjectPtr<UNiagaraSystem> DefeatVFX;
+
+	/** Looping magical forest particles over the map. Skipped quietly if the asset does not exist yet. */
+	UPROPERTY(EditDefaultsOnly, Category = "Rules|VFX")
+	TSoftObjectPtr<UNiagaraSystem> ForestAmbienceVFX;
 
 	/** Meta currency given on the first match if the wallet is empty, so the player can buy defenders straight away. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Rules|Meta")
@@ -307,6 +322,9 @@ private:
 	void WriteCheckpoint(int32 WavesCleared);
 	void WriteMatchFinishedSave();
 	void ApplyResumeSave(UTDSaveGame* Save);
+
+	/** *** Plays a match-level effect at the tower. */
+	void PlayMatchVFX(const TSoftObjectPtr<UNiagaraSystem>& System, const FLinearColor& Color, float Lifetime) const;
 
 	FTimerHandle MenuStretchTimerHandle;
 

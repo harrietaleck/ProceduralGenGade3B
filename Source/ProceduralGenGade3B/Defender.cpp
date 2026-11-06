@@ -9,6 +9,8 @@
 #include "ProceduralTerrain.h"
 #include "TDGameMode.h"
 #include "DefenderUpgradeComponent.h"
+#include "TDVFX.h" // *** visual pass
+#include "Components/PointLightComponent.h" // *** placement glow
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -50,6 +52,51 @@ ADefender::ADefender()
     MetaCost.WoodenMight = 5;
     MetaCost.GemStones = 0;
     MetaCost.LightLanterns = 0;
+
+    // *** Default visual-pass assets; all of them can be swapped in the editor.
+    FireVFX = TDVFX::Asset(TEXT("/Game/VFX/Towers/NS_TowerFire"));
+    ActivationVFX = TDVFX::Asset(TEXT("/Game/VFX/Towers/NS_TowerUpgrade"));
+    PlacementFireVFX = TDVFX::Asset(TEXT("/Game/VFX/Towers/NS_TowerFire"));      // *** fire burst on the pad
+    PlacementSparksVFX = TDVFX::Asset(TEXT("/Game/VFX/Enemies/NS_EnemyDeath"));  // *** radial sparks shooting outward
+}
+
+void ADefender::StyleProjectile(AProjectile* Shot) const
+{
+    if (!Shot)
+    {
+        return;
+    }
+    Shot->ConfigureVisuals(DefenderBallScale, DefenderBallColor);
+    Shot->ConfigureShape(ProjectileShape.LoadSynchronous(), ProjectileShapeScale, ProjectileImpactVFX);
+}
+
+void ADefender::PlayPlacementVFX()
+{
+    const FVector Pad = bHasOccupiedSlot ? OccupiedSlotLocation : GetActorLocation();
+    TDVFX::Play(this, PlacementFireVFX, Pad, TDVFX::Gold);
+    TDVFX::Play(this, PlacementSparksVFX, Pad, TDVFX::Green);
+
+    // Brief golden/emerald glow, removed again by a timer.
+    UPointLightComponent* Glow = NewObject<UPointLightComponent>(this);
+    Glow->SetupAttachment(GetRootComponent());
+    Glow->RegisterComponent();
+    Glow->SetWorldLocation(Pad + FVector(0.0f, 0.0f, 60.0f));
+    Glow->SetLightColor(FLinearColor(0.75f, 1.0f, 0.35f));
+    Glow->SetIntensity(5000.0f);
+    Glow->SetAttenuationRadius(400.0f);
+    Glow->SetCastShadows(false);
+    FTimerHandle GlowHandle;
+    GetWorldTimerManager().SetTimer(GlowHandle, FTimerDelegate::CreateWeakLambda(Glow, [Glow]() { Glow->DestroyComponent(); }), 0.5f, false);
+}
+
+void ADefender::PlayFireVFX(const FVector& Location) const
+{
+    TDVFX::Play(this, FireVFX, Location, DefenderBallColor); // *** each defender type keeps its own colour
+}
+
+void ADefender::PlayActivationVFX() const
+{
+    TDVFX::Play(this, ActivationVFX, GetActorLocation(), DefenderBallColor, 1.5f); // *** stops after 1.5 s
 }
 
 float ADefender::GetThreatRating() const
@@ -89,6 +136,9 @@ void ADefender::BeginPlay()
         );
     }
 
+    // *** The placement burst moved to PlayPlacementVFX, called by the player controller only after a
+    // *** successful placement (so restored saves and cancelled placements don't play it).
+
     // Pick up any temporary upgrade that is already running for this defender type.
     if (ATDGameMode* GameMode = GetWorld()->GetAuthGameMode<ATDGameMode>())
     {
@@ -122,6 +172,7 @@ void ADefender::FireAtNearestEnemy()
     }
 
     const FVector MuzzleLocation = GetActorLocation() + MuzzleOffset;
+    PlayFireVFX(MuzzleLocation); // *** attack flash
 
     // Normally we fire a projectile that flies to the enemy and does damage when it hits.
     if (ProjectileClass)
@@ -139,7 +190,7 @@ void ADefender::FireAtNearestEnemy()
                 SpawnParams))
         {
             Shot->InitProjectile(Target, AttackDamage, this);
-            Shot->ConfigureVisuals(DefenderBallScale, DefenderBallColor);
+            StyleProjectile(Shot); // *** colour, size and shape per defender type
         }
 
         return;

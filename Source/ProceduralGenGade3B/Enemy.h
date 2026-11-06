@@ -13,6 +13,8 @@ class UPointLightComponent;
 class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
 class ADefender;
+class UNiagaraSystem;     // *** visual pass
+class UMaterialInterface; // ***
 
 // The kind of loot an enemy drops.
 UENUM(BlueprintType)
@@ -206,6 +208,20 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Spawn Effect")
     FLinearColor SpawnGlowColor =
         FLinearColor(0.15f, 0.9f, 1.0f);
+
+    // *** Visual pass: editable effect/material references (swap them in the editor, no code needed).
+    /** Dark magical burst when the enemy appears. */
+    UPROPERTY(EditAnywhere, Category = "Enemy|VFX")
+    TSoftObjectPtr<UNiagaraSystem> SpawnVFX;
+
+    /** Magical burst when the enemy is defeated. */
+    UPROPERTY(EditAnywhere, Category = "Enemy|VFX")
+    TSoftObjectPtr<UNiagaraSystem> DeathVFX;
+
+    /** Corruption aura drawn over the body. Only used when the material is translucent or additive,
+        so an opaque material can never hide the enemy's type colour. */
+    UPROPERTY(EditAnywhere, Category = "Enemy|VFX")
+    TSoftObjectPtr<UMaterialInterface> CorruptionOverlay;
 
     // Health component.
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy")

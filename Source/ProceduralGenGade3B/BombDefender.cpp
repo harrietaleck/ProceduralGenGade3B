@@ -49,6 +49,7 @@ APoisonLightBombDefender::APoisonLightBombDefender()
     Cost = 75;
 
     BodyColor = FLinearColor(0.2f, 0.85f, 0.3f);
+    DefenderBallColor = FLinearColor(0.35f, 1.0f, 0.3f); // *** keeps its blast effects poison-green now the base default is turquoise
 }
 
 float APoisonLightBombDefender::GetThreatRating() const
@@ -104,6 +105,7 @@ void APoisonLightBombDefender::DetonateBomb()
     }
 
     SpawnBlastVisuals(ClusterCentre);
+    PlayFireVFX(ClusterCentre); // *** poison blast burst
     DamageEnemiesInArea(ClusterCentre, BombDamage);
 
     if (PoisonTicks > 0)

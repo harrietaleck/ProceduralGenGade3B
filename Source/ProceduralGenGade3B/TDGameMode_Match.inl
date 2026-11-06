@@ -1,4 +1,4 @@
-﻿// TDGameMode_Match.inl - economy, meta currency and match results.
+// TDGameMode_Match.inl - economy, meta currency and match results.
 // This file is included by TDGameMode.cpp and is not compiled on its own.
 
 void ATDGameMode::AddResources(int32 Amount)
@@ -140,6 +140,7 @@ bool ATDGameMode::TryUpgradeTowerBeam()
 	++BeamUpgradeLevel;
 	// Add rather than assign, so a running temporary tower upgrade is not overwritten.
 	Tower->AttackDamage += BeamUpgradeDamageBonus;
+	Tower->PlayUpgradeVFX(); // *** beam upgrade energy
 	RefreshMetaHUD();
 	return true;
 }
@@ -265,6 +266,7 @@ void ATDGameMode::HandleMatchVictory()
 
 	FinalizeMatchResult(true);
 	ShowEndScreen(true);
+	PlayMatchVFX(VictoryVFX, TDVFX::Gold, 4.0f); // *** victory celebration
 }
 
 void ATDGameMode::NotifyTowerDestroyed()
@@ -287,5 +289,6 @@ void ATDGameMode::NotifyTowerDestroyed()
 	OnGameOver.Broadcast();
 	FinalizeMatchResult(false);
 	ShowEndScreen(false);
+	PlayMatchVFX(DefeatVFX, TDVFX::Corruption, 4.0f); // *** subtle dark defeat particles
 	UE_LOG(LogTemp, Display, TEXT("TDGameMode: GAME OVER - the tower was destroyed."));
 }

@@ -67,7 +67,11 @@ public:
 	/** Restores saved phases and timers; active boosts are re-applied without charging again. */
 	void RestoreSaveState(const TArray<uint8>& Phases, const TArray<float>& SecondsLeft);
 
+	/** *** Starts any already-paid (queued) upgrade whose unit is now on the field, e.g. the Tower at match start. */
+	void ActivatePendingUpgrades();
+
 protected:
+	virtual void BeginPlay() override; // *** starts the HUD upgrade countdown timer
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
@@ -108,4 +112,11 @@ private:
 	bool CanAfford(DefenderUpgrades::EUpgrade Upgrade) const;
 	bool Spend(DefenderUpgrades::EUpgrade Upgrade) const;
 	ATDGameMode* GetGameMode() const;
+
+	// *** Final polish pass: queued purchases and the HUD countdown (DefenderUpgradeComponent_Extra.inl).
+	void StartActive(DefenderUpgrades::EUpgrade Upgrade, const TArray<AActor*>& Targets);
+	bool IsPending(DefenderUpgrades::EUpgrade Upgrade) const;
+	void UpdateHudCountdown();
+	FTimerHandle CountdownTimer;
+	TWeakObjectPtr<UTextBlock> CountdownLabel;
 };

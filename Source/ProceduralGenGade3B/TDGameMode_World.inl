@@ -119,10 +119,12 @@ void ATDGameMode::HandleWaveComplete(int32 WaveNumber)
 	if (bFinalWave)
 	{
 		WriteMatchFinishedSave();
+		PlayMatchVFX(VictoryVFX, TDVFX::Gold, 4.0f); // *** victory celebration
 	}
 	else
 	{
 		WriteCheckpoint(WaveNumber);
+		PlayMatchVFX(WaveTransitionVFX, TDVFX::Turquoise, 2.0f); // *** wave transition
 	}
 
 	if (bFinalWave && WaveManager)

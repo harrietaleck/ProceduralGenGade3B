@@ -7,6 +7,7 @@
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
+#include "TDVFX.h" // *** visual pass
 
 AProjectile::AProjectile()
 {
@@ -22,6 +23,11 @@ AProjectile::AProjectile()
 		MeshComponent->SetStaticMesh(SphereMesh.Object);
 	}
 	MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// *** Default visual-pass assets; all of them can be swapped in the editor.
+	TrailVFX = TDVFX::Asset(TEXT("/Game/VFX/Projectiles/NS_ProjectileTrail"));
+	ImpactVFX = TDVFX::Asset(TEXT("/Game/VFX/Towers/NS_TowerFire"));
+	GlowMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/Materials/Instances/MI_Glow_Turquoise.MI_Glow_Turquoise")));
 }
 
 void AProjectile::BeginPlay()
@@ -36,15 +42,28 @@ void AProjectile::ConfigureVisuals(float InVisualScale, FLinearColor InColor)
 	VisualScale = InVisualScale;
 	ProjectileColor = InColor;
 	ApplyVisuals();
+
+	// *** One glowing trail per projectile, in the shooter's colour. It is attached, so it is
+	// *** cleaned up automatically when the projectile is destroyed.
+	if (!TrailComponent)
+	{
+		TrailComponent = TDVFX::Play(this, TrailVFX, GetActorLocation(), ProjectileColor, 0.0f, MeshComponent);
+	}
+	else
+	{
+		TrailComponent->SetVariableLinearColor(TEXT("User.Color"), ProjectileColor);
+	}
 }
 
 void AProjectile::ApplyVisuals()
 {
-	MeshComponent->SetRelativeScale3D(FVector(VisualScale));
+	MeshComponent->SetRelativeScale3D(ShapeScale * VisualScale); // *** ShapeScale is (1,1,1) for plain orbs
 
 	if (!CachedDynMat)
 	{
-		UMaterialInterface* BaseMat = MeshComponent->GetMaterial(0);
+		// *** Use the glowing M_MagicGlow instance when it is available, otherwise the mesh's own material.
+		UMaterialInterface* GlowBase = GlowMaterial.LoadSynchronous();
+		UMaterialInterface* BaseMat = GlowBase ? GlowBase : MeshComponent->GetMaterial(0);
 		if (!BaseMat)
 		{
 			return;
@@ -67,7 +86,28 @@ void AProjectile::ApplyVisuals()
 	if (CachedDynMat)
 	{
 		CachedDynMat->SetVectorParameterValue(TEXT("Color"), ProjectileColor);
+		CachedDynMat->SetVectorParameterValue(TEXT("GlowColor"), ProjectileColor); // *** M_MagicGlow's colour parameter
 	}
+}
+
+void AProjectile::ConfigureShape(UStaticMesh* InMesh, const FVector& InShapeScale, const TSoftObjectPtr<UNiagaraSystem>& ImpactOverride)
+{
+	if (InMesh)
+	{
+		MeshComponent->SetStaticMesh(InMesh); // the glow material override on slot 0 is kept
+		ShapeScale = InShapeScale;
+		bPointAlongFlight = true;
+		const FVector ToTarget = CachedTargetLocation - GetActorLocation();
+		if (!ToTarget.IsNearlyZero())
+		{
+			SetActorRotation(FRotationMatrix::MakeFromZ(ToTarget.GetSafeNormal()).Rotator()); // face the target from the first frame
+		}
+	}
+	if (!ImpactOverride.IsNull())
+	{
+		ImpactVFX = ImpactOverride;
+	}
+	ApplyVisuals();
 }
 
 void AProjectile::InitProjectile(AActor* InTarget, float InDamage, AActor* InInstigatorActor)
@@ -107,7 +147,7 @@ void AProjectile::Tick(float DeltaSeconds)
 	// Move towards the target and face the way we are flying.
 	const FVector Direction = ToTarget / Distance;
 	SetActorLocation(Location + Direction * Step);
-	SetActorRotation(Direction.Rotation());
+	SetActorRotation(bPointAlongFlight ? FRotationMatrix::MakeFromZ(Direction).Rotator() : Direction.Rotation()); // *** arrows/spears point forward
 }
 
 void AProjectile::HitTargetAndDie()
@@ -123,5 +163,6 @@ void AProjectile::HitTargetAndDie()
 			}
 		}
 	}
+	TDVFX::Play(this, ImpactVFX, GetActorLocation(), ProjectileColor); // *** hit flash (pooled, one-shot)
 	Destroy();
 }

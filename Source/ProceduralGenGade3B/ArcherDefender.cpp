@@ -44,7 +44,11 @@ AArcherDefender::AArcherDefender()
     DefenderBallScale = 0.18f;
 
     //Use colours to distinguish the archer and its arrows
-    DefenderBallColor = FLinearColor(0.2f, 0.8f, 1.0f);
+    DefenderBallColor = FLinearColor(1.0f, 0.92f, 0.6f); // *** pale gold arrows, distinct from the basic turquoise orbs
+
+    // *** Real arrow shape: a long thin cone (about 47 x 6 units) pointing along its flight path.
+    ProjectileShape = TSoftObjectPtr<UStaticMesh>(FSoftObjectPath(TEXT("/Engine/BasicShapes/Cone.Cone")));
+    ProjectileShapeScale = FVector(0.35f, 0.35f, 2.6f);
     BodyColor = FLinearColor(0.15f, 0.6f, 0.95f);
 
     //Shots leave from the tip of the cone
@@ -101,6 +105,7 @@ void AArcherDefender::FireArrow()
     const bool bVolley = VolleyEveryNShots > 0 && ShotCounter % VolleyEveryNShots == 0;
     const int32 ArrowCount = bVolley ? FMath::Min(VolleyArrowCount, Targets.Num()) : 1;
 
+    PlayFireVFX(GetActorLocation() + MuzzleOffset); // *** one flash per shot or volley
     for (int32 i = 0; i < ArrowCount; ++i)
     {
         ShootAt(Targets[i]);
@@ -124,7 +129,7 @@ void AArcherDefender::ShootAt(AEnemy* Target)
         {
             Arrow->Speed += ProjectileSpeedBonus;
             Arrow->InitProjectile(Target, Damage, this);
-            Arrow->ConfigureVisuals(DefenderBallScale, DefenderBallColor);
+            StyleProjectile(Arrow); // *** arrow-shaped, glowing, with a trail
         }
         return;
     }

@@ -553,6 +553,7 @@ void ATDPlayerController::OnPlaceDefenderClicked()
         GameMode->NotifyDefenderPlaced();
 
         NewDefender->SetOccupiedSlot(SlotLocation);
+        NewDefender->PlayPlacementVFX(); // *** fire burst, sparks and glow - only after a successful, paid placement
 
         if (AProceduralTerrain* Terrain =
 
